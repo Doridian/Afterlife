@@ -15,11 +15,9 @@ the whole game state.
 python3 -m venv .venv && .venv/bin/pip install -r tools/emu/requirements.txt
 ```
 
-The only dependency is `unicorn`. In the current agent session a venv that
-already has it is at
-`/tmp/claude-2006/-home-doridian-Programming-Afterlife/eca05a4e-51ae-4ea2-8f2d-a8c7e42d57e1/scratchpad/venv/bin/python`.
-Run scripts by path rather than from inside that scratchpad, because a stray
-`glob.py` there shadows the stdlib. The port library (`libafterlife_port.so`,
+The only dependency is `unicorn`. Run the scripts with `.venv/bin/python`
+(gitignored).
+The port library (`libafterlife_port.so`,
 CMake target `afterlife_port`, not built by default) is configured and built
 in `build/emu` (Debug, asserts on) the first time the harness runs, then
 rebuilt on every run. The build is serialized with flock. If the build fails
