@@ -1,0 +1,28 @@
+# Copyrighted game data: never commit. Users supply their own CD.
+*.bin
+*.cue
+*.iso
+*.img
+*.mdf
+*.mds
+*.ccd
+/orig/
+*.000
+*.EXE
+*.exe
+*.ASC
+
+# Build output
+/build/
+compile_commands.json
+.cache/
+
+# Ghidra project (contains the original binaries). Share knowledge through
+# exported symbol files in the repo instead.
+/ghidra/
+*.gpr
+*.rep/
+
+# Python
+__pycache__/
+*.pyc

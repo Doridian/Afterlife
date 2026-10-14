@@ -1,0 +1,199 @@
+#include "platform.h"
+
+#include <SDL3/SDL.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
+static SDL_Window *g_window;
+static SDL_Renderer *g_renderer;
+static SDL_Texture *g_texture;
+static SDL_Surface *g_indexed;
+static SDL_Palette *g_palette;
+static SDL_AudioStream *g_audio;
+static char g_data_dir[1024] = ".";
+
+bool plat_init(const char *title, int width, int height)
+{
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
+        SDL_Log("SDL_Init: %s", SDL_GetError());
+        return false;
+    }
+    if (!SDL_CreateWindowAndRenderer(title, width, height, SDL_WINDOW_RESIZABLE, &g_window, &g_renderer)) {
+        SDL_Log("SDL_CreateWindowAndRenderer: %s", SDL_GetError());
+        return false;
+    }
+    SDL_SetRenderLogicalPresentation(g_renderer, width, height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    SDL_SetRenderVSync(g_renderer, 1);
+
+    g_indexed = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_INDEX8);
+    g_palette = SDL_CreateSurfacePalette(g_indexed);
+    g_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+    SDL_SetTextureScaleMode(g_texture, SDL_SCALEMODE_NEAREST);
+    return g_indexed && g_palette && g_texture;
+}
+
+void plat_shutdown(void)
+{
+    if (g_audio)
+        SDL_DestroyAudioStream(g_audio);
+    SDL_DestroyTexture(g_texture);
+    SDL_DestroySurface(g_indexed);
+    SDL_DestroyRenderer(g_renderer);
+    SDL_DestroyWindow(g_window);
+    SDL_Quit();
+}
+
+uint8_t *plat_video_framebuffer(void) { return g_indexed->pixels; }
+int plat_video_width(void) { return g_indexed->w; }
+int plat_video_height(void) { return g_indexed->h; }
+
+void plat_video_set_palette(const PlatColor *colors, int first, int count)
+{
+    SDL_Color tmp[256];
+    for (int i = 0; i < count; i++)
+        tmp[i] = (SDL_Color){colors[i].r, colors[i].g, colors[i].b, 255};
+    SDL_SetPaletteColors(g_palette, tmp, first, count);
+}
+
+void plat_video_present(void)
+{
+    SDL_Surface *dst;
+    if (SDL_LockTextureToSurface(g_texture, NULL, &dst)) {
+        SDL_BlitSurface(g_indexed, NULL, dst, NULL);
+        SDL_UnlockTexture(g_texture);
+    }
+    SDL_RenderClear(g_renderer);
+    SDL_RenderTexture(g_renderer, g_texture, NULL, NULL);
+    SDL_RenderPresent(g_renderer);
+}
+
+bool plat_poll_event(PlatEvent *ev)
+{
+    SDL_Event e;
+    while (SDL_PollEvent(&e)) {
+        memset(ev, 0, sizeof(*ev));
+        switch (e.type) {
+        case SDL_EVENT_QUIT:
+            ev->type = PLAT_EV_QUIT;
+            return true;
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP:
+            ev->type = e.type == SDL_EVENT_KEY_DOWN ? PLAT_EV_KEY_DOWN : PLAT_EV_KEY_UP;
+            ev->key = (int)e.key.key;
+            return true;
+        case SDL_EVENT_MOUSE_MOTION:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            SDL_ConvertEventToRenderCoordinates(g_renderer, &e);
+            if (e.type == SDL_EVENT_MOUSE_MOTION) {
+                ev->type = PLAT_EV_MOUSE_MOVE;
+                ev->x = (int)e.motion.x;
+                ev->y = (int)e.motion.y;
+            } else {
+                ev->type = e.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? PLAT_EV_MOUSE_DOWN : PLAT_EV_MOUSE_UP;
+                ev->button = e.button.button;
+                ev->x = (int)e.button.x;
+                ev->y = (int)e.button.y;
+            }
+            return true;
+        default:
+            break;
+        }
+    }
+    return false;
+}
+
+void plat_yield(void)
+{
+#ifdef __EMSCRIPTEN__
+    /* The game keeps its original blocking main loop; ASYNCIFY lets us
+     * unwind to the browser here. */
+    emscripten_sleep(0);
+#endif
+}
+
+uint32_t plat_ticks_ms(void) { return (uint32_t)SDL_GetTicks(); }
+
+void plat_delay_ms(uint32_t ms)
+{
+#ifdef __EMSCRIPTEN__
+    emscripten_sleep(ms);
+#else
+    SDL_Delay(ms);
+#endif
+}
+
+bool plat_audio_open(int rate)
+{
+    SDL_AudioSpec spec = {SDL_AUDIO_S16, 2, rate};
+    g_audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+    if (!g_audio) {
+        SDL_Log("audio: %s", SDL_GetError());
+        return false;
+    }
+    SDL_ResumeAudioStreamDevice(g_audio);
+    return true;
+}
+
+void plat_audio_queue(const int16_t *frames, int frame_count)
+{
+    if (g_audio)
+        SDL_PutAudioStreamData(g_audio, frames, frame_count * 4);
+}
+
+int plat_audio_queued_frames(void)
+{
+    return g_audio ? SDL_GetAudioStreamQueued(g_audio) / 4 : 0;
+}
+
+void plat_set_data_dir(const char *dir)
+{
+    SDL_strlcpy(g_data_dir, dir, sizeof(g_data_dir));
+}
+
+static bool find_ci(const char *dir, const char *name, char *out, size_t out_len)
+{
+    int count = 0;
+    char **entries = SDL_GlobDirectory(dir, NULL, 0, &count);
+    bool found = false;
+    for (int i = 0; entries && i < count && !found; i++) {
+        if (SDL_strcasecmp(entries[i], name) == 0) {
+            SDL_snprintf(out, out_len, "%s/%s", dir, entries[i]);
+            found = true;
+        }
+    }
+    SDL_free(entries);
+    return found;
+}
+
+FILE *plat_fopen_data(const char *name)
+{
+    /* Accept DOS paths from the original (e.g. "C:\\ALIFE\\SAVE.SAV") by
+     * walking each component case-insensitively under the data dir. */
+    char path[1024], part[256];
+    SDL_strlcpy(path, g_data_dir, sizeof(path));
+    const char *p = name;
+    if (p[0] && p[1] == ':')
+        p += 2;
+    while (*p) {
+        while (*p == '\\' || *p == '/')
+            p++;
+        size_t n = strcspn(p, "\\/");
+        if (n == 0)
+            break;
+        if (n >= sizeof(part))
+            return NULL;
+        memcpy(part, p, n);
+        part[n] = '\0';
+        p += n;
+        char next[1024];
+        if (!find_ci(path, part, next, sizeof(next)))
+            return NULL;
+        SDL_strlcpy(path, next, sizeof(path));
+    }
+    return fopen(path, "rb");
+}
