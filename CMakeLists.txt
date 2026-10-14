@@ -34,6 +34,8 @@ add_library(afterlife_core STATIC
     src/compbun/preload.c
     src/game/resource.c
     src/formats/bmp8.c
+    src/formats/flc.c
+    src/formats/tile.c
 )
 # The codecs are written separately; build them in when they're there.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/compbun/codec.c")
@@ -51,10 +53,13 @@ if(NOT EMSCRIPTEN)
     # stack, for tests/compare_jiff.py.
     add_executable(compbun_dump tests/compbun_dump.c)
     target_link_libraries(compbun_dump PRIVATE afterlife_core)
+    # tests/formats_dump: decodes every FLI/FLC and TILE resource to PNGs.
+    add_executable(formats_dump tests/formats_dump.c)
+    target_link_libraries(formats_dump PRIVATE afterlife_core)
 endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    foreach(t afterlife_core afterlife compbun_dump)
+    foreach(t afterlife_core afterlife compbun_dump formats_dump)
         if(TARGET ${t})
             target_compile_options(${t} PRIVATE -Wall -Wextra)
         endif()
@@ -70,5 +75,25 @@ if(EMSCRIPTEN)
     target_link_options(afterlife PRIVATE -sASYNCIFY -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=64MB)
     if(AFTERLIFE_WASM_DATA)
         target_link_options(afterlife PRIVATE "--preload-file=${AFTERLIFE_WASM_DATA}@/orig")
+    endif()
+endif()
+
+# Startup / INI (docs/startup.md).
+target_sources(afterlife_core PRIVATE src/game/ini.c src/game/config.c src/game/startup.c)
+if(NOT EMSCRIPTEN)
+    # tests/ini_dump: prints what the init sequence reads from an ALIFE.INI.
+    add_executable(ini_dump tests/ini_dump.c)
+    target_link_libraries(ini_dump PRIVATE afterlife_core)
+endif()
+
+# Video core (docs/rendering.md).
+target_sources(afterlife_core PRIVATE src/gfx/surface.c src/gfx/palette.c src/gfx/draw.c src/gfx/font.c
+    src/gfx/mouse.c src/gfx/exe_res.c)
+if(NOT EMSCRIPTEN)
+    # tests/gfx_test: draws a bundle bitmap, primitives and text, writes a PPM.
+    add_executable(gfx_test tests/gfx_test.c)
+    target_link_libraries(gfx_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(gfx_test PRIVATE -Wall -Wextra)
     endif()
 endif()

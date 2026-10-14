@@ -88,8 +88,8 @@ docs/           format and binary notes
 1. **Bundle manager and compression** (`compbun`): done, see
    [compbun.md](compbun.md). The .000 bundles are read by the game's own
    resource code (`src/game/resource.c`) at the bottom of the compbun stack.
-2. **Startup and INI parsing** (`ALIFE.INI` keys: Resolution, Resource file,
-   Heap size, Music/Voice stream, …).
+2. **Startup and INI parsing**: done, see [startup.md](startup.md) (init
+   order, `ALIFE.INI` keys, main loop shape).
 3. **Rendering**: DIB blit paths, TILE drawing, FLI/FLC player, cursors.
 4. **iMUSE**: mixer and streamer onto `plat_audio_queue`.
 5. **Simulation**: the actual game. This is the bulk of `.text`.

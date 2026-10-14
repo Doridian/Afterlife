@@ -47,6 +47,23 @@ int plat_video_width(void);
 int plat_video_height(void);
 void plat_video_set_palette(const PlatColor *colors, int first, int count);
 void plat_video_present(void);
+/* Replaces CreateWindowEx at the resolution / ChangeDisplaySettingsA:
+ * (re)creates the framebuffer at width x height (contents undefined) and
+ * sizes the window, fullscreen or not. The palette is kept. */
+bool plat_video_set_mode(int width, int height, bool fullscreen);
+/* Desktop size in pixels, or 0 x 0 if unknown. */
+void plat_video_desktop_size(int *width, int *height);
+
+/* Mouse cursor (USER32 LoadCursor/SetCursor/ShowCursor/SetCursorPos).
+ * plat_cursor_create takes w * h RGBA pixels (4 bytes each, A = 0 is
+ * transparent). A NULL cursor means the system arrow. */
+typedef struct PlatCursor PlatCursor;
+PlatCursor *plat_cursor_create(const uint8_t *rgba, int w, int h, int hot_x, int hot_y);
+void plat_cursor_destroy(PlatCursor *cursor);
+void plat_cursor_set(PlatCursor *cursor);
+void plat_cursor_show(bool show);
+/* Moves the pointer to framebuffer coordinates (x, y). */
+void plat_mouse_warp(int x, int y);
 
 /* Returns false when the queue is empty. Call regularly; on WebAssembly this
  * is also where control is handed back to the browser. */

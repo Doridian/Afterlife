@@ -3,31 +3,264 @@
 # Win32 imports are named by Ghidra and are not listed here.
 
 # --- MSVC CRT (only the ones compbun calls through its C File Layer) ---
+0x00401000 func game_main
+0x00407282 func game_frame_update
+0x00408eb0 func tile_load_all
+0x00409af4 func tile_unload_all
+0x00409dc0 func flc_open
+0x00409eb9 func flc_open_stream
+0x0040a005 func flc_read_header
+0x0040a030 func flc_close
+0x0040a047 func flc_reset
+0x0040a0d4 func flc_clone
+0x0040a145 func flc_rewind
+0x0040a1cf func flc_seek_ring_frame
+0x0040a27f func flc_play
+0x0040a376 func flc_next_frame
+0x0040a469 func flc_apply_palette
+0x0040a4be func flc_apply_palette64
+0x0040a5ad func flc_decode_chunks
+0x0040a714 func flc_color_packets
+0x0040a7ac func flc_chunk_color256
+0x0040a7d0 func flc_chunk_color64
+0x0040a7f4 func flc_chunk_byte_run
+0x0040a8e8 func flc_chunk_delta_fli
+0x0040aa10 func flc_chunk_delta_flc
+0x0040abe8 func flc_chunk_black
+0x0040ac9c func flc_chunk_copy
+0x0040ad1f func flc_open_resource
+0x0040ad5d func flc_read
+0x0040ae2b func flc_fill_run
+0x0040ae8d func flc_fill_run16
+0x0040af1b func flc_copy_span
+0x0040afa1 func flc_put_pixel
+0x0040affc func flc_clip_span
+0x0040b0c9 func flc_target_init
+0x0040b134 func flc_center
+0x0040b18b func flc_target_width
+0x0040b1a1 func flc_target_height
+0x004265dc func intro_play
+0x0042a6c3 func di_video_benchmark
+0x004486bd func cd_spin_up
+0x00480375 func cfg_save_games_dir
+0x004803dc func cfg_cd_dir
+0x004805d8 func cfg_error
+0x004b119f func sprintf
+0x004b1264 func strlen
+0x004b12b4 func strcat
+0x004b12b8 func strcpy
+0x004b140a func atoi
+0x004b2250 func memset
+0x004b2294 func strchr
+0x004b22b9 func toupper
+0x004b276c func exit
+0x004b4de9 func malloc
+0x004b5e8e func free
 0x004b89cd func fclose  # MSVC CRT; C File Layer close slot
+0x004b8cd0 func ms_initialize
+0x004b8d28 func ms_shutdown
+0x004b8d3a func ms_suspend
+0x004b8d4c func ms_resume
+0x004b8d5e func ms_get_state
+0x004b8e2a func ms_get_buttons
+0x004b8e3f func ms_set_clip_rect
+0x004b8f1f func ms_get_clip_rect
+0x004b8f57 func ms_set_handler
+0x004b8f7d func ms_restore_handler
+0x004b8f90 func ms_on_move
+0x004b901d func ms_on_left_down
+0x004b9049 func ms_on_right_down
+0x004b9075 func ms_on_middle_down
+0x004b90a1 func ms_on_left_up
+0x004b90cd func ms_on_right_up
+0x004b90f9 func ms_on_middle_up
+0x004b9125 func ms_load_cursor
+0x004b9164 func ms_destroy_cursor
+0x004b9179 func ms_show_cursor
+0x004b924c func ms_show_cursor_get
+0x004b9274 func ms_get_cursor
+0x004b928a func ms_set_cursor
+0x004b92af func ms_set_pos
+0x004b92ff func ms_get_screen_pos
+0x004b933b func ms_queue_reset
+0x004b935a func ms_queue_pop
+0x004b93fb func ms_queue_push
 0x004b9510 func snd_initialize  # "HILEVEL ERROR SoIntialize"; patches C File Layer slots to snd_res_*, then compbun_init(1,0)
+0x004b97e8 func snd_shutdown
+0x004b9875 func snd_suspend
+0x004b98a0 func snd_resume
+0x004b9d7c func snd_idle
 0x004ba03f func snd_res_open
 0x004ba07b func snd_res_close
 0x004ba092 func snd_res_read
 0x004ba0ba func snd_res_tell
 0x004ba0d6 func snd_res_seek
+0x004ba100 func ctl_initialize
+0x004ba130 func ctl_shutdown
+0x004bf68a func ctl_idle
+0x004c1580 func wm_initialize
+0x004c1722 func wm_shutdown
+0x004c1bce func wm_create_window
+0x004c62e0 func win_main
+0x004c63f0 func sys_pump
+0x004c6485 func sys_initialize
+0x004c65ef func sys_shutdown
+0x004c666a func sys_suspend
+0x004c66e3 func sys_resume
+0x004c6755 func sys_register_task
+0x004c67f6 func sys_unregister_task
+0x004c689e func app_split_cmdline
+0x004c6911 func app_parse_args
+0x004c6a64 func app_chdir_to_exe
+0x004c6ad6 func ini_set_path
+0x004c6b3e func app_already_running
+0x004c6bd0 func pal_highlight_initialize
+0x004c6be7 func pal_highlight_shutdown
+0x004c7d79 func pal_build_highlight_remap
+0x004c98bb func he_initialize
+0x004c9a86 func he_shutdown
+0x004c9afd func he_suspend
+0x004c9b0f func he_resume
+0x004c9b21 func he_sys_alloc
+0x004c9d8e func he_malloc
+0x004ca1c0 func di_initialize
+0x004ca6ac func di_shutdown
+0x004ca713 func di_suspend
+0x004ca725 func di_resume
+0x004ca737 func di_blit
+0x004ca905 func di_stretch_blit
+0x004caa9c func di_tile_blit
+0x004cacc7 func di_set_palette
+0x004caece func di_get_palette
+0x004cafbb func di_create_surface
+0x004cb244 func di_destroy_surface
+0x004cb290 func di_scroll_rect
+0x004cb38b func di_screen_fill_black
+0x004cb3fa func di_set_paint_handler
+0x004cb420 func di_restore_paint_handler
+0x004cb433 func di_closest_color
+0x004cb54c func di_clear_system_palette
+0x004cb67a func di_create_identity_palette
+0x004cb7ad func main_wnd_proc
+0x004cbedb func di_save_system_palette
+0x004cbf16 func di_restore_system_palette
+0x004cbfb5 func di_screen_fill_rect
+0x004cc082 func di_screen_fill_white
+0x004cc0f1 func di_screen_fill_black_grow
+0x004cc162 func di_screen_xor_rect_white
+0x004cc251 func di_screen_xor_rect_black
+0x004cc340 func di_screen_line
+0x004cc3d4 func di_rotate_palette
+0x004cc498 func di_palette_is_realized
+0x004cc5a4 func di_screen_xor_frame
+0x004cc6e2 func di_move_window
+0x004cc741 func di_get_window_rect
+0x004cc793 func di_resize_window
+0x004cc803 func di_null_surface_hook
+0x004cc827 func di_blit_transparent
+0x004cc906 func di_tile_fill
+0x004ccb2c func di_tile_fill_phase
+0x004ccf6e func di_save_screenshot
+0x004cd448 func di_change_display_mode
+0x004cd58f func di_enum_display_modes
+0x004cd6ae func di_minimize_other_window
+0x004cd6f1 func di_minimize
+0x004cd73a func di_set_main_window_size
+0x004cd892 func app_register_class
 0x004cd9b0 func rc_initialize  # INI "CD Path" -> 0x64d810, "Resource file" -> 0x64da10; indexes both JIFF files
 0x004cda8e func rc_open_resource  # "RcLoadResource"/"RcOpenResource": local index first, then CD; RESC body +0 kind 1=remote file, 2=inline
+0x004cdcbf func rc_load_resource
 0x004cdd61 func rc_resource_size  # RESC body +4 size - 16 (kind 2); RESC chunk len ignored
+0x004cdf21 func rc_shutdown
 0x004cdf6c func rc_find_local
 0x004cdff4 func rc_find_cd
 
 # --- resource layer ---
 0x004ce09f func rc_load_bmp_resource  # error tag "HILEVEL ERROR RcLoadBMPResource"
+0x004ce2e3 func ini_get_string
+0x004ce465 func ini_set_string
 0x004ce706 func rc_load_index  # (path, &ids, &offsets, &count): checks JIFF and HEAD tags only
 0x004ceafd func rc_set_cd_path
+0x004ceba0 func pcyc_initialize
+0x004cebe3 func pcyc_shutdown
+0x004cec02 func pcyc_set_range
+0x004cec6d func pal_from_rgb
+0x004ced05 func pal_load_resource
+0x004ceee9 func pal_build_shade_table
+0x004cf042 func pcyc_stop_all
+0x004cf089 func pcyc_start_all
+0x004cf0d0 func pcyc_disable
+0x004cf0ec func pcyc_enable
+0x004cf108 func pcyc_idle
+0x004cf22b func pal_init_distance_tables
+0x004cf2a2 func pal_closest_in_range
+0x004cf400 func font_initialize
+0x004cf444 func font_shutdown
+0x004cf456 func font_load
+0x004cf504 func font_select
+0x004cf559 func font_current
+0x004cf56e func font_draw_char
+0x004cf9f0 func font_draw_text
+0x004cff0e func font_draw_wrapped
+0x004d0102 func font_set_colors
+0x004d01d3 func font_get_colormap
+0x004d02a8 func font_set_colormap
+0x004d0361 func font_char_width
+0x004d041f func font_char_height
+0x004d045e func font_text_width
+0x004d050d func font_height
+0x004d056e func font_slot
+0x004d05e0 func kb_initialize
+0x004d05f7 func kb_shutdown
+0x004d0609 func kb_suspend
+0x004d061b func kb_resume
+0x004d062d func kb_set_handler
+0x004d0653 func kb_restore_handler
+0x004d0666 func kb_flush_one
+0x004d067b func kb_pending
+0x004d0690 func kb_wait_key
+0x004d06f1 func kb_on_key_down
+0x004d070e func kb_on_key_up
+0x004d072b func kb_on_char
+0x004d0746 func kb_debug_mda
+0x004d07b0 func kb_queue_push
+0x004d0820 func kb_queue_pop
+0x004d088e func kb_queue_reset
+0x004d08b7 func kb_post
+0x004d08e0 func gr_fill_rect
+0x004d09bb func gr_frame_rect
+0x004d0b34 func gr_dotted_frame
+0x004d0cd1 func gr_line
+0x004d0eb8 func gr_bevel_rect
+0x004d1066 func rect_normalize
+0x004d10d1 func list_pop_head
+0x004d1159 func list_push_free
+0x004d11c1 func list_append
+0x004d124d func list_remove
+0x004d12d3 func rect_intersect
+0x004d1353 func rect_contains
+0x004d13aa func rect_copy
+0x004d13fc func rect_set
+0x004d1439 func list_move_all
+0x004d1493 func list_last
+0x004d14e0 func tm_initialize
+0x004d150b func tm_shutdown
+0x004d152c func tm_suspend
+0x004d153e func tm_resume
+0x004d15a1 func tm_start
+0x004d1de0 func sys_null_initialize
+0x004d1df2 func sys_null_shutdown
 0x004d202d func file_open
 0x004d20d2 func file_close
 0x004d20f3 func file_seek
 0x004d2117 func file_read
 0x004d2220 func file_tell
 0x004d223c func file_length
+0x004d2292 func file_gets
 0x004d22b6 func file_read_u32
+0x004d3ea0 func imuse_initialize
 0x004d51a0 func compbun_init  # (compress, bundle): cbres_init, push bndl_layer, push cmprs_layer; ALIFE calls (1,0) from snd_initialize
+0x004d51d0 func vh_initialize
 
 # --- compbun: cbresfm.c. Layered file system; layer struct: name, init, open,
 #     close, read(buf,size,count,h), read_cb(..., cb), seek(h,off,whence),
@@ -48,10 +281,15 @@
 0x004d54d0 func cfile_read_cb  # C File Layer read_cb slot: fread then callback
 0x004d5510 func cbres_shutdown
 0x004d5530 func cbres_dump  # dumps topLayer / currentLayer
+0x004d5570 func error_box
+0x004d5717 func warning_box
+0x004d5862 func choice_box
+0x004d7a10 func vh_module_init
 
 # --- VHUMOR runtime (vhumor:source:*.c) ---
 0x004d7b20 func vh_assert_fail  # "Assertion failed: %s, file %s, line %d" (expr, file, line)
 0x004d7df0 func vh_module_register  # module.c: (name, time, date, shutdown_fn, dump_fn, 0); asserts numModules<MAX_MODULES
+0x004d8190 func vh_mem_init
 0x004d8230 func vh_mem_alloc | void * vh_mem_alloc(uint size, char * file, int line)  # mem.c: (size, file, line); strings "vh_MemAlloc: ..."
 0x004d8410 func vh_mem_free | void vh_mem_free(void * ptr, char * file, int line)  # mem.c: (ptr, file, line); string "vh_MemFree: Block not found"
 
@@ -81,6 +319,7 @@
 0x004db910 func bndl_compare_entry
 0x004db9a0 func bndl_read_cb
 0x004dba10 func vh_message_box
+0x004dbaf0 func vh_error_init
 0x004dbb92 func read_be32_ptr
 0x004dbbe0 func tag_to_str
 0x004dbc23 func res_find_block  # (tag, block): SCUMM-style child block search, BE lengths; "'%s' Not found in %03d... illegal block len %ld"
@@ -147,14 +386,56 @@
 0x004e65c0 func codec_lz_put_byte
 0x004e65e0 func codec_lz_put_bit
 0x004e6680 func codec_lz_get_byte
+0x004e66b0 func tile_init
+0x004e6834 func tile_free_all
+0x004e688a func tile_load_set
+0x004e6a0c func tile_unload_set
+0x004e6a6a func tile_draw
+0x004eba4a func tile_stamp_footprint
+0x004ef4fb func tile_get_height
+0x004ef587 func tile_get_size
+0x004ef603 func tile_get_name
+0x004ef665 func tile_get_desc
+0x004ef6c7 func tile_get_str3
+0x004ef729 func tile_get_str4
+0x004ef798 func sscanf
+0x004ef7d6 func strtok
+0x004ef8cb func _chdir
+0x004ef948 func _makepath
+0x004ef9e7 func _chdrive
+0x004efa48 func _splitpath
 
 # --- MSVC CRT ---
 0x004eff22 func fopen  # MSVC CRT; C File Layer open slot
 0x004eff35 func fseek  # MSVC CRT; C File Layer seek slot
 0x004effc9 func fread  # MSVC CRT; C File Layer read slot
 0x004f0255 func ftell  # MSVC CRT; C File Layer tell slot
+0x004f038d func fgets
 0x004f063c func fgetpos
 0x004f0704 func bsearch
+0x004f0940 func _strupr
+0x00522fac data ms_buttons
+0x00522fb0 data ms_x
+0x00522fb4 data ms_y
+0x00522fb8 data ms_queue
+0x00523138 data ms_clip_rect
+0x005351c8 data sys_tasks
+0x00535318 data pal_highlight_remap
+0x00545428 data di_display_flags
+0x00545430 data di_dist_b
+0x00545838 data di_dist_r
+0x00545c38 data di_palette
+0x00546038 data di_hpalette
+0x005464a0 data window_name
+0x005468a0 data di_src_dc
+0x005468a4 data di_dst_dc
+0x005468c0 data di_dist_g
+0x00546dc0 data ini_value_buf
+0x005479c8 data pcyc_ranges
+0x005485a4 data font_cur
+0x005485a8 data font_ids
+0x005485d0 data font_data
+0x005485f8 data font_cur_id
 
 # --- data ---
 0x0054f364 data cbres_current_layer
@@ -181,10 +462,42 @@
 0x0057d46c data codec_lz_src_len
 0x0057d470 data codec_lz_src_pos
 0x0057d474 data codec_lz_out_cap
+0x0057d478 data tile_set_entries
+0x0057da48 data tile_set_data
+0x00639b90 data flc_frame_buf
 0x0064798c data codec_output_temp_buffer
 0x00647990 data codec_save_buffer
 0x00647998 data cmprs_file_list  # numFileListEntries entries of 0x34 bytes
 0x0064b9e1 data res_cur_room
+0x0064cf10 data pal_shade_tables
+0x0064d710 data ini_path
+0x0064d810 data rc_cd_path
+0x0064da10 data rc_resource_file
+0x0064dc10 data hidden_hwnd
+0x0064dc14 data app_hwnd
+0x0064dc50 data di_screen_width
+0x0064dc54 data di_screen_height
+0x0064dc60 data sys_state
+0x0064dc64 data arg_load_file
+0x0064e070 data app_hinstance
+0x0064e08c data app_exit_code
+0x0064e090 data exe_path
+0x0064e190 data arg_ini_path
+0x0064e290 data app_class_name
+0x0064e390 data di_desktop_width
+0x0064e394 data di_desktop_height
+0x00650048 data game_command
+0x0065004c data game_next_command
+0x00650054 data game_running
+0x0067254c data ms_cursor
+0x0067258c data snd_voice_stream_size
+0x0067259c data snd_music_stream_size
+0x00672780 data sys_shutdown_done
+0x006727e8 data he_heap_base
+0x006727ec data he_heap_size
+0x00672924 data di_paint_handler
+0x00673a00 data pcyc_running
+0x00673a10 data font_builtin
 0x006749c8 data cbres_top_layer
 0x006749d0 data cbres_c_file_layer  # "C File Layer" table
 0x00675bb0 data cmprs_layer  # "Compression Layer" table

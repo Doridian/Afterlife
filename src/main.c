@@ -1,7 +1,18 @@
 /*
- * Entry point. Until the game's own WinMain is decompiled, this runs a small
- * resource viewer that exercises the platform layer and the bundle reader:
- * left/right pages through the bitmaps in the bundle, Escape quits.
+ * Entry point: the port's version of the CRT entry (0x4b1007) and WinMain
+ * (win_main 0x4c62e0). Follows the original's startup (see
+ * docs/startup.md): parse the command line, pick the INI file, run the
+ * subsystem init sequence, run the game, shut down.
+ *
+ * Usage: afterlife [DATA_DIR] [FILE.INI] [SAVE.ALF|SCENARIO.ASC] [--quit]
+ *   DATA_DIR stands in for the original's install folder (default: the
+ *   folder of FILE.INI if one is given, else "orig"). FILE.INI is resolved
+ *   in it (default ALIFE.ini, matched case-insensitively). --quit exits right
+ *   after initialisation (for testing).
+ *
+ * game_main (0x401000) isn't decompiled yet. Until it is, this runs a small
+ * resource viewer on top of the initialised subsystems: left/right pages
+ * through the bitmaps in the bundles, Escape quits.
  */
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_keycode.h>
@@ -11,16 +22,13 @@
 
 #include "compbun/cbres.h"
 #include "formats/bmp8.h"
+#include "game/config.h"
+#include "game/ini.h"
 #include "game/resource.h"
+#include "game/startup.h"
 #include "platform/platform.h"
 
-#define SCREEN_W 640
-#define SCREEN_H 480
-
-/* Stand-ins for ALIFE.INI's "Resource file" (a hard-disk install's local
- * subset) and "CD Path" until the INI code is decompiled. */
-static const char *const k_local_bundles[] = {"FULL.000", "MEDIUM.000"};
-static const char *const k_cd_bundle = "ALIFE.000";
+/* --- placeholder for game_main ------------------------------------------- */
 
 /* Reads a whole resource through the compbun stack, like the game's sound
  * code (0x4b9913). Returns a malloc'd buffer the caller frees, or NULL. */
@@ -59,70 +67,132 @@ static void show(uint32_t id)
     long len = 0;
     uint8_t *data = load_resource(id, &len);
     int w = 0, h = 0;
-    memset(plat_video_framebuffer(), 0, SCREEN_W * SCREEN_H);
-    if (data && bmp8_blit(data, (size_t)len, plat_video_framebuffer(), SCREEN_W, SCREEN_H, pal, &w, &h))
+    int sw = plat_video_width(), sh = plat_video_height();
+    memset(plat_video_framebuffer(), 0, (size_t)sw * (size_t)sh);
+    if (data && bmp8_blit(data, (size_t)len, plat_video_framebuffer(), sw, sh, pal, &w, &h))
         plat_video_set_palette(pal, 0, 256);
     printf("resource %u: %dx%d\n", (unsigned)id, w, h);
     free(data);
 }
 
-int main(int argc, char **argv)
+static uint32_t *g_bmps;
+static int g_nbmp, g_cur;
+static bool g_escape;
+
+static void viewer_event(const PlatEvent *ev)
 {
-    plat_set_data_dir(argc > 1 ? argv[1] : "orig");
-
-    const char *local = "None";
-    for (size_t i = 0; i < sizeof(k_local_bundles) / sizeof(k_local_bundles[0]); i++) {
-        FILE *f = plat_fopen_data(k_local_bundles[i]);
-        if (f) {
-            fclose(f);
-            local = k_local_bundles[i];
-            break;
-        }
+    if (ev->type != PLAT_EV_KEY_DOWN)
+        return;
+    if (ev->key == SDLK_ESCAPE)
+        g_escape = true;
+    if (g_nbmp && (ev->key == SDLK_LEFT || ev->key == SDLK_RIGHT)) {
+        g_cur = (g_cur + (ev->key == SDLK_RIGHT ? 1 : g_nbmp - 1)) % g_nbmp;
+        show(g_bmps[g_cur]);
     }
-    rc_initialize(local, k_cd_bundle);
-    /* The original refuses to run without the CD; the viewer makes do with
-     * a local bundle. */
+}
+
+/* Stand-in for game_main (0x401000). The original's shape:
+ *   load cursors, palette, bitmaps; create the main and control-panel
+ *   windows; intro/title unless a file was given on the command line;
+ *   init the game modules; then
+ *   do { sys_pump(); game_frame_update(); ui_update(...); sys_pump();
+ *        ...; switch (game_command) { load, save, new game, ... }
+ *   } while (game_running);
+ */
+static int game_main(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    if (!g_config.sound_enabled) {
+        fprintf(stderr, "Sound = NONE: compbun is not initialised, nothing to show.\n");
+        return 0;
+    }
     const RcIndex *index = rc_cd_index()->count ? rc_cd_index() : rc_local_index();
-    if (!index->count) {
-        fprintf(stderr, "No resource bundle found. Run tools/extract_cd.py first (see README.md).\n");
-        return 1;
-    }
-    rc_hook_compbun();
-    compbun_init(1, 0);
-
-    uint32_t *bmps = malloc(index->count * sizeof(*bmps));
-    int nbmp = 0, cur = 0;
-    for (uint32_t i = 0; bmps && i < index->count; i++) {
+    g_bmps = malloc((index->count ? index->count : 1) * sizeof(*g_bmps));
+    for (uint32_t i = 0; g_bmps && i < index->count; i++) {
         if (is_bmp(index->ids[i])) {
             if (index->ids[i] == 1210)
-                cur = nbmp;
-            bmps[nbmp++] = index->ids[i];
+                g_cur = g_nbmp;
+            g_bmps[g_nbmp++] = index->ids[i];
         }
     }
-    printf("%u resources, %d bitmaps\n", (unsigned)index->count, nbmp);
+    printf("%u resources, %d bitmaps\n", (unsigned)index->count, g_nbmp);
+    if (g_nbmp)
+        show(g_bmps[g_cur]);
 
-    if (!plat_init("Afterlife", SCREEN_W, SCREEN_H))
-        return 1;
-    if (nbmp)
-        show(bmps[cur]);
-
-    for (int running = 1; running;) {
-        PlatEvent ev;
-        while (plat_poll_event(&ev)) {
-            if (ev.type == PLAT_EV_QUIT || (ev.type == PLAT_EV_KEY_DOWN && ev.key == SDLK_ESCAPE))
-                running = 0;
-            if (ev.type == PLAT_EV_KEY_DOWN && nbmp && (ev.key == SDLK_LEFT || ev.key == SDLK_RIGHT)) {
-                cur = (cur + (ev.key == SDLK_RIGHT ? 1 : nbmp - 1)) % nbmp;
-                show(bmps[cur]);
-            }
-        }
+    sys_set_event_hook(viewer_event);
+    while (!sys_quit_requested() && !g_escape) {
+        sys_pump();
         plat_video_present();
-        plat_yield();
+    }
+    sys_set_event_hook(NULL);
+    free(g_bmps);
+    return 0;
+}
+
+/* --- entry ---------------------------------------------------------------- */
+
+static void print_config(void)
+{
+    const AlConfig *c = &g_config;
+    printf("INI file:        %s\n", ini_path());
+    printf("Heap size:       %u bytes\n", (unsigned)c->heap_size);
+    printf("CD Path:         \"%s\" (%u resources)\n", c->cd_path, (unsigned)rc_cd_index()->count);
+    printf("Resource file:   \"%s\" (%u resources)\n", c->resource_file,
+           (unsigned)rc_local_index()->count);
+    printf("Resolution:      %s -> %dx%d, mode %d\n", c->resolution_max ? "MAX" : "set", c->width,
+           c->height, c->display_mode);
+    printf("Color depth:     %s%d\n", c->has_color_depth ? "" : "don't care / ", c->color_depth);
+    printf("Window name:     \"%s\"\n", c->window_name);
+    printf("Sound:           %s\n", c->sound_enabled ? "on" : "NONE");
+    printf("Music stream:    %d, %d, %d\n", c->music_stream[0], c->music_stream[1],
+           c->music_stream[2]);
+    printf("Voice stream:    %d, %d, %d\n", c->voice_stream[0], c->voice_stream[1],
+           c->voice_stream[2]);
+    printf("Mixer channels:  %d\n", c->mixer_channels);
+    if (g_arg_load_file[0])
+        printf("Load file:       %s\n", g_arg_load_file);
+}
+
+int main(int argc, char **argv)
+{
+    bool quit_after_init = false;
+    for (int i = 1; i < argc; i++)
+        if (strcmp(argv[i], "--quit") == 0)
+            quit_after_init = true;
+
+    /* app_already_running (0x4c6b3e) and app_chdir_to_exe (0x4c6a64) have
+     * no port equivalent; the data dir plays the role of the exe's folder. */
+    const char *dir = NULL;
+    if (!app_parse_args(argc, argv, &dir)) {
+        printf("usage: %s [DATA_DIR] [FILE.INI] [SAVE.ALF|SCENARIO.ASC] [--quit]\n", argv[0]);
+        return 0;
     }
 
-    plat_shutdown();
-    free(bmps);
-    compbun_shutdown();
-    rc_shutdown();
-    return 0;
+    /* An INI path with a directory and no DATA_DIR: use its folder. */
+    static char ini_dir[1024];
+    const char *ini_name = g_arg_ini_path;
+    const char *slash = strrchr(g_arg_ini_path, '/');
+    const char *bslash = strrchr(g_arg_ini_path, '\\');
+    if (bslash && (!slash || bslash > slash))
+        slash = bslash;
+    if (slash && !dir) {
+        size_t n = (size_t)(slash - g_arg_ini_path);
+        if (n >= sizeof(ini_dir))
+            n = sizeof(ini_dir) - 1;
+        memcpy(ini_dir, g_arg_ini_path, n);
+        ini_dir[n] = '\0';
+        dir = n ? ini_dir : "/";
+        ini_name = slash + 1;
+    }
+    plat_set_data_dir(dir ? dir : "orig");
+    ini_set_path(ini_name);
+
+    int ret = 1;
+    if (sys_initialize() == 0) {
+        print_config();
+        ret = quit_after_init ? 0 : game_main(argc, argv);
+    }
+    sys_shutdown();
+    return ret;
 }

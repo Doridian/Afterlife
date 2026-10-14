@@ -59,6 +59,93 @@ void plat_video_set_palette(const PlatColor *colors, int first, int count)
     SDL_SetPaletteColors(g_palette, tmp, first, count);
 }
 
+bool plat_video_set_mode(int width, int height, bool fullscreen)
+{
+    if (!g_window || width <= 0 || height <= 0)
+        return false;
+    if (!g_indexed || g_indexed->w != width || g_indexed->h != height) {
+        SDL_Surface *ind = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_INDEX8);
+        SDL_Palette *pal = ind ? SDL_CreateSurfacePalette(ind) : NULL;
+        SDL_Texture *tex =
+            SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+        if (!ind || !pal || !tex) {
+            SDL_Log("plat_video_set_mode: %s", SDL_GetError());
+            SDL_DestroySurface(ind);
+            SDL_DestroyTexture(tex);
+            return false;
+        }
+        SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
+        if (g_palette)
+            SDL_SetPaletteColors(pal, g_palette->colors, 0, g_palette->ncolors);
+        SDL_DestroySurface(g_indexed);
+        SDL_DestroyTexture(g_texture);
+        g_indexed = ind;
+        g_palette = pal;
+        g_texture = tex;
+        SDL_SetRenderLogicalPresentation(g_renderer, width, height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    }
+    SDL_SetWindowFullscreen(g_window, fullscreen);
+    if (!fullscreen)
+        SDL_SetWindowSize(g_window, width, height);
+    return true;
+}
+
+void plat_video_desktop_size(int *width, int *height)
+{
+    const SDL_DisplayMode *mode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+    *width = mode ? mode->w : 0;
+    *height = mode ? mode->h : 0;
+}
+
+struct PlatCursor {
+    SDL_Cursor *cursor;
+};
+
+PlatCursor *plat_cursor_create(const uint8_t *rgba, int w, int h, int hot_x, int hot_y)
+{
+    SDL_Surface *s = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA32, (void *)rgba, w * 4);
+    SDL_Cursor *c = s ? SDL_CreateColorCursor(s, hot_x, hot_y) : NULL;
+    SDL_DestroySurface(s);
+    PlatCursor *pc = c ? malloc(sizeof(*pc)) : NULL;
+    if (!pc) {
+        if (c)
+            SDL_DestroyCursor(c);
+        return NULL;
+    }
+    pc->cursor = c;
+    return pc;
+}
+
+void plat_cursor_destroy(PlatCursor *cursor)
+{
+    if (cursor) {
+        if (SDL_GetCursor() == cursor->cursor)
+            SDL_SetCursor(SDL_GetDefaultCursor());
+        SDL_DestroyCursor(cursor->cursor);
+        free(cursor);
+    }
+}
+
+void plat_cursor_set(PlatCursor *cursor)
+{
+    SDL_SetCursor(cursor ? cursor->cursor : SDL_GetDefaultCursor());
+}
+
+void plat_cursor_show(bool show)
+{
+    if (show)
+        SDL_ShowCursor();
+    else
+        SDL_HideCursor();
+}
+
+void plat_mouse_warp(int x, int y)
+{
+    float wx = 0, wy = 0;
+    if (g_renderer && SDL_RenderCoordinatesToWindow(g_renderer, (float)x, (float)y, &wx, &wy))
+        SDL_WarpMouseInWindow(g_window, wx, wy);
+}
+
 void plat_video_present(void)
 {
     SDL_Surface *dst;
