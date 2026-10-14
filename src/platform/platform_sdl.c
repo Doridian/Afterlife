@@ -197,3 +197,48 @@ FILE *plat_fopen_data(const char *name)
     }
     return fopen(path, "rb");
 }
+
+/* PlatFile is a thin wrapper over the CRT stream; keeping it opaque leaves
+ * room for a backend without stdio (e.g. reading straight from the CD image). */
+struct PlatFile {
+    FILE *f;
+};
+
+PlatFile *plat_file_open(const char *name)
+{
+    FILE *f = plat_fopen_data(name);
+    PlatFile *pf = f ? malloc(sizeof(*pf)) : NULL;
+    if (!pf) {
+        if (f)
+            fclose(f);
+        return NULL;
+    }
+    pf->f = f;
+    return pf;
+}
+
+void plat_file_close(PlatFile *f)
+{
+    if (f) {
+        fclose(f->f);
+        free(f);
+    }
+}
+
+size_t plat_file_read(PlatFile *f, void *buf, size_t size, size_t count)
+{
+    return fread(buf, size, count, f->f);
+}
+
+int plat_file_seek(PlatFile *f, long offset, int whence)
+{
+    static const int k_whence[] = {SEEK_SET, SEEK_CUR, SEEK_END};
+    if (whence < 0 || whence > 2)
+        return -1;
+    return fseek(f->f, offset, k_whence[whence]) == 0 ? 0 : -1;
+}
+
+long plat_file_tell(PlatFile *f)
+{
+    return ftell(f->f);
+}

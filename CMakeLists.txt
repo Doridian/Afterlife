@@ -25,17 +25,40 @@ else()
     endif()
 endif()
 
-add_executable(afterlife
-    src/main.c
+# Everything but the entry point, shared by the game and the tests.
+add_library(afterlife_core STATIC
     src/platform/platform_sdl.c
-    src/formats/jiff.c
+    src/compbun/cbres.c
+    src/compbun/bndlemgr.c
+    src/compbun/cmprsmgr.c
+    src/compbun/preload.c
+    src/game/resource.c
     src/formats/bmp8.c
 )
-target_include_directories(afterlife PRIVATE src)
-target_link_libraries(afterlife PRIVATE SDL3::SDL3)
+# The codecs are written separately; build them in when they're there.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/compbun/codec.c")
+    target_sources(afterlife_core PRIVATE src/compbun/codec.c)
+    target_compile_definitions(afterlife_core PRIVATE COMPBUN_HAVE_CODECS)
+endif()
+target_include_directories(afterlife_core PUBLIC src)
+target_link_libraries(afterlife_core PUBLIC SDL3::SDL3)
+
+add_executable(afterlife src/main.c)
+target_link_libraries(afterlife PRIVATE afterlife_core)
+
+if(NOT EMSCRIPTEN)
+    # tests/compbun_dump: dumps every resource of a bundle through the compbun
+    # stack, for tests/compare_jiff.py.
+    add_executable(compbun_dump tests/compbun_dump.c)
+    target_link_libraries(compbun_dump PRIVATE afterlife_core)
+endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(afterlife PRIVATE -Wall -Wextra)
+    foreach(t afterlife_core afterlife compbun_dump)
+        if(TARGET ${t})
+            target_compile_options(${t} PRIVATE -Wall -Wextra)
+        endif()
+    endforeach()
 endif()
 
 if(EMSCRIPTEN)

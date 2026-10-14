@@ -6,6 +6,7 @@ See docs/formats/jiff.md for what is known so far.
 
     tools/jiff.py list orig/ALIFE.000
     tools/jiff.py stats orig/ALIFE.000
+    tools/jiff.py verify orig/ALIFE.000
     tools/jiff.py dump orig/ALIFE.000 out/
 """
 import argparse
@@ -64,17 +65,23 @@ class Bundle:
         for i in range(self.count):
             pos = self.base + self.offsets[i]
             self.f.seek(pos)
-            # 16-byte entry header: u32 flags (always 2 so far), u32 length
-            # counted from offset 8, then 8 zero bytes. The payload is an
-            # embedded file in its own format.
-            flags, length = struct.unpack("<II", self.f.read(8))
-            self.f.seek(pos + 16)
+            # Each resource is its own "RESC" chunk (whose length field counts
+            # its own 8-byte header). OFST points at the chunk body: u32
+            # compression type (always 2 = stored), u32 body size including
+            # this 16-byte header, 8 zero bytes, then the payload.
+            self.f.seek(pos - 8)
+            ctag, clen, flags, size = struct.unpack("<4sIII", self.f.read(16))
+            reserved = self.f.read(8)
             yield {
                 "index": i,
                 "id": self.ids[i],
+                "pos": pos,
+                "chunk": tag(ctag),
+                "chunk_len": clen,
                 "offset": pos + 16,
                 "flags": flags,
-                "length": length - 8,
+                "reserved": reserved,
+                "length": size - 16,
                 "type": sniff(self.f.read(16)),
             }
 
@@ -83,9 +90,47 @@ class Bundle:
         return self.f.read(entry["length"])
 
 
+def self_size(d, length):
+    """Size the payload claims for itself, or None if the format has no size field."""
+    if d[:2] == b"BM":
+        n = struct.unpack("<I", d[2:6])[0]
+        return n + 14 if n + 14 == length else n  # some BMPs omit the 14-byte file header
+    if d[4:6] in (b"\x11\xaf", b"\x12\xaf"):
+        return struct.unpack("<I", d[:4])[0]
+    if d[:4] == b"TILE":
+        return struct.unpack("<I", d[4:8])[0] + 8
+    if d[:4] == b"AKOS":
+        return struct.unpack(">I", d[4:8])[0]
+    return None
+
+
+def verify(b):
+    """Check the RESC chain and that payloads with their own size field are complete."""
+    ok = True
+    entries = sorted(b.entries(), key=lambda e: e["pos"])
+    end = b.f.seek(0, 2)
+    for k, e in enumerate(entries):
+        nxt = entries[k + 1]["pos"] - 8 if k + 1 < len(entries) else end
+        problems = []
+        if e["chunk"] != "RESC" or e["chunk_len"] != e["length"] + 24:
+            problems.append(f"chunk {e['chunk']!r} len {e['chunk_len']}")
+        if e["offset"] + e["length"] != nxt:
+            problems.append(f"gap {nxt - e['offset'] - e['length']}")
+        if e["flags"] != 2 or any(e["reserved"]):
+            problems.append(f"type {e['flags']:#x} reserved {e['reserved'].hex()}")
+        claimed = self_size(b.read(e)[:16], e["length"])
+        if claimed is not None and claimed != e["length"]:
+            problems.append(f"payload says {claimed} bytes, entry has {e['length']}")
+        if problems:
+            ok = False
+            print(f"id {e['id']}: " + "; ".join(problems))
+    print(f"{len(entries)} resources, {'OK' if ok else 'problems found'}")
+    return ok
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["list", "stats", "dump"])
+    ap.add_argument("command", choices=["list", "stats", "verify", "dump"])
     ap.add_argument("bundle")
     ap.add_argument("outdir", nargs="?")
     args = ap.parse_args()
@@ -98,12 +143,19 @@ def main():
     elif args.command == "stats":
         by_type = collections.Counter()
         size = collections.Counter()
+        flags = collections.Counter()
         for e in b.entries():
             by_type[e["type"]] += 1
             size[e["type"]] += e["length"]
+            flags[e["flags"], e["reserved"].hex()] += 1
         print(f"{b.count} resources")
         for t, n in by_type.most_common():
             print(f"  {t:4}  {n:5}  {size[t]:>12,} bytes")
+        print("compression type / reserved bytes:")
+        for (f, r), n in flags.most_common():
+            print(f"  {f:#06x}  {r}  {n:5}")
+    elif args.command == "verify":
+        sys.exit(0 if verify(b) else 1)
     else:
         if not args.outdir:
             sys.exit("dump needs an output directory")

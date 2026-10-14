@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Query the headless Ghidra project (ghidra/Afterlife.gpr) from the command line.
+
+  tools/gh decompile <addr|name>      decompiled C of the function containing it
+  tools/gh disasm <addr|name>         disassembly of that function
+  tools/gh listing <addr|name> [n]    n code units (data or code) from the address
+  tools/gh xrefs <addr|name>          references to the address
+  tools/gh strings [-x] [regex]       defined strings (-x: list referencing functions)
+  tools/gh funcs [-u] [regex]         functions: addr, size, name (-u: user-named only)
+  tools/gh apply [file]               symbols/ALIFE.EXE.txt -> Ghidra DB
+  tools/gh rename <addr|name> <new> [func|data]   rename in DB and symbol file
+  tools/gh export [file]              Ghidra DB user names -> symbols/ALIFE.EXE.txt
+  tools/gh batch < cmds               several commands (one per line) in one JVM
+
+Addresses are hex (0x4012a0, 4012a0, FUN_004012a0) or symbol names; regexes are
+case-insensitive. Every call is serialized with flock on ghidra/.gh.lock, so
+parallel callers are safe (they queue). Use `batch` to amortize JVM startup.
+Env: GH_PROGRAM (default ALIFE.EXE), GHIDRA_INSTALL_DIR (default /opt/ghidra).
+"""
+
+import fcntl
+import os
+import shlex
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+PROJ = ROOT / "ghidra"
+SCRIPTS = ROOT / "tools" / "ghidra" / "scripts"
+GHIDRA = Path(os.environ.get("GHIDRA_INSTALL_DIR", "/opt/ghidra"))
+PROGRAM = os.environ.get("GH_PROGRAM", "ALIFE.EXE")
+
+READ_CMDS = {"decompile", "disasm", "listing", "xrefs", "strings", "funcs", "export"}
+WRITE_CMDS = {"apply", "rename"}
+
+
+def die(msg: str) -> None:
+    print(f"gh: {msg}", file=sys.stderr)
+    sys.exit(2)
+
+
+def main() -> int:
+    argv = sys.argv[1:]
+    if not argv or argv[0] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return 0
+    if argv[0] == "batch":
+        cmds = [shlex.split(l) for l in sys.stdin if l.strip() and not l.lstrip().startswith("#")]
+    else:
+        cmds = [argv]
+    for c in cmds:
+        if c[0] not in READ_CMDS | WRITE_CMDS:
+            die(f"unknown command: {c[0]} (see tools/gh --help)")
+        if any("\t" in a or "\n" in a for a in c):
+            die("arguments may not contain tabs or newlines")
+    if not (PROJ / "Afterlife.gpr").exists():
+        die("no Ghidra project; run tools/ghidra/setup.sh first")
+    write = any(c[0] in WRITE_CMDS for c in cmds)
+
+    (PROJ / "logs").mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="gh-") as tmp:
+        cmdfile = Path(tmp, "cmds")
+        cmdfile.write_text("".join("\t".join(c) + "\n" for c in cmds), encoding="utf-8")
+        outfile = Path(tmp, "out")
+        log = Path(tmp, "log")
+        args = [
+            str(GHIDRA / "support" / "analyzeHeadless"), str(PROJ), "Afterlife",
+            "-process", PROGRAM, "-noanalysis",
+            "-scriptPath", str(SCRIPTS),
+            "-postScript", "GhCli.java", str(outfile), "batch", str(cmdfile),
+        ]
+        if not write:
+            args.append("-readOnly")
+        with open(PROJ / ".gh.lock", "w") as lock:
+            # Ghidra itself refuses a second open of the project, so all calls queue here.
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            with open(log, "w") as lf:
+                proc = subprocess.run(args, stdout=lf, stderr=subprocess.STDOUT)
+        rc_file = Path(str(outfile) + ".rc")
+        if outfile.exists():
+            sys.stdout.write(outfile.read_text(encoding="utf-8"))
+        if proc.returncode != 0 or not rc_file.exists():
+            keep = PROJ / "logs" / "gh-last-error.log"
+            keep.write_text(log.read_text(errors="replace"))
+            interesting = [l for l in log.read_text(errors="replace").splitlines()
+                           if "ERROR" in l or "error:" in l or "Exception" in l]
+            print("gh: Ghidra run failed; full log in ghidra/logs/gh-last-error.log", file=sys.stderr)
+            for l in interesting[:20]:
+                print("  " + l, file=sys.stderr)
+            return 1
+        return int(rc_file.read_text().strip() or "1")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

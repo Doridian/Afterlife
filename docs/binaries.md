@@ -16,11 +16,15 @@ All from the retail Afterlife CD (volume `AFTERLIF`, mastered with OMI QuickTOPi
 ## ALIFE.EXE
 
 - PE32, i386, GUI. Link timestamp **1996-05-30 16:23:16 UTC**. Linker version 2.55.
-- **Compiled with Watcom C/C++32** (10.x era; runtime banners say "1988-1994"). There's no
-  MSVC Rich header and no debug directory, so no symbols.
-- The code is C. Watcom passes arguments in registers by default (`eax`, `edx`,
-  `ebx`, `ecx`, then stack), so set Ghidra's calling convention to `__watcall` for
-  internal functions or the decompiled output won't make sense.
+- **Compiled with Microsoft Visual C++** (VC++ 2.x era, judging by linker 2.55), not Watcom.
+  The entry point is the MSVC CRT startup (SEH frame, `GetVersion`, `__cinit`), Ghidra's
+  Function ID matches MSVC CRT routines (`__cinit`, `__ftol`, `__adj_fdiv_m64`, ...), and
+  the code is plain `__cdecl` with caller stack cleanup. The Watcom "1988-1994" runtime
+  banners are in `ALIFEDOS.EXE`, not here. There's no Rich header and no debug directory,
+  so no symbols.
+- The code is C, apparently built with optimizations off (`jnz rel32`, dead blocks
+  after `jmp`). Ghidra's default x86 Windows calling conventions are correct, so don't
+  switch to `__watcall` for this binary.
 - Image base `0x400000`, entry `0x4b1007`.
 
 | Section | VA | Virtual size |
@@ -42,7 +46,7 @@ The whole Windows dependency is small, so the platform layer (`src/platform/`) s
 - **WINMM**: `waveOut*` for audio, `timeSetEvent`/`timeKillEvent`/`timeGetTime` for timing.
   No DirectSound. All music and sound is digital, mixed in-process by iMUSE.
 - **USER32**: window, message pump, cursor, `ChangeDisplaySettingsA` for mode switching.
-- **KERNEL32**: file I/O, find-first/next, directories, `VirtualAlloc`, and the Watcom CRT's usual imports.
+- **KERNEL32**: file I/O, find-first/next, directories, `VirtualAlloc`, and the MSVC CRT's usual imports.
 - **comdlg32**: `GetSaveFileNameA` only.
 
 ### Source-path strings (assert/debug leftovers)

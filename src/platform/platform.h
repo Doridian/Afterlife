@@ -66,4 +66,15 @@ int plat_audio_queued_frames(void);
 void plat_set_data_dir(const char *dir);
 FILE *plat_fopen_data(const char *name);
 
+/* Read-only data files (KERNEL32/CRT file I/O). Same name lookup as
+ * plat_fopen_data. seek/tell use the CRT whence values 0 = set, 1 = current,
+ * 2 = end, which is what the original passes around. */
+typedef struct PlatFile PlatFile;
+
+PlatFile *plat_file_open(const char *name);
+void plat_file_close(PlatFile *f);
+size_t plat_file_read(PlatFile *f, void *buf, size_t size, size_t count); /* items read */
+int plat_file_seek(PlatFile *f, long offset, int whence);                 /* 0 on success */
+long plat_file_tell(PlatFile *f);                                          /* -1 on error */
+
 #endif

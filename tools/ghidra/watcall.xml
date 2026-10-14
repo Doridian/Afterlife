@@ -1,0 +1,33 @@
+<!-- Watcom C 10.x default register calling convention (#pragma aux __watcall).
+     Args: EAX, EDX, EBX, ECX, then stack (callee pops). Return: EAX / EDX:EAX / ST0.
+     The callee preserves every register except the return registers.
+     Installed into the program as a compiler-spec extension by AfterlifeSetup.java. -->
+<prototype name="__watcall" extrapop="unknown" stackshift="4">
+  <input>
+    <pentry minsize="1" maxsize="4"><register name="EAX"/></pentry>
+    <pentry minsize="1" maxsize="4"><register name="EDX"/></pentry>
+    <pentry minsize="1" maxsize="4"><register name="EBX"/></pentry>
+    <pentry minsize="1" maxsize="4"><register name="ECX"/></pentry>
+    <pentry minsize="1" maxsize="500" align="4"><addr offset="4" space="stack"/></pentry>
+  </input>
+  <output killedbycall="true">
+    <pentry minsize="4" maxsize="10" metatype="float" extension="float"><register name="ST0"/></pentry>
+    <pentry minsize="1" maxsize="4"><register name="EAX"/></pentry>
+    <pentry minsize="5" maxsize="8"><addr space="join" piece1="EDX" piece2="EAX"/></pentry>
+  </output>
+  <unaffected>
+    <register name="ESP"/>
+    <register name="EBP"/>
+    <register name="ESI"/>
+    <register name="EDI"/>
+    <register name="EBX"/>
+    <register name="ECX"/>
+    <register name="EDX"/>
+    <register name="DF"/>
+    <register name="FS_OFFSET"/>
+  </unaffected>
+  <killedbycall>
+    <register name="ST0"/>
+    <register name="ST1"/>
+  </killedbycall>
+</prototype>

@@ -1,0 +1,194 @@
+# Symbols for ALIFE.EXE (Win32, MSVC-built). Format: see symbols/README.md.
+# ADDR KIND NAME [| C signature or data type] [# comment]
+# Win32 imports are named by Ghidra and are not listed here.
+
+# --- MSVC CRT (only the ones compbun calls through its C File Layer) ---
+0x004b89cd func fclose  # MSVC CRT; C File Layer close slot
+0x004b9510 func snd_initialize  # "HILEVEL ERROR SoIntialize"; patches C File Layer slots to snd_res_*, then compbun_init(1,0)
+0x004ba03f func snd_res_open
+0x004ba07b func snd_res_close
+0x004ba092 func snd_res_read
+0x004ba0ba func snd_res_tell
+0x004ba0d6 func snd_res_seek
+0x004cd9b0 func rc_initialize  # INI "CD Path" -> 0x64d810, "Resource file" -> 0x64da10; indexes both JIFF files
+0x004cda8e func rc_open_resource  # "RcLoadResource"/"RcOpenResource": local index first, then CD; RESC body +0 kind 1=remote file, 2=inline
+0x004cdd61 func rc_resource_size  # RESC body +4 size - 16 (kind 2); RESC chunk len ignored
+0x004cdf6c func rc_find_local
+0x004cdff4 func rc_find_cd
+
+# --- resource layer ---
+0x004ce09f func rc_load_bmp_resource  # error tag "HILEVEL ERROR RcLoadBMPResource"
+0x004ce706 func rc_load_index  # (path, &ids, &offsets, &count): checks JIFF and HEAD tags only
+0x004ceafd func rc_set_cd_path
+0x004d202d func file_open
+0x004d20d2 func file_close
+0x004d20f3 func file_seek
+0x004d2117 func file_read
+0x004d2220 func file_tell
+0x004d223c func file_length
+0x004d22b6 func file_read_u32
+0x004d51a0 func compbun_init  # (compress, bundle): cbres_init, push bndl_layer, push cmprs_layer; ALIFE calls (1,0) from snd_initialize
+
+# --- compbun: cbresfm.c. Layered file system; layer struct: name, init, open,
+#     close, read(buf,size,count,h), read_cb(..., cb), seek(h,off,whence),
+#     tell(h), getpos(h,*pos), next (lower layer) at +0x24 ---
+0x004d5270 func cbres_lower_open  # cbresfm.c: call open of the layer below currentLayer
+0x004d52a0 func cbres_lower_close
+0x004d52d0 func cbres_lower_read
+0x004d5310 func cbres_lower_getpos
+0x004d5340 func cbres_lower_tell
+0x004d5370 func cbres_lower_seek
+0x004d53b0 func cbres_open
+0x004d53d0 func cbres_close
+0x004d53f0 func cbres_read
+0x004d5420 func cbres_tell
+0x004d5440 func cbres_seek
+0x004d5470 func cbres_push_layer  # (layer): layer->next = topLayer; topLayer = layer; layer->init()
+0x004d54a0 func cbres_init  # registers compbun:source:cbresfm.c, topLayer = C File Layer
+0x004d54d0 func cfile_read_cb  # C File Layer read_cb slot: fread then callback
+0x004d5510 func cbres_shutdown
+0x004d5530 func cbres_dump  # dumps topLayer / currentLayer
+
+# --- VHUMOR runtime (vhumor:source:*.c) ---
+0x004d7b20 func vh_assert_fail  # "Assertion failed: %s, file %s, line %d" (expr, file, line)
+0x004d7df0 func vh_module_register  # module.c: (name, time, date, shutdown_fn, dump_fn, 0); asserts numModules<MAX_MODULES
+0x004d8230 func vh_mem_alloc | void * vh_mem_alloc(uint size, char * file, int line)  # mem.c: (size, file, line); strings "vh_MemAlloc: ..."
+0x004d8410 func vh_mem_free | void vh_mem_free(void * ptr, char * file, int line)  # mem.c: (ptr, file, line); string "vh_MemFree: Block not found"
+
+# --- compbun: cmprsmgr.c (Compression Layer) ---
+0x004daa60 func cmprs_init  # registers module, preload_init, codec_init, registers codecs 0x0..0xc
+0x004daba0 func cmprs_shutdown
+0x004dac90 func cmprs_dump
+0x004dad10 func cmprs_open  # (name, mode) -> handle+1, 0 on failure
+0x004daf90 func cmprs_close
+0x004db040 func cmprs_getpos
+0x004db0a0 func cmprs_tell
+0x004db0e0 func cmprs_seek  # whence 0/1/2 on the decompressed stream
+0x004db160 func cmprs_read  # reads sectors, codec_decompress per sector
+0x004db3f0 func cmprs_read_cb
+
+# --- compbun: bndlemgr.c (Bundling layer) ---
+0x004db430 func bndl_init  # registers module; returns numBunFiles
+0x004db480 func bndl_shutdown  # closes bunFiles, frees fileSystem[] buffers
+0x004db510 func bndl_dump  # dumps numBunFiles, bundleInitialized, fileSystem[]
+0x004db5f0 func bndl_open
+0x004db650 func bndl_close
+0x004db690 func bndl_getpos
+0x004db6f0 func bndl_tell
+0x004db730 func bndl_seek
+0x004db7f0 func bndl_read
+0x004db890 func bndl_find_entry  # (name) -> (bundle << 16 | entry) or -1
+0x004db910 func bndl_compare_entry
+0x004db9a0 func bndl_read_cb
+0x004dba10 func vh_message_box
+0x004dbb92 func read_be32_ptr
+0x004dbbe0 func tag_to_str
+0x004dbc23 func res_find_block  # (tag, block): SCUMM-style child block search, BE lengths; "'%s' Not found in %03d... illegal block len %ld"
+0x004dbd1c func res_find_block_data
+0x004dbd59 func res_find_block2
+0x004dbe52 func res_wrap_offs_entry
+
+# --- compbun: codecmgr.c. Codec proc(cmd, a, b, c): cmd 0 init, 1 shutdown,
+#     2 return codec id, 3 compress(dst, src, size) (never issued), 4 decompress(dst, src, size).
+#     All codecs = LZSS + optional delta / 12-bit plane split. src/compbun/codec.c, docs/formats/comp.md ---
+0x004e1800 func codec_init  # clears codecList[15], allocs buffers, registers module
+0x004e1870 func codec_shutdown
+0x004e18d0 func codec_dump
+0x004e1950 func codec_register  # (proc): codecList[proc(2)] = proc
+0x004e1990 func codec_decompress | int codec_decompress(int id, void * dst, void * src, int size)  # (id, dst, src, size) -> codecList[id](4, ...)
+0x004e19c0 func codec_lz_12stereo_2_proc  # id 0xc: 12-bit stereo, block starts 2 bytes into a 3-byte frame
+0x004e1a30 func codec_lz_12stereo_2_compress
+0x004e1c00 func codec_lz_12stereo_2_decompress
+0x004e1d80 func codec_lz_12stereo_1_proc  # id 0xb: 12-bit stereo, phase 1
+0x004e1df0 func codec_lz_12stereo_1_compress
+0x004e1fc0 func codec_lz_12stereo_1_decompress
+0x004e2120 func codec_lz_12stereo_0_proc  # id 0xa: 12-bit stereo, phase 0
+0x004e2190 func codec_lz_12stereo_0_compress
+0x004e2360 func codec_lz_12stereo_0_decompress
+0x004e24e0 func codec_lz_12mono_2_proc  # id 6: 12-bit mono, phase 2
+0x004e2550 func codec_lz_12mono_2_compress
+0x004e26f0 func codec_lz_12mono_2_decompress
+0x004e2860 func codec_lz_12mono_1_proc  # id 5: 12-bit mono, phase 1
+0x004e28d0 func codec_lz_12mono_1_compress
+0x004e2a70 func codec_lz_12mono_1_decompress
+0x004e2bc0 func codec_lz_12mono_0_proc  # id 4: 12-bit mono, phase 0
+0x004e2c30 func codec_lz_12mono_0_compress
+0x004e2dd0 func codec_lz_12mono_0_decompress
+0x004e2f40 func codec_lz_delta2_proc  # id 3: LZSS + 2nd-order byte delta
+0x004e2fb0 func codec_lz_delta2_compress
+0x004e3050 func codec_lz_delta2_decompress
+0x004e30a0 func codec_lz_delta1_proc  # id 2: LZSS + 1st-order byte delta
+0x004e3110 func codec_lz_delta1_compress
+0x004e3180 func codec_lz_delta1_decompress
+0x004e31c0 func codec_lz_proc  # id 1: plain LZSS
+0x004e3230 func codec_lz_compress
+0x004e3250 func codec_lz_decompress
+0x004e3270 func codec_raw_proc  # id 0: stored (memcpy for both directions)
+
+# --- compbun: preload.c ---
+0x004e32f0 func preload_init
+0x004e3330 func preload_shutdown
+0x004e3370 func preload_dump
+0x004e3480 func preload_open_entry
+0x004e3510 func preload_find  # (filename) -> index in preloadDirectory[], -1 if absent
+0x004e3560 func preload_build_block_table
+0x004e35e0 func preload_read_be32  # read 4 bytes via lower layer, byte-swap
+0x004e3610 func bswap32
+0x004e3640 func preload_read_comp_header  # 'COMP' magic, then 3 big-endian u32s
+
+# --- LZSS core used by codecmgr.c; sits after iMUSE wave_mixer.c, own module (name unknown) ---
+0x004e5ea0 func codec_lz_encode  # (dst, src, len) -> encoded len, > len if it does not fit
+0x004e5ee0 func codec_lz_decode  # (dst, src, len) -> decoded len; ignores len, stops at end marker
+0x004e5f20 func codec_lz_encode_run  # Okumura LZSS encoder, N=4096 F=18, no space prefill
+0x004e6210 func codec_lz_decode_run
+0x004e6330 func codec_lz_insert_node  # Okumura InsertNode
+0x004e6470 func codec_lz_delete_node  # Okumura DeleteNode
+0x004e6560 func codec_lz_flush_pending
+0x004e65c0 func codec_lz_put_byte
+0x004e65e0 func codec_lz_put_bit
+0x004e6680 func codec_lz_get_byte
+
+# --- MSVC CRT ---
+0x004eff22 func fopen  # MSVC CRT; C File Layer open slot
+0x004eff35 func fseek  # MSVC CRT; C File Layer seek slot
+0x004effc9 func fread  # MSVC CRT; C File Layer read slot
+0x004f0255 func ftell  # MSVC CRT; C File Layer tell slot
+0x004f063c func fgetpos
+0x004f0704 func bsearch
+
+# --- data ---
+0x0054f364 data cbres_current_layer
+0x0055ed28 data cmprs_read_buffer  # 0x2200 bytes
+0x0055ed2c data cmprs_decompress_buffer  # 0x2200 bytes
+0x0055ed30 data cmprs_num_file_list_entries
+0x0055ed38 data bndl_file_system  # fileSystem[]: 16 bytes each {bunFile, files, ?, tocData}
+0x0055ee5c data bndl_num_bun_files
+0x00567a80 data codec_list  # codecList[15]
+0x00567ac0 data preload_directory  # preloadDirectory[100], 0x28 bytes each
+0x0056ffb8 data codec_lz_dad
+0x00573fc0 data codec_lz_pending
+0x00574028 data codec_lz_lson
+0x0057802c data codec_lz_npending
+0x00578030 data codec_lz_dst
+0x00578038 data codec_lz_text_buf
+0x00579050 data codec_lz_rson
+0x0057d454 data codec_lz_src
+0x0057d458 data codec_lz_out_pos
+0x0057d45c data codec_lz_bitcount
+0x0057d460 data codec_lz_bits
+0x0057d464 data codec_lz_match_pos
+0x0057d468 data codec_lz_match_len
+0x0057d46c data codec_lz_src_len
+0x0057d470 data codec_lz_src_pos
+0x0057d474 data codec_lz_out_cap
+0x0064798c data codec_output_temp_buffer
+0x00647990 data codec_save_buffer
+0x00647998 data cmprs_file_list  # numFileListEntries entries of 0x34 bytes
+0x0064b9e1 data res_cur_room
+0x006749c8 data cbres_top_layer
+0x006749d0 data cbres_c_file_layer  # "C File Layer" table
+0x00675bb0 data cmprs_layer  # "Compression Layer" table
+0x00675bd8 data cmprs_initialized
+0x00675c88 data bndl_layer  # "Bundling layer" table
+0x00675cb0 data bndl_initialized
+0x00677038 data preload_codec_map  # u8[3][4]: (sample format, 2-bit block type) -> codec id {0,1,2,3},{0,4,5,6},{0,10,11,12}
