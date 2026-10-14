@@ -97,4 +97,4 @@ locally so the CD was hit less.
 | `ALSV` | 13 | Same format as the `ASCEN00x.ASC` files on the CD: saved/scenario worlds ("Dusk of the Demiurges") |
 | FLI / FLC | 11 / 4 | Autodesk Animator animations (`0xAF11` / `0xAF12` at +4) |
 | `CHAP`… | 10 | Plain-text chapters of the in-game guide |
-| `AKOS` | 4 | SCUMM-style costume/animation (big-endian), likely the advisors Jasper and Aria |
+| `AKOS` | 4 | SCUMM v7 costumes: Jasper (2003), Aria (2004), plus two unused ones. See [akos.md](akos.md) |

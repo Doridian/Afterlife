@@ -78,7 +78,9 @@ typedef intptr_t (*WmProc)(WmWindow *w, unsigned msg, intptr_t a, intptr_t b);
 #define WM_MSG_CTL_RDOWN 0x11
 #define WM_MSG_CTL_CLICK 0x14     /* a = id */
 #define WM_MSG_CTL_RUP 0x15
-#define WM_MSG_HSCROLL 0x1b       /* scrollbar -> parent: a = position, b = delta */
+#define WM_MSG_HTRACK 0x19        /* scrollbar thumb dragged / track clicked: a = position, b = old - new */
+#define WM_MSG_VTRACK 0x1a
+#define WM_MSG_HSCROLL 0x1b       /* scrollbar arrow: a = position, b = delta */
 #define WM_MSG_VSCROLL 0x1c
 #define WM_MSG_CHAR 0x1e          /* a = character, b = key */
 #define WM_MSG_KEYDOWN 0x1f       /* a = key, b = character */
@@ -97,7 +99,8 @@ typedef intptr_t (*WmProc)(WmWindow *w, unsigned msg, intptr_t a, intptr_t b);
 #define WM_MSG_CTL_RELEASE 0x400  /* controls free their bitmaps */
 #define WM_MSG_CLOSE_BUTTON 0x401 /* menu bar close button */
 #define WM_MSG_CLOSE 0x406        /* quit request, sent to the root (WM_CLOSE) */
-#define WM_MSG_MENUBAR 0x1001
+#define WM_MSG_MENUBAR 0x1001     /* menu container: paint the frame */
+#define WM_MSG_MENU_COMMAND 0x1006 /* menu item chosen, to the menu bar's owner: w = item, a = id */
 
 /* Keyboard event types (kb_flush_one's records). */
 #define WM_KEY_CHAR 1
@@ -135,14 +138,11 @@ struct WmWindow {
     intptr_t *extra;           /* +0xad extra data, one slot per 4 bytes */
 };
 
-/* Optional hooks for modules that aren't ported yet. All may be NULL. */
+/* Optional hooks into the game and the platform. All may be NULL. (The
+ * menu bar, the Alt menu activation and the scrollbars, hooks while those
+ * modules were unported, are now direct calls into ui/menu.c and
+ * ui/scrollbar.c, as in the original.) */
 typedef struct WmHooks {
-    /* 0x4c6e66: menu bar (wm_create_window with WM_F_MENUBAR) */
-    WmWindow *(*create_menubar)(WmWindow *owner, const GfxRect *r, unsigned style);
-    /* 0x4c916a: Alt released over a window with a menu bar */
-    void (*menu_activate)(WmWindow *menubar);
-    /* 0x4bb012: scrollbar (WM_F_VSCROLL / WM_F_HSCROLL) */
-    WmWindow *(*create_scrollbar)(WmWindow *owner, const GfxRect *r, unsigned id, unsigned style);
     /* 0x4ac69c(0): input arrived while the attract mode runs (input_live == 0). */
     void (*attract_stop)(void);
     /* kb_flush_one (0x4d0...): next keyboard event, false if none. */
@@ -281,6 +281,7 @@ void wm_set_default_cursor(PlatCursor *c); /* 0x4c620d */
 /* 0x6727cc: the open menu (set by the menu module, 0x4c84c7); a left
  * release outside it goes to the menu's owner. */
 void wm_set_open_menu(WmWindow *menu);
+WmWindow *wm_open_menu(void);
 
 /* --- extra data and title ---------------------------------------------------------- */
 void wm_set_data(WmWindow *w, uint32_t offset, intptr_t value); /* 0x4c5a00 */

@@ -8,11 +8,12 @@ sits on top of the video core ([rendering.md](rendering.md)).
 |---|---|---|
 | 0x4c1580-0x4c62cc | Window manager (`wm_*`) | `src/ui/wm.c` |
 | 0x4c4a61-0x4c50ae | Rectangle lists ("regions"), part of the WM | `src/ui/region.c` |
-| 0x4ba100-0x4c1568 | Controls (`ctl_*`): button, scrollbar, text field, list box, message box | `src/ui/controls.c` (button and task only) |
-| 0x4c6bf9-0x4c95ca | Menus (menu bar, pop-ups; 0x6727cc = open menu) | not ported, hooked |
+| 0x4ba100-0x4c1568 | Controls (`ctl_*`): button, scrollbar, text field, list box, text viewer, prompt, message box | `src/ui/controls.c`, `scrollbar.c`, `textfield.c`, `listbox.c`, `msgbox.c` |
+| 0x4c6bf9-0x4c97de | Menus (`menu_*`: menu bar, pop-ups, items; 0x6727cc = open menu) | `src/ui/menu.c` |
 
-Tests: `build/ui_region_test` (no game data) and
-`build/ui_test orig MEDIUM.000 out.ppm [--window]` (see [Verification](#verification)).
+Tests: `build/ui_region_test` (no game data),
+`build/ui_test orig MEDIUM.000 out.ppm [--window]` and
+`build/ui_widgets_test orig MEDIUM.000 out-prefix [--window]` (see [Verification](#verification)).
 
 ## Model
 
@@ -113,7 +114,8 @@ per call.
 | 0x10 | control pressed (a = id, b = pressed) | from the minimize button: minimize/restore, lower when minimized |
 | 0x11 / 0x15 | control right down / up | |
 | 0x14 | control clicked (a = id) | |
-| 0x1b / 0x1c | scrollbar moved (a = position, b = delta) | |
+| 0x19 / 0x1a | scrollbar thumb dragged or track clicked (w = the scrollbar, a = position, b = old - new) | |
+| 0x1b / 0x1c | scrollbar arrow (w = the scrollbar, a = position +/- 1, b = delta) | |
 | 0x1e / 0x1f / 0x20 | char / key down / key up to the focus window | Alt (0x12) up without Tab: open the menu bar |
 | 0x28 | minimized state (a) | |
 | 0x29 | hover (mouse still 1.5 s) | |
@@ -127,7 +129,9 @@ per call.
 | 0x400 | release resources | controls free their bitmap |
 | 0x401 | menu bar close button | |
 | 0x406 | quit request (main window's WM_CLOSE, sent to the root) | forwarded to the children |
-| 0x1001 | menu bar layout | |
+| 0x1001 | menu: paint the frame (sent by the menu bar button update) | |
+| 0x1006 | menu command, to the menu bar's owner (w = item, a = id) | |
+| 0x8000+ | per-control requests and notifications (`controls.h`) | |
 
 ## Painting and dirty rectangles
 
@@ -215,63 +219,252 @@ column, 0x4c4346).
 ## Controls
 
 Every control is a child window with extra data; offset 0 is the id and 8
-the state (4 pressed, 8 disabled, 0x10 focus frame) for all of them
+the state (4 pressed, 8 disabled, 0x10 focus frame) for buttons
 (`ctl_get_id` 0x4bc5c1, which Ghidra had matched as `__mkgmtime`;
-`ctl_is_pressed` 0x4bc5df).
+`ctl_is_pressed` 0x4bc5df). Controls report to their parent either by
+posting (button, scrollbar: `wm_post(parent, control, msg, ...)`, so the
+parent's proc sees `w` = the control) or by sending to the parent itself
+(text field, list box: `wm_send(parent, parent, msg, control, ...)`).
 
 `ctl_initialize` (0x4ba100) registers a task: suspend/resume save the
 game's pause flag (0x5fa61c) and set it; `ctl_idle` (0x4bf68a) closes a
-timed message box, auto-repeats a held scroll arrow every 100 ms, and
-blinks the text cursor every 250 ms.
+timed message box (result 1), auto-repeats a held scroll arrow every 100
+ms after five ticks, reporting each position once, and blinks the text
+cursor every 250 ms. Other helpers: `ctl_create_child` / `ctl_destroy_child`
+(0x4bf8d8 / 0x4bf959, unused), `ctl_find_by_id` (0x4c1064, wrapper 0x4c10ea:
+depth-first search for a window whose data 0 is the id; the tutorial uses
+it to move the mouse onto a dialog's button, 0x4ac939, and 0x42634a fakes
+a click on it through `wm_mouse_event`).
 
-**Button** (ported): `ctl_button_create` (0x4ba2eb, 73 call sites) makes a
-NOSURFACE | NOFOCUS | NOCLIP window with 0x18 bytes of extra data (id,
-style, state, bitmap, font, label colors). The bitmap holds the normal and
-pressed frames side by side and is owned by the button. Styles: 4 bitmap
-(required), 0x20 sticky, 0x80 toggle. Left down captures, presses (or
-toggles), redraws and posts 0x10; left up releases and posts 0x14 (ids
-0x230/0x231 post close/minimize to the menu bar's owner). The label is
-centred, clipped 7 px from the right edge, shifted a pixel when pressed,
-and drawn with colormap 0-3 from the packed colors (grey 0x10 when
-disabled). `ctl_button_set_pressed` (0x4ba7e9) has 231 call sites.
+### Button (0x4ba18e-0x4ba90c)
 
-Mapped, not ported:
+`ctl_button_create` (0x4ba2eb, 73 call sites) makes a NOSURFACE | NOFOCUS
+| NOCLIP window with 0x18 bytes of extra data (id, style, state, bitmap,
+font, label colors). The bitmap holds the normal and pressed frames side by
+side and is owned by the button. Styles: 4 bitmap (required), 0x20 sticky,
+0x80 toggle. Left down captures, presses (or toggles), redraws and posts
+0x10; left up releases and posts 0x14 (ids 0x230/0x231 post close/minimize
+to the menu bar's owner). The label is centred, clipped 7 px from the right
+edge, shifted a pixel when pressed, and drawn with colormap 0-3 from the
+packed colors (grey 0x10 when disabled). `ctl_button_set_pressed`
+(0x4ba7e9) has 231 call sites.
 
-| Range | What |
-|---|---|
-| 0x4baca2 / 0x4bad6d | scrollbar part bitmaps (vertical / horizontal: two arrows, thumb, track) |
-| 0x4bae38 | re-skin a scrollbar |
-| 0x4bb012 | scrollbar create (0x4bb095 vertical, 0x4bb48b horizontal): a track window (ids 0x7ffc) with arrows 0x7ffe/0x7fff and thumb 0x7ffd, proc 0x4bbb4a; shrinks the owner's client rect |
-| 0x4bb878 / 0x4bba71 | scrollbar position / range (data 0x10 position, 0x14-0x18 range) |
-| 0x4bc3f8, 0x4bc482, 0x4c110a | scrollbar parts, thumb clamping, layout |
-| 0x4bc611-0x4bcb13 | single-line text field (proc 0x4bcb13, draw 0x4bc7cd, cursor 0x4bc9c0) |
-| 0x4bcfbc-0x4be5d2 | multi-line text box (proc 0x4bd2c6) |
-| 0x4be691-0x4bf5e3 | list box with a vertical scrollbar (proc 0x4be8d4, items 0x4befcb) |
-| 0x4bf8d8 / 0x4bf959 | create / destroy a plain child window |
-| 0x4bf970 | pop-up text box on bitmap 0x260 (proc 0x4bfc10) |
-| 0x4bfc69 | message box (89 call sites; window 0x6726b0, bitmaps 0x260/0x227, font 500, proc 0x4c06d7, created by 0x4c0d2e) |
+### Scrollbar (0x4baca2-0x4bc482, 0x4c110a)
+
+`ctl_scroll_create(owner, rect, id, style)` (0x4bb012; style 1 = vertical,
+0x20 = shown) builds a **track** window (flags NOFOCUS | NOTITLE | NORAISE
+| 0x80000, so it stacks in the owner's front group; it has a surface)
+with three NOCLIP **parts** drawn into the track's surface by
+`ctl_scroll_layout` (0x4c110a): the forward arrow (kind 0x7ffe,
+down/right, created first, so it heads the child list), the back arrow
+(0x7fff) and the thumb (0x7ffd, centred across). Extra data (0x20 bytes,
+the same layout on all four): 0 id, 4 kind (track 0x7ffc), 8 style, 0x0c
+bitmap, 0x10 position, 0x14/0x18 range, 0x1c position last reported by the
+auto-repeat. A NULL rect puts it along the owner's right/bottom edge (below
+the menu bar, left of the vertical one) and shrinks the owner's client
+rect; this is what `WM_F_VSCROLL` / `WM_F_HSCROLL` do (id 0).
+
+The part bitmaps are global (`ctl_scroll_set_vbitmaps` /
+`_hbitmaps`, 0x4baca2 / 0x4bad6d; game_main loads 0x4000 up, 0x4001 down,
+0x4006 thumb, 0x4004 track and 0x4002 left, 0x4003 right, 0x4006, 0x4005).
+Arrows and the thumb have normal and pressed frames side by side; the track
+is tiled. Without bitmaps the parts are 24 px and nothing is drawn. The
+horizontal thumb takes its height from the vertical thumb bitmap (the same
+one in the game).
+
+Input: an arrow captures, starts the auto-repeat (`ctl_repeat_arrow`,
+0x524790) and posts 0x1c / 0x1b (position + 1 or - 1, delta); the thumb
+captures, and while dragged every mouse move posts 0x1a / 0x19 with the
+position under the grab point; a track click sends 0x1a / 0x19 for the
+thumb centred on the click. The scrollbar never moves itself: the owner
+calls `ctl_scroll_set_pos` (0x4bb878, clamps, places the thumb with
+`ctl_scroll_clamp_thumb` 0x4bc482, redraws). `ctl_scroll_set_range`
+(0x4bba71) hides the thumb for an empty range. Message 0x0f (the track
+resized) moves the arrows to the new ends. 0x4bae38 (re-skin one bar) is
+never called.
+
+### Text field (0x4bc611-0x4bcb13)
+
+`ctl_text_create(parent, rect, id, bg, fg1, fg2, cursor1, cursor2, font,
+style)` (0x4bc611): a window with a surface and 0x2c bytes of data (0 id, 4
+length, 8-0x10 colors, 0x14 cursor glyph `|`, 0x18/0x1c cursor colors, 0x20
+style, 0x24 font, 0x28 cursor x). It has `WM_F_NOTITLE`; a 256-byte buffer
+is installed as the title (255 characters). Styles: 1 right click sends
+0x80c8 to the parent, 2 upper-case, 4 read-only (grey 0x24 / 0x13, no
+cursor), 8 keeps the blinking cursor (0x6726c4) even without the focus.
+Characters 0x20-0x7c except `@ { [ & \` = ] ^ _` are appended, backspace
+deletes the last one, Enter sends 0x8000 (a = field, b = id) to the parent.
+Requests: 0x8001 set text, 0x8002 draw, 0x8003 id, 0x8004 read-only.
+Drawing (0x4bc7cd) shows the tail of the text that fits; the cursor
+(0x4bc9c0) goes after it.
+
+`ctl_prompt(x, y, title, prompt, default)` (0x4bf970, 4 call sites): a
+modal window on bitmap 0x260 with a text field (id 1000, font 500); runs
+`sys_pump` until Enter (its proc 0x4bfc10 sees 0x8000) and returns a static
+copy of the text (0x64e3c0), or the default if it was left empty.
+
+### List box (0x4bcfbc-0x4be5d2)
+
+`ctl_list_create(parent, rect, style, user, scroll id, font, bg, fg)`
+(0x4bcfbc, 3 call sites) keeps a 0x35e-byte block in data 0: up to 101
+lines of 255 characters with an int of item data each, the top line,
+selected line, count and number of visible rows (row height = font height
++ 2). The height is cut to whole rows unless style 8; a 26 px vertical
+scrollbar runs along the right. Styles: 1 the line after the last can be
+selected, 2 characters and key-ups go on to the parent, 4 no selection
+bar, 8 partial last row. A click or a drag with the button down selects;
+the scrollbar arrows and thumb move the selection; key-ups: PgUp/PgDn by a
+page, Home, End, Up, Down. The selected row is drawn by swapping its
+background and text colors (0x4be5d2). Notifications to the parent: 0x8064
+selected (a = list, b = index), 0x8065 double click. Requests 0x8000-0x800e
+(`CTL_LIST_*`): add a line, delete, set item data, scroll, select, row
+rectangle, get selection / top / text / length / data / count / the
+creator's value, set a whole text (word-wrapped into lines, 0x4be04f), clear.
+
+### Text viewer (0x4be691-0x4bf5e3)
+
+`ctl_view_create(parent, rect, style, id, font, bg, fg1, fg2, bufsize)`
+(0x4be691, 3 call sites): read-only text with the window manager's
+vertical scrollbar (`WM_F_VSCROLL`). 0x8000 sets the text (kept; freed by
+the viewer with style 1), which is word-wrapped into a buffer of at least
+32 KB with a line table of 2500 entries (0x4bf214); the scrollbar scrolls
+by lines; 0x8001 redraws; 0x8002 resizes. A left click is passed to the
+parent in its coordinates.
+
+### Message box (0x4bfc69, 89 call sites)
+
+`ctl_message_box(x, y, title, text, buttons, timeout)` (0x4bfc69): the
+game's one modal dialog. `ctl_msgbox_init` (0x4c0d2e, also called by
+game_main) creates the window once (0x6726b0: 450x270, TOPMOST |
+HITCHILDREN, proc 0x4c06d7) with four buttons (ids 1000-1003, bitmap
+0x227 each, font 500) and keeps background bitmap 0x260. Each call:
+
+- Size from the text: width clamp(text width, 173, 303) plus its value
+  mod 10, height (width / that + 2 lines + one per blank line) clamped to
+  48..150, widened for the buttons; the background bitmap's quarters go to
+  the corners and 10 px strips from its middle fill the extra size.
+- Title at (5, 4), text word-wrapped into (24, 24)-(196 + extra, 71 +
+  extra) in colors 0x1a / 0x13, buttons centred in a row at y = 90 +
+  extra. `buttons` is double-NUL terminated, up to four: `&` marks the key
+  (stored upper-cased), a leading `~` the Esc / F1 button (with one button,
+  that one).
+- Pauses the game, calls 0x403c23 and closes the window at 0x5bb200 (port:
+  `ctl_hooks.modal_begin`), centres if x or y is -1, captures, raises,
+  activates, and with a timeout (only if menu item 0x6465e8 is checked;
+  port: `ctl_hooks.timeouts_enabled`) sets the deadline for `ctl_idle`.
+- Runs `sys_pump` until a button is chosen and returns its number (1-4).
+
+Keys (proc 0x4c06d7): Enter, Esc / F1 or a button's key press it on key
+down and choose it on key up; Tab / Shift-Tab and Left / Right move the
+focus frame. A click on a button chooses it (0x14 from the button).
+
+The port also splits it into `ctl_msgbox_open` / `ctl_msgbox_result` /
+`ctl_msgbox_close` for callers with their own loop.
+
+## Menus
+
+`src/ui/menu.c`, `menu.h`. Menus are windows with `menu_proc` (0x4c84c7)
+and a style word in data 0:
+
+- A **menu** (`menu_create` 0x4c6e66; flags NOSURFACE | NOTITLE | 0x80000,
+  data 0 = style | 0x400000) is a container; its children are items. Style
+  bit 4 lays items out side by side, 8 keeps the rectangle; 0x3c is the
+  menu bar `wm_create_window` makes for `WM_F_MENUBAR` (as wide as the
+  owner, top edge + font + bottom edge + 1 high, and the owner's client top
+  moves below it) with the close (0x230) and minimize (0x231) buttons.
+- An **item** (`menu_add_item` 0x4c6fce; NOSURFACE | NOCLIP | NORAISE,
+  0x14 bytes: style | 0x800000, font, value, id) is text (0x1000000, the
+  title: `&` marks the key, a tab starts a right-aligned part) or a
+  separator (0x8000000). 0x400 checkable, 0x200 checked
+  (`menu_set_checked` 0x4c8393, `menu_is_checked` 0x4c8355), 0x800
+  highlighted. An item's child is its pop-up menu.
+- `menu_set_skin` (0x4c6c64; game_main loads 0x4010-0x4018: four corners,
+  four edges, fill) and `menu_set_font` (0x4c6e1f; 501, measures the check
+  mark glyph 1 and the sub-menu arrow glyph 3). 0x4c6bf9 (sound slots
+  700-702) is never called.
+
+**Layout**: `menu_show(m, 1)` (0x4c70f6 -> 0x4c714b) lays a menu out the
+first time it opens (window flag 0x40000000 afterwards): it measures the
+items (0x1003: text width + 20 by font height + 2, padding 10 / 1;
+separators 2 high), creates the surface, places a pop-up right of its
+item's menu or below a bar item, paints the frame (0x1001), places and
+draws every item (0x1005) and shows them, then raises and shows the menu.
+The game builds its menus once (0x409c17: File 100, Global 200, Window
+300, Tutorial 400 on the bar, each with a pop-up from a table of {id,
+text, style}) and opens the bar after loading. Items are drawn into their
+menu's surface: fill, text in white with a black shadow, check mark,
+right-aligned part, arrow, and highlighting by remapping the pixels through
+the 20% brighter palette remap (0x535318).
+
+**State**: the highlighted item (0x6727c4; highlighting an item highlights
+the items it hangs under), the open pop-up (0x6727cc, which the window
+manager also reads), the focus to give back (0x6727d0) and a queue of items
+to redraw (0x535290).
+
+**Mouse**: pressing an item with a pop-up opens it (pressing it again
+closes it); moving over items while a pop-up is open moves the highlight,
+opening pop-ups on the way. Releasing on an item chooses it, closing
+everything; releasing on an item with a pop-up does the same (so a simple
+click on a bar item opens and closes its menu, and the owner gets that
+item's id, which the game ignores: the menus work by press, drag, release).
+Releasing anywhere else closes the menus without a command (the window
+manager forwards that release to the open menu's item).
+
+**Keyboard**: Alt (key up) on a window with a menu bar activates its first
+item (0x4c916a), which takes the focus. Then Down opens the pop-up, Up /
+Down / Left / Right move (skipping separators, wrapping, crossing to the
+neighbouring bar menu), Enter chooses, Alt closes, and a character chooses
+the item with that `&` key among the highlighted item's siblings (opening
+its pop-up if it has one). Losing the focus to a non-menu window closes
+everything.
+
+**Commands**: choosing an item sends `WM_MSG_MENU_COMMAND` (0x1006) to the
+bar's owner with w = the item and a = its id. In the game the owner is
+the main window (0x5f7460), whose proc game_main replaces with
+`game_view_proc` (0x404023). It switches on the id (0x33-0x36 excepted,
+which skip the 0x403c23 call) and either acts at once or sets
+`game_command` (0x650048) for game_main's loop, which switches on it once
+per frame: id 1 -> command 1; id 2 (asks "Save Game Before Loading?" if
+there is a game: yes -> command 1 then 2 via `game_next_command`, no -> 2);
+id 3 likewise -> 5; id 4 -> 3; id 5 -> 4 (new game, after a query). In
+game_main 1 and 6 call 0x480ea4(1 / 2), 2 and 5 call 0x489e90(1 / 2), 3
+calls 0x4946bd, and 4 asks for the difficulty with a message box and starts
+a new game. The game also sends 0x1006 itself to run a command (its
+keyboard shortcuts, and 0x0e after a new game).
 
 ## Port notes
 
 - Messages carry `intptr_t` arguments and extra data is stored in
   `intptr_t` slots (one per 4 bytes of the original offset), so pointers
-  fit on 64-bit.
-- Modules that aren't ported yet are reached through `wm_hooks`
-  (menu bar creation, Alt menu activation, scrollbar creation, attract mode
-  stop, keyboard polling, sound idle) and `ctl_hooks` (text cursor). All
-  may be NULL. Without `attract_stop`, the first input just sets
-  `wm_input_live`.
+  fit on 64-bit. The list box's block is a C struct.
+- `wm_hooks` keeps the game/platform hooks (attract mode stop, keyboard
+  polling, sound idle); the menu bar, scrollbars and Alt activation are
+  direct calls again. `ctl_hooks`: `pump` (the modal loops' `sys_pump`;
+  NULL runs `wm_idle`, `ctl_idle`, `gfx_present`), `modal_begin` and
+  `timeouts_enabled` (game state the message box looks at). All may be
+  NULL. Without `attract_stop`, the first input just sets `wm_input_live`.
 - Fixed original bugs: `wm_center` and `wm_invalidate(w, NULL)` passed a
   parent-relative rectangle through local-to-screen (offset twice), so the
   wrong area was repainted; the message queue's pop could advance the write
   index after a wrap and replay stale entries; destroying a window left a
-  dangling capture and leaked its invalid list; `wm_set_title_size`
-  didn't update the size. `wm_shutdown` also frees the windows (the
-  original only unhooks).
-- Kept: the region pool limit, the menu bar's cached close/minimize
-  bitmaps being freed by the buttons that use them, the empty "under the
-  button" save at creation, the capture clip using the parent's client rect
-  in local coordinates, message 0x0f painting new/old/new.
+  dangling capture and leaked its invalid list, and left queued messages
+  for it (now dropped); `wm_set_title_size` didn't update the size; the
+  menu bar's cached close/minimize bitmaps were freed by the buttons that
+  use them (each bar now loads its own); the message box's button press
+  compared `1000 - id` with the focus and never updated it; the list box's
+  row-rectangle request read an uninitialized row; the text viewer compared
+  a new top line with the last line instead of the current top, and could
+  set a negative scroll range or overrun its buffers; the menus' redraw
+  queue could overrun; a hidden scrollbar thumb was still drawn.
+  `wm_shutdown` also frees the windows (the original only unhooks) and
+  `ctl_shutdown` the message box.
+- Kept: the region pool limit, the empty "under the button" save at
+  creation, the capture clip using the parent's client rect in local
+  coordinates, message 0x0f painting new/old/new, the horizontal thumb's
+  height, the click-closes-the-menu behaviour, the previous-item search
+  that only wraps to a selectable last item, a timed-out message box
+  returning 1, the message box button that takes the capture from the
+  dialog.
 
 ## Wiring it up
 
@@ -282,9 +475,18 @@ wm_hooks.key_poll = ...;             /* the keyboard queue (kb_flush_one) */
 if (wm_initialize() != 0) fail;      /* sys_initialize step 11 */
 sys_register_task(wm_initialize, wm_shutdown, wm_suspend, wm_resume, wm_idle);
 ctl_initialize();                    /* step 12 */
+ctl_hooks.pump = sys_pump;
 sys_register_task(ctl_initialize, NULL, ctl_suspend, ctl_resume, ctl_idle);
 ctl_set_pause_flag(&game_paused);
 ...
+/* game_main: fonts 500/501, the skins, then the main window */
+ctl_scroll_set_hbitmaps(0x4002, 0x4003, 0x4006, 0x4005 loaded);
+ctl_scroll_set_vbitmaps(0x4000, 0x4001, 0x4006, 0x4004 loaded);
+menu_set_skin(0x4010 ... 0x4018 loaded);
+menu_set_font(501);
+main = wm_create_toplevel(&screen, proc, WM_F_MENUBAR | WM_F_VSCROLL | WM_F_HSCROLL | WM_F_CLIPMOUSE);
+ctl_msgbox_init();
+/* build the menus under main->menubar, then menu_show(main->menubar, true) */
 wm_set_input_live(true);             /* or call it from the attract mode code */
 /* each frame: sys_pump -> task idles (wm_idle, ctl_idle) -> gfx_present() */
 ```
@@ -307,3 +509,26 @@ another, then clicks, presses the button through the mouse path (its click
 arrives via the queue), drags a window by mouse, draws and invalidates,
 hides, raises and minimizes/restores, checking screen pixels against the
 windows' surfaces after each step, and writes the screen as a PPM.
+
+`ui_widgets_test` uses the game's skins on a main window like the game's
+(menu bar, both scrollbars) and drives everything through the mouse module
+and the `key_poll` hook, with `wm_idle` making the messages:
+
+- menus: press File, drag to Load Game (pop-up on screen, item brightened),
+  release: command 2, pop-up gone, focus back; Alt, Down, Down, Down (over
+  the separator), Enter: command 7; Alt, `g`, `x`: command 22; a release
+  outside closes without a command; check marks; find by id;
+- the main window's scrollbar: arrow clicks, a track click near the end, a
+  thumb drag to the top (positions, thumb movement, capture);
+- a list box of 30 lines: click a row (selection, notification, item data,
+  text, inverted row pixels), 12 clicks on its down arrow (selection 14,
+  top line moved, scrollbar position), delete;
+- a text field: click, type (a rejected `@`), backspace, Enter
+  notification, white text pixels, set text;
+- a text viewer: wrapped text, two arrow clicks scroll two lines;
+- message boxes: modal with a click on button 2 from the pump (2, focus and
+  pause flag restored), Esc on a `~` button (3, screen restored), a button
+  key, Tab + Enter, a timeout (1); the text prompt typed from the pump.
+
+It writes `<prefix>_menu.ppm` (File open, Load Game highlighted),
+`<prefix>_widgets.ppm` and `<prefix>_msgbox.ppm`. Clean under ASan/UBSan.

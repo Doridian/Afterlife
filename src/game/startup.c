@@ -405,6 +405,7 @@ static void ctl_task_resume(void) { ctl_resume(); }   /* 0x4ba172 */
 static int ctl_init_step(void)
 {
     ctl_initialize();
+    ctl_hooks.pump = sys_pump; /* the modal loops (message box, prompt) call sys_pump */
     sys_register_task(ctl_initialize, NULL, ctl_task_suspend, ctl_task_resume, ctl_idle);
     return 0;
 }

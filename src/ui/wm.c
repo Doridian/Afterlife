@@ -10,6 +10,7 @@
 #include "gfx/font.h"
 #include "gfx/mouse.h"
 #include "ui/controls.h"
+#include "ui/menu.h"
 #include "ui/region.h"
 
 WmHooks wm_hooks;
@@ -25,8 +26,6 @@ static WmWindow *g_open_menu;   /* 0x6727cc, owned by the menu module */
 static GfxSurface *g_frame[9];
 enum { FR_TL, FR_TOP, FR_TR, FR_RIGHT, FR_BR, FR_BOTTOM, FR_BL, FR_LEFT, FR_FILL };
 
-static GfxSurface *g_bmp_close;    /* 0x672740 bitmap 0x230 */
-static GfxSurface *g_bmp_minimize; /* 0x672744 bitmap 0x231 */
 static bool g_clip_saved;          /* 0x672748 */
 static GfxRect g_saved_clip;       /* 0x535178 */
 static uint32_t g_mode;            /* 0x67274c */
@@ -466,6 +465,7 @@ WmWindow *wm_last_activated(void) { return g_last_active; }
 void wm_set_input_live(bool live) { g_input_live = live; }
 bool wm_shift_down(void) { return g_shift; }
 void wm_set_open_menu(WmWindow *menu) { g_open_menu = menu; }
+WmWindow *wm_open_menu(void) { return g_open_menu; }
 
 /* --------------------------------------------------------- messages */
 
@@ -585,6 +585,11 @@ static void free_window(WmWindow *w)
         g_focus = NULL;
     if (w == g_hover)
         g_hover = NULL;
+    /* port-only: drop queued messages for it (the original would deliver
+     * them to freed memory) */
+    for (int i = 0; i < WM_QUEUE_SIZE; i++)
+        if (g_queue[i].w == w || g_queue[i].target == w)
+            g_queue[i].msg = 0;
     free(w->extra);
     free(w);
 }
@@ -607,30 +612,37 @@ static void menubar_update_buttons(WmWindow *menubar)
 /* the WM_F_MENUBAR part of wm_create_window */
 static void create_menubar(WmWindow *w)
 {
-    if (!wm_hooks.create_menubar)
-        return;
-    WmWindow *bar = wm_hooks.create_menubar(w, NULL, 0x3c);
+    WmWindow *bar = menu_create(w, NULL, MENU_BAR);
     w->menubar = bar;
     if (!bar)
         return;
-    if (!g_bmp_close)
-        g_bmp_close = gfx_load_bmp_resource(0x230, NULL);
-    if (!g_bmp_minimize)
-        g_bmp_minimize = gfx_load_bmp_resource(0x231, NULL);
-    if (!g_bmp_close || !g_bmp_minimize)
+    /* The original caches the two bitmaps (0x672740 / 0x672744) and hands
+     * them to the buttons, which free them when destroyed, leaving the
+     * cache dangling for the next bar. The port loads a copy per bar. */
+    GfxSurface *bmp_close = gfx_load_bmp_resource(0x230, NULL);
+    GfxSurface *bmp_min = gfx_load_bmp_resource(0x231, NULL);
+    if (!bmp_close || !bmp_min) {
+        if (bmp_close)
+            gfx_surface_destroy(bmp_close);
+        if (bmp_min)
+            gfx_surface_destroy(bmp_min);
         return;
+    }
     GfxRect r;
     wm_get_local_rect(bar, &r);
     r.top += 3;
-    r.bottom = r.top + g_bmp_close->height - 1;
-    r.left = (r.right - 3) - (g_bmp_close->width >> 1);
-    r.right = r.left + g_bmp_close->width - 1;
-    /* the buttons free their bitmap on destruction, while these two are
-     * cached here: the original has the same dangling pointer */
-    bar->close_button = ctl_button_create(bar, &r, 0x230, 0x404, g_bmp_close);
-    r.left = (r.left - 1) - (g_bmp_minimize->width >> 1);
-    r.right = r.left + g_bmp_minimize->width - 1;
-    bar->min_button = ctl_button_create(bar, &r, 0x231, 0x404, g_bmp_minimize);
+    r.bottom = r.top + bmp_close->height - 1;
+    r.left = (r.right - 3) - (bmp_close->width >> 1);
+    r.right = r.left + bmp_close->width - 1;
+    int min_w = bmp_min->width;
+    bar->close_button = ctl_button_create(bar, &r, 0x230, 0x404, bmp_close);
+    if (!bar->close_button)
+        gfx_surface_destroy(bmp_close);
+    r.left = (r.left - 1) - (min_w >> 1);
+    r.right = r.left + min_w - 1;
+    bar->min_button = ctl_button_create(bar, &r, 0x231, 0x404, bmp_min);
+    if (!bar->min_button)
+        gfx_surface_destroy(bmp_min);
     menubar_update_buttons(bar);
 }
 
@@ -695,10 +707,10 @@ WmWindow *wm_create_window(WmWindow *parent, GfxRect *rect, WmProc proc, uint32_
     }
     if (flags & WM_F_MENUBAR)
         create_menubar(w);
-    if ((flags & WM_F_HSCROLL) && wm_hooks.create_scrollbar)
-        w->hscroll = wm_hooks.create_scrollbar(w, NULL, 0, 0);
-    if ((flags & WM_F_VSCROLL) && wm_hooks.create_scrollbar)
-        w->vscroll = wm_hooks.create_scrollbar(w, NULL, 0, 1);
+    if (flags & WM_F_HSCROLL)
+        w->hscroll = ctl_scroll_create(w, NULL, 0, 0);
+    if (flags & WM_F_VSCROLL)
+        w->vscroll = ctl_scroll_create(w, NULL, 0, CTL_SCROLL_VERTICAL);
     return w;
 }
 
@@ -1312,7 +1324,7 @@ void wm_idle(void)
         }
     }
     WmQueued q;
-    if (queue_pop(&q))
+    if (queue_pop(&q) && q.msg)
         wm_send(q.w, q.target, q.msg, q.a, q.b);
 }
 
@@ -1482,8 +1494,8 @@ intptr_t wm_default_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t b)
 
     case WM_MSG_KEYUP:
         /* Alt released without Tab in between opens the menu bar */
-        if (a == 0x12 && g_last_key != 9 && w->menubar && wm_hooks.menu_activate)
-            wm_hooks.menu_activate(w->menubar);
+        if (a == 0x12 && g_last_key != 9 && w->menubar)
+            menu_activate(w->menubar);
         g_last_key = (int)a;
         return 0;
 
@@ -1548,11 +1560,7 @@ int wm_shutdown(void)
         free_window(g_root);
     }
     g_root = g_focus = g_last_active = g_hover = g_capture = g_open_menu = NULL;
-    if (g_bmp_close)
-        gfx_surface_destroy(g_bmp_close);
-    if (g_bmp_minimize)
-        gfx_surface_destroy(g_bmp_minimize);
-    g_bmp_close = g_bmp_minimize = NULL;
+    menu_reset(); /* port: the menu module's pointers into the freed tree */
     wm_queue_clear();
     return 0;
 }

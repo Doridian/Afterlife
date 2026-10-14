@@ -22,6 +22,7 @@
 
 #include "formats/tile.h"
 #include "game/resource.h"
+#include "game/savegame.h"
 #include "gfx/map_view.h"
 #include "gfx/palette.h"
 #include "gfx/surface.h"
@@ -643,144 +644,24 @@ static void synthetic_map(void)
     free(cells);
 }
 
-/* --- ALSV savegames (map part only; docs/map.md) --------------------------- */
-
-typedef struct {
-    const uint8_t *p, *end;
-    bool bad;
-} Rd;
-
-static uint32_t rd_n(Rd *r, int n)
-{
-    if (r->end - r->p < n) {
-        r->bad = true;
-        r->p = r->end;
-        return 0;
-    }
-    uint32_t v = 0;
-    for (int i = 0; i < n; i++)
-        v |= (uint32_t)r->p[i] << (8 * i);
-    r->p += n;
-    return v;
-}
-
-static void rd_skip(Rd *r, size_t n)
-{
-    if ((size_t)(r->end - r->p) < n) {
-        r->bad = true;
-        r->p = r->end;
-    } else {
-        r->p += n;
-    }
-}
-
-/* Bytes after the kind byte of a simulation cell, by the cell's tile set
- * (0x48a83a; cells of a big building other than its origin have set 0). */
-static size_t sim_payload(unsigned set, int ver)
-{
-    switch (set) {
-    case 0: return 11;
-    case 1: case 4: case 16: return 1;
-    case 2: return 2;
-    case 3: return 9;
-    case 5: return 13 + (ver > 0x1bc0 ? 2 : 0);
-    case 6: return 15;
-    case 7: return 5;
-    case 8: case 13: return 14;
-    case 9: return 15;
-    case 12: return 13 + (ver > 0x1b6b ? 2 : 0);
-    case 14: case 15: return 17;
-    case 17: return 10;
-    case 18: return 4;
-    case 19: return ver > 0x1bb1 ? 6 : 0;
-    case 29: return ver > 0x1bb1 ? 8 : 0;
-    case 30: return (ver > 0x1bb1 ? 12 : 0) + (ver > 0x1c29 ? 2 : 0);
-    default: return 0;
-    }
-}
-
-/* The per-plane statistics block after the cells of planes 1 and 3. */
-static size_t plane_stats(int ver)
-{
-    size_t n = 2 * 112 * 137 + 64 + 64 + 100 + (ver > 0x1bc5 ? 40 : 0) + 256 + 28 + 16 * 68 + 32 + 64 + 4 + 64 + 4 +
-               64 + 12 + 112 + 32 + (ver > 0x1c0b ? 32 : 0);
-    n += 88 + 3 + 8 + 20 + (ver > 0x1c0b ? 20 : 0) + 20 + 20 + 64 + 4 + 12 + 1 + 8 + 5 + 8;
-    n += (ver > 6999 ? 6 : 0) + (ver > 0x1b62 ? 16 : 0) + (ver > 0x1b70 ? 4 : 0) + (ver > 0x1be3 ? 4 : 0) +
-         (ver > 0x1bfd ? 4 : 0) + (ver > 0x1c06 ? 4 : 0);
-    return n;
-}
-
-static bool load_save(const char *path, uint32_t *cells[4], uint8_t *objmap[4], char *title, size_t title_len)
-{
-    FILE *f = fopen(path, "rb");
-    if (!f)
-        return false;
-    fseek(f, 0, SEEK_END);
-    long len = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    uint8_t *data = malloc((size_t)len);
-    if (!data || fread(data, 1, (size_t)len, f) != (size_t)len) {
-        fclose(f);
-        free(data);
-        return false;
-    }
-    fclose(f);
-    Rd r = {data, data + len, false};
-    if (len < 8 || memcmp(data, "ALSV", 4) != 0) {
-        free(data);
-        return false;
-    }
-    char vs[5] = {0};
-    memcpy(vs, data + 4, 4);
-    int ver = atoi(vs);
-    r.p += 8;
-    rd_n(&r, 1);
-    rd_n(&r, 4);
-    rd_n(&r, 4);
-    size_t t = 0;
-    while (r.p < r.end && *r.p) {
-        if (t + 1 < title_len)
-            title[t++] = (char)*r.p;
-        r.p++;
-    }
-    title[t] = 0;
-    rd_n(&r, 1);
-    if (ver > 0x1c33)
-        rd_n(&r, 2);
-    if (ver > 0x1b71) {
-        uint32_t w = rd_n(&r, 4), h = rd_n(&r, 4);
-        rd_skip(&r, (size_t)w * h); /* thumbnail */
-    }
-    for (int pl = 1; pl <= 3; pl++) {
-        cells[pl] = malloc(100 * 100 * sizeof(uint32_t));
-        objmap[pl] = malloc(100 * 100);
-        for (int x = 0; x < 100; x++)
-            for (int y = 0; y < 100; y++) {
-                uint32_t c = rd_n(&r, 4) & ~CELL_HILITE;
-                cells[pl][y * 100 + x] = c;
-                objmap[pl][y * 100 + x] = (uint8_t)rd_n(&r, 1);
-                if (pl != 2) {
-                    rd_n(&r, 1);
-                    rd_skip(&r, sim_payload(cell_set(c), ver));
-                }
-            }
-        if (pl != 2)
-            rd_skip(&r, plane_stats(ver));
-    }
-    free(data);
-    return !r.bad;
-}
+/* --- ALSV savegames (src/game/savegame.c, docs/formats/alsv.md) ----------- */
 
 static void render_save(const char *path)
 {
-    uint32_t *cells[4] = {0};
-    uint8_t *objmap[4] = {0};
-    char title[128];
-    if (!load_save(path, cells, objmap, title, sizeof title)) {
-        fprintf(stderr, "%s: can't parse\n", path);
+    static GameState gs; /* ~1 MB */
+    char err[160];
+    if (!savegame_load(&gs, path, err, sizeof err)) {
+        fprintf(stderr, "%s: can't load: %s\n", path, err);
         g_failures++;
         return;
     }
+    uint32_t *cells[4] = {0};
+    uint8_t *objmap[4] = {0};
+    for (int pl = 1; pl <= 3; pl++) {
+        cells[pl] = gs.plane[pl].cells;
+        objmap[pl] = gs.plane[pl].objmap;
+    }
+    const char *title = gs.hdr.title;
     const char *base = strrchr(path, '/');
     base = base ? base + 1 : path;
     char stem[64];
@@ -852,10 +733,7 @@ static void render_save(const char *path)
         save(s, name);
         gfx_surface_destroy(s);
     }
-    for (int pl = 1; pl <= 3; pl++) {
-        free(cells[pl]);
-        free(objmap[pl]);
-    }
+    savegame_free(&gs);
 }
 
 int main(int argc, char **argv)

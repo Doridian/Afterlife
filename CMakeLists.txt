@@ -155,3 +155,57 @@ if(NOT EMSCRIPTEN)
         target_compile_options(map_render PRIVATE -Wall -Wextra)
     endif()
 endif()
+
+# ALSV saved games and scenarios (docs/formats/alsv.md): the game state
+# (src/game/state.h) and its loader/saver.
+target_sources(afterlife_core PRIVATE src/game/savegame.c)
+if(NOT EMSCRIPTEN)
+    # tests/savegame_test: loads .ASC/.ALF files, prints a summary, checks
+    # that saving reproduces them byte for byte.
+    add_executable(savegame_test tests/savegame_test.c)
+    target_link_libraries(savegame_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(savegame_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# AKOS costumes (docs/formats/akos.md): the advisors' animated heads.
+target_sources(afterlife_core PRIVATE src/formats/akos.c src/gfx/akos.c)
+if(NOT EMSCRIPTEN)
+    # tests/akos_test: decodes every AKOS resource, runs the interpreter,
+    # renders cels, animations and the advisor window to PNGs.
+    add_executable(akos_test tests/akos_test.c)
+    target_link_libraries(akos_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(akos_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+# The talking heads on top of AKOS (needs the WM, fonts and the voice slot).
+target_sources(afterlife_core PRIVATE src/gfx/akos_talk.c)
+
+# UI toolkit beyond the button (docs/ui.md): scrollbar, text field, list
+# box and text viewer, message box, menus.
+target_sources(afterlife_core PRIVATE src/ui/scrollbar.c src/ui/textfield.c src/ui/listbox.c src/ui/msgbox.c
+    src/ui/menu.c)
+if(NOT EMSCRIPTEN)
+    # tests/ui_widgets_test: menus, scrollbars, list, text field, viewer,
+    # message box and prompt through synthetic input; writes PPMs.
+    add_executable(ui_widgets_test tests/ui_widgets_test.c)
+    target_link_libraries(ui_widgets_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(ui_widgets_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# World core (docs/game-map.md, WP0): the live GameState, plane switch,
+# cell / sim-cell accessors, RNG, bignum and shared utilities.
+target_sources(afterlife_core PRIVATE src/game/world.c src/game/util.c)
+if(NOT EMSCRIPTEN)
+    # tests/world_test: RNG/bignum/mul_div/format checks, then cross-checks
+    # the accessors against the realm statistics of each save given.
+    add_executable(world_test tests/world_test.c)
+    target_link_libraries(world_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(world_test PRIVATE -Wall -Wextra)
+    endif()
+endif()

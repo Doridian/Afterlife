@@ -74,25 +74,12 @@ renderer only reads the records.
 
 ### Savegames (ALSV)
 
-The map part of an `.ASC` savegame (`save_load_game` 0x48f837,
-`save_load_plane` 0x48a83a), all little-endian:
-
-```
-"ALSV" "7195"            version as 4 ASCII digits
-u8, u32, u32, title\0
-[ver > 7219] u16
-[ver > 7025] u32 w, u32 h, w*h bytes   thumbnail (8-bit, w=104 h=78)
-plane 1, plane 2, plane 3:
-  for x in 0..99: for y in 0..99:      (column-major!)
-    u32 cell (bit 7 masked off), u8 object map
-    planes 1, 3 only: u8 kind, then a payload whose size depends on the
-                      cell's set (bits 27-31; 0 for building parts): see
-                      sim_payload() in tests/map_render.c
-  planes 1, 3 only: a fixed block of statistics (~32 KB for version 7195)
-... (objects and the rest of the game state follow)
-```
-
-`tests/map_render` parses this and renders all four sample saves.
+The planes are saved column by column (x outer, y inner): each cell's u32
+(bit 7 cleared on load, bit 4 on save) and object map byte, then on Hell and
+Heaven the simulation cell (kind byte plus a payload chosen by the cell's
+tile set) and the realm's statistics record. The whole format is in
+[formats/alsv.md](formats/alsv.md); `src/game/savegame.c` loads it and
+`tests/map_render` renders the planes of each sample save through it.
 
 ## The view (0x5bb120)
 

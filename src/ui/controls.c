@@ -6,38 +6,57 @@
 
 #include <stddef.h>
 
+#include "ui/controls_int.h"
+
 #include "gfx/draw.h"
 #include "gfx/font.h"
 #include "platform/platform.h"
 
 CtlHooks ctl_hooks;
 
-static int *g_pause_flag;     /* 0x5fa61c, a game global */
-static int g_saved_pause;     /* 0x64e4ec */
-static WmWindow *g_timed_dialog;  /* 0x6726b0 */
-static uint32_t g_timed_deadline; /* 0x6726b8 */
-static bool g_timed_fired;        /* 0x6726bc */
-static WmWindow *g_repeat_arrow;  /* 0x524790 */
-static int g_repeat_delay;        /* 0x524794 */
-static uint32_t g_repeat_time;    /* 0x6726d0 */
-static WmWindow *g_blink_field;   /* 0x6726c4 */
-static bool g_blink_phase;        /* 0x6726c8 */
-static uint32_t g_blink_time;     /* 0x6726cc */
+int *ctl_pause_flag;           /* 0x5fa61c, a game global */
+static int g_saved_pause;      /* 0x64e4ec */
+WmWindow *ctl_msgbox_dlg;      /* 0x6726b0 */
+uint32_t ctl_msgbox_deadline;  /* 0x6726b8 */
+int ctl_msgbox_res;            /* 0x6726bc */
+WmWindow *ctl_repeat_arrow;    /* 0x524790 */
+int ctl_repeat_delay;          /* 0x524794 */
+static uint32_t g_repeat_time; /* 0x6726d0 */
+WmWindow *ctl_blink_field;     /* 0x6726c4 */
+bool ctl_blink_phase;          /* 0x6726c8 */
+static uint32_t g_blink_time;  /* 0x6726cc */
+
+void ctl_modal_pump(void)
+{
+    if (ctl_hooks.pump) {
+        ctl_hooks.pump();
+        return;
+    }
+    wm_idle();
+    ctl_idle();
+    gfx_present();
+}
 
 /* ---------------------------------------------------------------- task */
 
 /* 0x4ba100 */
 int ctl_initialize(void) { return 0; }
 
-/* 0x4ba130 */
-int ctl_shutdown(void) { return 0; }
+/* 0x4ba130 (port: also frees the message box) */
+int ctl_shutdown(void)
+{
+    ctl_msgbox_shutdown();
+    ctl_blink_field = NULL;
+    ctl_repeat_arrow = NULL;
+    return 0;
+}
 
 /* 0x4ba14f */
 int ctl_suspend(void)
 {
-    if (g_pause_flag) {
-        g_saved_pause = *g_pause_flag;
-        *g_pause_flag = 1;
+    if (ctl_pause_flag) {
+        g_saved_pause = *ctl_pause_flag;
+        *ctl_pause_flag = 1;
     }
     return 0;
 }
@@ -45,63 +64,78 @@ int ctl_suspend(void)
 /* 0x4ba172 */
 int ctl_resume(void)
 {
-    if (g_pause_flag)
-        *g_pause_flag = g_saved_pause;
+    if (ctl_pause_flag)
+        *ctl_pause_flag = g_saved_pause;
     return 0;
 }
 
-void ctl_set_pause_flag(int *flag) { g_pause_flag = flag; }
-void ctl_set_blink_field(WmWindow *field) { g_blink_field = field; } /* 0x4c1568 */
-
-void ctl_set_repeat_arrow(WmWindow *arrow, int delay)
-{
-    g_repeat_arrow = arrow;
-    g_repeat_delay = delay;
-}
-
-void ctl_set_timed_dialog(WmWindow *dialog, uint32_t deadline_ms)
-{
-    g_timed_dialog = dialog;
-    g_timed_deadline = deadline_ms;
-    g_timed_fired = false;
-}
+void ctl_set_pause_flag(int *flag) { ctl_pause_flag = flag; }
+void ctl_set_blink_field(WmWindow *field) { ctl_blink_field = field; } /* 0x4c1568 */
 
 /* 0x4bf68a */
 void ctl_idle(void)
 {
     uint32_t now;
-    if (g_timed_deadline && g_timed_dialog && g_timed_deadline <= plat_ticks_ms()) {
-        /* the dialog's owner clears the deadline */
-        g_timed_fired = true;
-        wm_send(g_timed_dialog, g_timed_dialog, WM_MSG_CTL_RELEASE, 0, 0);
+    if (ctl_msgbox_deadline && ctl_msgbox_dlg && ctl_msgbox_deadline <= plat_ticks_ms()) {
+        /* a timed message box: button 1 */
+        ctl_msgbox_res = 1;
+        wm_send(ctl_msgbox_dlg, ctl_msgbox_dlg, WM_MSG_CTL_RELEASE, 0, 0);
     }
-    if (g_repeat_arrow && g_repeat_time + 100 < (now = plat_ticks_ms())) {
+    if (ctl_repeat_arrow && g_repeat_time + 100 < (now = plat_ticks_ms())) {
         g_repeat_time = now;
-        if (g_repeat_delay == 0) {
-            /* an arrow (id 0x7ffe down/right, 0x7fff up/left) of a
-             * scrollbar: report the position once per change */
-            unsigned style = (unsigned)wm_get_data(g_repeat_arrow, CTL_BUTTON_STATE);
-            intptr_t kind = wm_get_data(g_repeat_arrow, CTL_BUTTON_STYLE);
-            WmWindow *bar = g_repeat_arrow->parent;
-            intptr_t pos = wm_get_data(bar, 0x10), last = wm_get_data(bar, 0x1c);
+        if (ctl_repeat_delay == 0) {
+            /* report the position once per change */
+            unsigned style = (unsigned)wm_get_data(ctl_repeat_arrow, CTL_SCROLL_STYLE);
+            intptr_t kind = wm_get_data(ctl_repeat_arrow, CTL_SCROLL_KIND);
+            WmWindow *bar = ctl_repeat_arrow->parent;
+            intptr_t pos = wm_get_data(bar, CTL_SCROLL_POS), last = wm_get_data(bar, CTL_SCROLL_LAST);
             if (last == pos)
                 return;
-            wm_set_data(bar, 0x1c, pos);
-            unsigned msg = (style & 1) ? WM_MSG_VSCROLL : WM_MSG_HSCROLL;
-            if (kind == 0x7ffe)
+            wm_set_data(bar, CTL_SCROLL_LAST, pos);
+            unsigned msg = (style & CTL_SCROLL_VERTICAL) ? WM_MSG_VSCROLL : WM_MSG_HSCROLL;
+            if (kind == CTL_SCROLL_FWD)
                 wm_post(bar->parent, bar, msg, pos + 1, 1);
-            else if (kind == 0x7fff)
+            else if (kind == CTL_SCROLL_BACK)
                 wm_post(bar->parent, bar, msg, pos - 1, -1);
         } else {
-            g_repeat_delay--;
+            ctl_repeat_delay--;
         }
     }
-    if (g_blink_field && g_blink_time + 250 < (now = plat_ticks_ms())) {
-        g_blink_phase = !g_blink_phase;
+    if (ctl_blink_field && g_blink_time + 250 < (now = plat_ticks_ms())) {
+        ctl_blink_phase = !ctl_blink_phase;
         g_blink_time = now;
-        if (ctl_hooks.draw_text_cursor)
-            ctl_hooks.draw_text_cursor(g_blink_field, g_blink_phase);
+        ctl_text_draw_cursor(ctl_blink_field, ctl_blink_phase);
     }
+}
+
+/* 0x4bf8d8 */
+WmWindow *ctl_create_child(WmWindow *parent, const GfxRect *r, WmProc proc, uint32_t flags, uint32_t extra_size)
+{
+    if (!proc)
+        return NULL;
+    GfxRect cr;
+    if (r)
+        cr = *r;
+    else
+        wm_get_rect(parent, &cr);
+    return wm_create_window(parent, &cr, proc, flags, extra_size);
+}
+
+void ctl_destroy_child(WmWindow *w) { wm_destroy(w); } /* 0x4bf959 */
+
+/* 0x4c1064 */
+WmWindow *ctl_find_by_id(WmWindow *list, intptr_t id)
+{
+    for (; list; list = list->next) {
+        if (list->children) {
+            WmWindow *found = ctl_find_by_id(list->children, id);
+            if (found)
+                return found;
+        }
+        if (wm_get_data(list, 0) == id)
+            return list;
+    }
+    return NULL;
 }
 
 /* -------------------------------------------------------- accessors */
@@ -119,8 +153,8 @@ static WmWindow *button_new(WmWindow *parent, GfxRect *r, uint32_t id, uint32_t 
 {
     if (!parent || !r)
         return NULL;
-    WmWindow *b = wm_create_window(parent, r, ctl_button_proc,
-                                   WM_F_NOSURFACE | WM_F_NOFOCUS | WM_F_NOCLIP | WM_F_CONTROL, 0x18);
+    WmWindow *b =
+        wm_create_window(parent, r, ctl_button_proc, WM_F_NOSURFACE | WM_F_NOFOCUS | WM_F_NOCLIP | WM_F_CONTROL, 0x18);
     if (!b)
         return NULL;
     wm_set_data(b, CTL_BUTTON_ID, id);
