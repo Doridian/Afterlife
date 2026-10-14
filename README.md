@@ -61,3 +61,7 @@ There's also a `debug` preset with ASan/UBSan.
 Afterlife is © LucasArts Entertainment Company. This project is not affiliated
 with or endorsed by LucasArts or Disney. It's intended for owners of the
 original game, for preservation and interoperability.
+
+The code in this repository is licensed under the
+[GNU Affero General Public License v3.0 or later](LICENSE). Game data is not
+included and is not covered by this license.
