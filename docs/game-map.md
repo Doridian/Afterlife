@@ -332,6 +332,17 @@ the original address in a comment to the *owner's* header, never its own copy.
 - Provides: `sim_update(speed)`, `realm_year()`, `economy_*`; calls WP1b, WP4
   (`badthings_tick`, `bad_thing_start`), WP5 (`planet_*` phase steps), WP6/WP7
   refresh hooks (`views_refresh_all`, `statusbar_draw`, `news_popup_show`).
+- **Done.** As built: `game/sim.h` (`sim_update`, the phase machine and its
+  timers, `sim_soul_rate` 0x448150, `scenario_event_step`; runtime `g_sim`,
+  UI side effects through `g_sim_hooks`, a hookable clock), `game/economy.h`
+  (`economy_realm_year` 0x43ed55 with the `RW_*` names of realm
+  `unk_7ff0[]`, `economy_score` 0x43eb7c, `economy_random_bad_things`),
+  `game/realm.h` (everything else in the ranges), `game/tables.h` (the
+  constant tables of `game_init_defaults` / `game_reset_world`). The Bad
+  Thing timers stayed in `sim_update` and call WP4's stubs
+  (`game/badthings.h`); Karma calls are stubs in `game/karma.h`. Tests:
+  `tests/sim_test` (invariants), `tools/emu/test_sim.py` (differential:
+  every function and whole years of `sim_update` against the original).
 
 ### WP1b: SOUL flow (priority 2, after WP0)
 
@@ -340,6 +351,17 @@ the original address in a comment to the *owner's* header, never its own copy.
 - Files: `src/game/souls.c`, `src/game/zones.c`.
 - Provides: phase steps `souls_zone_scan()`, `souls_flow()`, `souls_arrivals()`,
   `soul_group_add()`, `area_search()` (0x45ebe2, used by WP3/WP4).
+- **Done** (all of 0x458490-0x4619ef, plus the tracker sim side 0x47de6c,
+  0x47e165, 0x47e3be, 0x47e4be, 0x47eaf7, 0x47ed71 in `src/game/soultrack.c`).
+  Interface as built (`src/game/souls.h`, which also explains the flow):
+  `souls_zone_scan()`, `souls_flow(max_groups)`, `souls_gate_arrivals()`
+  (0x46114f), `souls_siphon_release()` (0x460b16), `soul_group_add()`,
+  `area_search()`, `souls_zone_evict()` (0x45fd84), `souls_gate_spawn()`
+  (0x461636), runtime counters `souls_groups_created` / `souls_gate_arrived`
+  / `souls_to_heaven` / `souls_to_hell`. Differential test against the
+  original: `tools/emu/test_souls.py` (scenarios as shipped, and
+  `--synthetic` with Omnibolges, siphons and Soulview trackers added).
+  Map object marks (0x4ee5d8/0x4ed550) are WP3 stubs in `game/mapobj.h`.
 
 ### WP2: build tools, structures, world setup (priority 2)
 
@@ -378,11 +400,43 @@ the original address in a comment to the *owner's* header, never its own copy.
 - Files: `src/game/planet.c`, `src/game/planet_gen.c`, `src/ui/planetview.c`.
 - Provides: `planet_stats_step()`, `planet_emit_step()`, `planet_sector_step()`,
   `planet_tech_step()`, `planet_year()`, `planetview_*`.
+- **Done** (simulation; the model is described at the top of
+  `src/game/planet.h`). Files: `src/game/planet.c` (stats, births/deaths,
+  SOULs, migration, tech, influence, disasters, the Flood),
+  `planet_gen.c` (0x496e71-0x49818e), `planet_map.c` (coastline bitmap,
+  0x4a6b61-0x4a8337, 0x49beee), `src/ui/planetview.c` (the window).
+  Interface for sim_update: `planet_stats_step()` (phase 20),
+  `planet_emit_step()` then `planet_year(0)` (phase 30),
+  `planet_sector_step()` (10), `planet_tech_step()` (15), each returning
+  true when its pass is complete; `planet_flood()` (scenario 'F'),
+  `planet_generate()` / `planet_reset_counters()` (game_reset_world),
+  `planet_summary()` after loading. Tables come from ALIFE.EXE
+  (`planet_tables_load()`). Side effects go through `g_planet_hooks`
+  (`souls` = 0x445785, UI hooks filled by the Planetview). Checked:
+  `tests/planet_test` (invariants over the four scenarios and a generated
+  planet) and `tools/emu/test_planet.py`, which runs every step function
+  against the original in the emulator and finds RNG, all planet globals,
+  the coastline map and the SOUL groups identical (all four scenarios,
+  forced disasters, the Flood, world generation).
 
 ### WP6: information views (priority 4; two agents if needed)
 
 - WP6a: Graphview 0x40b1c0-0x41722f (history IO shared with savegame), Mapview
   0x463b70-0x4678f3. Files `src/ui/graphview.c`, `src/ui/mapview.c`.
+  **Done** (0x467890 is the Microview's title, WP6b). Interface as built:
+  `ui/graphview.h`: `graph_history_record()` (0x40d34b) and
+  `graph_history_update()` (0x4154ab) for sim_update's phase 80 and
+  game_reset_world, `graphview_refresh()` (graphview_draw(0, 0, 1)),
+  `graphview_create/destroy/window()`; `ui/mapview.h`: `mapview_refresh()`,
+  `mapview_draw()`, `mapview_create/destroy/window()`; `ui/views.h`: the
+  shell context (`views_set_context`: main window, main `MapView`, pause
+  flag) and hooks (`select_plane` both halves of 0x42b102, `help_balloon`
+  0x478a14, `center_on_cell` 0x406be8, `menu_command` for the close
+  buttons). The summaries are `g_state.summary[]` (field map at the top of
+  graphview.c), the History Graph's series `g_state.rec_5c4eb0[]` (`Rec72`).
+  Tests: `tests/views_test` (all graphs and layers of each save through the
+  mouse path, PNGs), `tools/emu/test_views.py` (record/update against the
+  original over 430 years).
 - WP6b: Microview 0x4678f4-0x4750ef, Macromanager 0x4619f0-0x463b6f, Soulview
   UI 0x478d50-0x47fca6 (minus what WP1b takes). Files `src/ui/microview.c`,
   `src/ui/macro.c`, `src/ui/soulview.c`. Bank/loan/upgrade/funding actions call

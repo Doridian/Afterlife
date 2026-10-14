@@ -344,14 +344,14 @@ static void s_plane(Ser *s, MapPlaneState *pl, int plane)
         s_plane_stats(s, &pl->stats);
 }
 
-static void s_grid_rec(Ser *s, GridRec2a *r)
+static void s_grid_rec(Ser *s, PlanetSector *r)
 {
-    s_u32(s, &r->unk_00);
-    s_u8(s, &r->unk_04), s_u8(s, &r->unk_05), s_u8(s, &r->unk_06);
-    s_bytes(s, r->unk_07, 9);
-    s_bytes(s, r->unk_10, 16);
-    s_bytes(s, r->unk_20, 7);
-    s_u8(s, &r->unk_27), s_u8(s, &r->unk_28), s_u8(s, &r->unk_29);
+    s_u32(s, &r->pop);
+    s_u8(s, &r->death_rate), s_u8(s, &r->birth_rate), s_u8(s, &r->tech);
+    s_bytes(s, r->tenet, 9);
+    s_bytes(s, r->soul_frac, 16);
+    s_bytes(s, r->sin, 7);
+    s_u8(s, &r->terrain), s_u8(s, &r->height), s_u8(s, &r->flags);
 }
 
 static void s_map_object(Ser *s, MapObjectRec *o)
@@ -368,10 +368,10 @@ static void s_map_object(Ser *s, MapObjectRec *o)
 static void s_rec72(Ser *s, Rec72 *r)
 {
     s_u32s(s, r->v, 25);
-    s_u32(s, &r->unk_64), s_u32(s, &r->unk_68);
-    s_u8(s, &r->unk_6c), s_u8(s, &r->unk_6d);
+    s_u32(s, &r->min), s_u32(s, &r->max);
+    s_u8(s, &r->count), s_u8(s, &r->unk_6d);
     if (s->ver > 7124)
-        s_u32(s, &r->unk_6e);
+        s_u32(s, &r->shift);
 }
 
 /* Everything between the planes and the sub-module blocks (body of
@@ -381,13 +381,13 @@ static void s_globals(Ser *s, GameState *g)
     int v = s->ver;
     for (int i = 0; i < 64; i++)
         for (int j = 0; j < 32; j++)
-            s_grid_rec(s, &g->grid_57e1c0[i][j]);
+            s_grid_rec(s, &g->sectors[i][j]);
     s_bytes(s, &g->unk_64e500[0][0], sizeof g->unk_64e500);
     for (int i = 0; i < GS_MAP_OBJECTS; i++)
         s_map_object(s, &g->objects[i]);
     for (int i = 0; i < 0x2000; i++) {
         SoulGroup *r = &g->soul_groups[i];
-        s_u32(s, &r->count), s_u16(s, &r->mask), s_u32(s, &r->unk_06), s_u8(s, &r->unk_0a);
+        s_u32(s, &r->count), s_u16(s, &r->mask), s_u32(s, &r->next), s_u8(s, &r->age);
     }
     s_u32s(s, g->unk_5b2f10, 16);
     for (int i = 0; i < 7; i++) {
@@ -408,7 +408,7 @@ static void s_globals(Ser *s, GameState *g)
     s_u32(s, &g->unk_62659c), s_u32(s, &g->unk_5b2f54);
     s_u8(s, &g->unk_5b2f58), s_u8(s, &g->unk_630426), s_u8(s, &g->unk_5fa61d), s_u8(s, &g->unk_57e067);
     s_u32(s, &g->unk_6265a0), s_u32(s, &g->unk_57e020), s_u32(s, &g->unk_57e1b4);
-    s_u32(s, &g->unk_5bb114), s_u32(s, &g->unk_5f7464), s_u32(s, &g->unk_630434);
+    s_u32(s, &g->unk_5bb114), s_u32(s, &g->unk_5f7464), s_u32(s, &g->planet_cursor);
     s_u8(s, &g->unk_593254), s_u8(s, &g->unk_5b2f60);
     s_u32(s, &g->embos_next.lo), s_u32(s, &g->embos.lo);
     if (v > 7299)
@@ -424,9 +424,9 @@ static void s_globals(Ser *s, GameState *g)
     s_u32(s, &g->unk_63042c), s_u32(s, &g->unk_638668), s_u32(s, &g->unk_626594);
     s_u32(s, &g->unk_57e1ac), s_u32(s, &g->unk_5bb10c);
     s_u8(s, &g->unk_63041c), s_u8(s, &g->unk_630424), s_u8(s, &g->unk_63050e), s_u8(s, &g->sim_phase);
-    s_u32(s, &g->unk_630488);
+    s_u32(s, &g->planet_deaths_last);
     if (v > 7100)
-        s_u32(s, &g->unk_638694);
+        s_u32(s, &g->planet_deaths);
     s_u8(s, &g->unk_6301f4), s_u8(s, &g->unk_59ceb0);
     s_u32(s, &g->unk_630508);
     s_u8(s, &g->unk_5b2f61);
@@ -459,7 +459,7 @@ static void s_globals(Ser *s, GameState *g)
     if (v > 7169)
         s_u32(s, &g->lost_souls);
     if (v > 7109)
-        s_u8(s, &g->unk_6301f3);
+        s_u8(s, &g->planet_aaaa);
     if (v > 7129)
         s_u32(s, &g->unk_638690), s_u32(s, &g->unk_593250);
     if (v > 7139)
@@ -531,43 +531,43 @@ static void s_planet(Ser *s, PlanetState *p)
         }
     }
     s_bytes(s, p->map, p->map_size);
-    s_u8(s, &p->unk_66c8dc);
-    s_u32(s, &p->unk_66c8e0);
+    s_u8(s, &p->disaster);
+    s_u32(s, &p->disaster_year);
     if (v > 7011)
-        s_u16(s, &p->unk_66c8cc);
+        s_u16(s, &p->belief_drift);
     s_u8(s, &p->n_a);
     for (int i = 0; i < p->n_a; i++) {
-        s_u32(s, &p->rec_a[i].unk_0), s_u32(s, &p->rec_a[i].unk_4);
+        s_u32(s, &p->rec_a[i].x), s_u32(s, &p->rec_a[i].y);
         s_u16s(s, p->rec_a[i].v, 7);
     }
     s_u8(s, &p->n_b);
     for (int i = 0; i < p->n_b; i++) {
-        s_u32(s, &p->rec_b[i].unk_0), s_u32(s, &p->rec_b[i].unk_4);
+        s_u32(s, &p->rec_b[i].x), s_u32(s, &p->rec_b[i].y);
         s_u16s(s, p->rec_b[i].v, 9);
     }
     s_u8(s, &p->n_c);
     for (int i = 0; i < p->n_c; i++) {
-        s_u32(s, &p->rec_c[i].unk_0), s_u32(s, &p->rec_c[i].unk_4);
-        s_u8(s, &p->rec_c[i].unk_518cf0), s_u8(s, &p->rec_c[i].unk_4f3fe8);
+        s_u32(s, &p->rec_c[i].x), s_u32(s, &p->rec_c[i].y);
+        s_u8(s, &p->rec_c[i].left), s_u8(s, &p->rec_c[i].initial);
     }
     if (v > 7194) {
-        s_u8(s, &p->unk_66c8c0), s_u8(s, &p->unk_66c8c4);
+        s_u8(s, &p->sector_row), s_u8(s, &p->tech_row);
         for (int j = 0; j < 32; j++)
             for (int i = 0; i < 64; i++)
                 s_u32(s, &p->grid[i][j][0]), s_u32(s, &p->grid[i][j][1]);
     }
-    s_u32s(s, p->unk_50acf0, 0x3800);
-    s_u32s(s, p->unk_4f4438, 0x4800);
+    s_u32s(s, p->sin_acc, 0x3800);
+    s_u32s(s, p->tenet_acc, 0x4800);
     if (v > 7100)
-        s_u32(s, &p->unk_66c8e4);
+        s_u32(s, &p->tech_year);
     if (v > 7204)
-        s_u8(s, &p->unk_66c8e8);
+        s_u8(s, &p->tech_best);
     if (v > 7166)
-        s_u32(s, &p->unk_66c8c8);
+        s_u32(s, &p->coastal_pop);
     if (v > 7219) {
-        s_bytes(s, p->unk_4f4028, 7);
-        s_u32s(s, p->unk_4f3f90, 7);
-        s_u32(s, &p->unk_66c89c);
+        s_bytes(s, p->sin_avg, 7);
+        s_u32s(s, p->sin_sum, 7);
+        s_u32(s, &p->pop_k);
     }
 }
 

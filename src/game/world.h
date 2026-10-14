@@ -86,9 +86,9 @@ void world_reset(void);
 /* Loads an ALSV file into g_state (via a temporary, so g_state is untouched
  * on failure) and applies it like the end of save_load_game (0x48f837):
  * realm +0x80ef is clamped (> 100 -> 0), the planes are reselected in the
- * order 2, 3, 1 (Hell stays selected). The derived-table rebuilds the
- * original runs between those selects (0x4506b6 recompute and 0x452267,
- * WP2) are not ported yet. */
+ * order 2, 3, 1 (Hell stays selected) with the derived-table rebuilds
+ * the original runs between them (build_after_load in game/newworld.h:
+ * 0x4506b6 zone stand-ins, 0x452267 tile costs). */
 bool world_load(const char *path, char *err, size_t err_len);
 /* The same for a state that was loaded elsewhere: takes ownership of *gs
  * (its heap parts move into g_state; *gs is zeroed). */

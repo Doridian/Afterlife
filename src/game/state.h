@@ -176,16 +176,22 @@ typedef struct MapPlaneState {
 
 /* ---- Fixed tables after the planes --------------------------------------- */
 
-/* 0x57e1c0: 64 x 32 records of 0x2a bytes ([i * 0x540 + j * 0x2a]); used by
- * the planet view code (0x4aaca0, 0x4ab5d4 read +0x10). */
-typedef struct GridRec2a {
-    uint32_t unk_00;
-    uint8_t unk_04, unk_05, unk_06;
-    uint8_t unk_07[9];
-    uint8_t unk_10[16];
-    uint8_t unk_20[7];
-    uint8_t unk_27, unk_28, unk_29;
-} GridRec2a;
+/* 0x57e1c0 planet_sectors: the Planet, 64 x 32 sectors of 0x2a bytes
+ * ([x * 0x540 + y * 0x2a]); simulated by game/planet.c (docs there). */
+typedef struct PlanetSector {
+    uint32_t pop;               /* +0x00: EMBOs living here */
+    uint8_t death_rate;         /* +0x04: from the tech table (0x498dd5) */
+    uint8_t birth_rate;         /* +0x05 */
+    uint8_t tech;               /* +0x06: tech level 0..14 (Fire .. Advanced Golf) */
+    /* +0x07: tenets 0..255: AAAA (NAAA = 255 - AAAA); the fates HAHA, HOHO,
+     * OPRA, OCRA (sum ~255); ALF/RALF and SUMA/SUSA pairs (sum 255). */
+    uint8_t tenet[9];
+    uint8_t soul_frac[16];      /* +0x10: share of deaths per SOUL belief type (0x4aaca0) */
+    uint8_t sin[7];             /* +0x20: int8 sin (< 0) / virtue (> 0) level per pair */
+    uint8_t terrain;            /* +0x27: 0 land, 1 water, 2 arctic */
+    uint8_t height;             /* +0x28: land elevation (mountains >= 3) */
+    uint8_t flags;              /* +0x29: 1 flooded, bit 7 lowered by the flood */
+} PlanetSector;
 
 /* 0x64e5f0: map objects, the sprites moving over the map (docs/map.md;
  * gfx/map_view.h MapObject is the renderer's view of the same record). */
@@ -213,17 +219,20 @@ typedef struct MapObjectRec {
 #define GS_SOUL_GROUPS 0x2000
 typedef struct SoulGroup {
     uint32_t count;             /* +0x0: SOULs in the group; 0 = free */
-    uint16_t mask;              /* +0x4: sin/virtue bits (game-map.md) */
-    uint32_t unk_06;
-    uint8_t unk_0a;
+    uint16_t mask;              /* +0x4: categories held (bits 0-15, game/souls.h) */
+    uint32_t next;              /* +0x6: chained group (int32; <= 0 ends the chain) */
+    uint8_t age;                /* +0xa: years on the roads, capped at 0xfe */
 } SoulGroup;
 
-/* 0x5c4eb0: 30 records of 0x72 bytes (18 before version 7130). */
+/* 0x5c4eb0: the History Graph's time series (ui/graphview.c), 30 records
+ * of 0x72 bytes (18 before version 7130): series k * 3 + scale, scale 0
+ * the last 25 years, 1 one point per 20 years, 2 one per 400 years
+ * (graph_history_update 0x4154ab). */
 typedef struct Rec72 {
-    uint32_t v[25];             /* +0x00 */
-    uint32_t unk_64, unk_68;
-    uint8_t unk_6c, unk_6d;
-    uint32_t unk_6e;            /* ver > 7124 */
+    uint32_t v[25];             /* +0x00: int32 samples, oldest first, >> shift */
+    uint32_t min, max;          /* +0x64, +0x68: int32 range of v[0..count-1] */
+    uint8_t count, unk_6d;      /* +0x6c: samples used (int8, <= 25) */
+    uint32_t shift;             /* +0x6e: samples are value >> shift; ver > 7124 */
 } Rec72;
 
 /* 0x6399d0 and 0x639480: two summary records read by the graph views
@@ -244,30 +253,33 @@ typedef struct GraphSummary {
 } GraphSummary;
 
 /* The planet (Earth) view module (block written by 0x495300). */
-typedef struct PlanetRecA { uint32_t unk_0, unk_4; uint16_t v[7]; } PlanetRecA; /* 0x4f4030 / 0x5068b8 */
-typedef struct PlanetRecB { uint32_t unk_0, unk_4; uint16_t v[9]; } PlanetRecB; /* 0x518d50 / 0x506438 */
-typedef struct PlanetRecC { uint32_t unk_0, unk_4; uint8_t unk_518cf0, unk_4f3fe8; } PlanetRecC; /* 0x4f4238 */
+/* Divine influence still spreading, one list per Planetview mode (game/planet.c). */
+typedef struct PlanetRecA { uint32_t x, y; uint16_t v[7]; } PlanetRecA; /* 0x4f4030 / 0x5068b8: artist, int16 per sin */
+typedef struct PlanetRecB { uint32_t x, y; uint16_t v[9]; } PlanetRecB; /* 0x518d50 / 0x506438: famous person, int16 per tenet */
+typedef struct PlanetRecC { uint32_t x, y; uint8_t left, initial; } PlanetRecC; /* 0x4f4238 / 0x518cf0 / 0x4f3fe8: scientist */
 
 typedef struct PlanetState {
     uint32_t map_size;          /* 0x66c7e8 */
     uint8_t *map;               /* 0x66c7e4: map_size bytes, bit-packed terrain/inhabitants; owned */
-    uint8_t unk_66c8dc;
-    uint32_t unk_66c8e0;
-    uint16_t unk_66c8cc;        /* ver > 7011 */
+    uint8_t disaster;           /* 0x66c8dc: last disaster (0..9, 100 flood), 0xff none, 0 after the flood */
+    uint32_t disaster_year;     /* 0x66c8e0 */
+    uint16_t belief_drift;      /* 0x66c8cc: int16, RALF drift applied last year, ver > 7011 */
     uint8_t n_a, n_b, n_c;      /* 0x66c8d0, 0x66c8d4, 0x66c8d8 */
-    PlanetRecA rec_a[256];
+    PlanetRecA rec_a[256];      /* used up to 64 */
     PlanetRecB rec_b[256];
     PlanetRecC rec_c[256];
-    uint8_t unk_66c8c0, unk_66c8c4;     /* ver > 7194 */
-    uint32_t grid[64][32][2];   /* 0x506c40, ver > 7194; saved j-major */
-    uint32_t unk_50acf0[0x3800];
-    uint32_t unk_4f4438[0x4800];
-    uint32_t unk_66c8e4;        /* ver > 7100 */
-    uint8_t unk_66c8e8;         /* ver > 7204 */
-    uint32_t unk_66c8c8;        /* ver > 7166 */
-    uint8_t unk_4f4028[7];      /* ver > 7219 */
-    uint32_t unk_4f3f90[7];     /* ver > 7219 */
-    uint32_t unk_66c89c;        /* ver > 7219 */
+    uint8_t sector_row, tech_row; /* 0x66c8c0, 0x66c8c4: incremental pass cursors, ver > 7194 */
+    /* 0x506c40, ver > 7194; saved j-major: [x][y] {int32 migration this
+     * year, int32 tech levels brought in by migrants} */
+    uint32_t grid[64][32][2];
+    uint32_t sin_acc[0x3800];   /* 0x50acf0: int32 [x][y][7] sin influence pending */
+    uint32_t tenet_acc[0x4800]; /* 0x4f4438: int32 [x][y][9] tenet influence pending */
+    uint32_t tech_year;         /* 0x66c8e4: year of the last tech advance, ver > 7100 */
+    uint8_t tech_best;          /* 0x66c8e8: highest tech reached (announced), ver > 7204 */
+    uint32_t coastal_pop;       /* 0x66c8c8: EMBOs in coastal sectors, ver > 7166 */
+    uint8_t sin_avg[7];         /* 0x4f4028: int8 planet average per sin, ver > 7219 */
+    uint32_t sin_sum[7];        /* 0x4f3f90: int32 sums for it, ver > 7219 */
+    uint32_t pop_k;             /* 0x66c89c: the weight (EMBOs / 1000), ver > 7219 */
 } PlanetState;
 
 /* 0x4f33f8: 10 records of 0x26 bytes (block written by 0x478d50); the
@@ -296,7 +308,7 @@ typedef struct GameState {
     SaveHeader hdr;
     MapPlaneState plane[4];         /* [1] Hell, [2] middle, [3] Heaven; [0] unused */
 
-    GridRec2a grid_57e1c0[64][32];
+    PlanetSector sectors[64][32];   /* 0x57e1c0 planet_sectors, [x][y] */
     uint8_t unk_64e500[25][9];      /* 0x64e500 */
     MapObjectRec objects[GS_MAP_OBJECTS];
     SoulGroup soul_groups[GS_SOUL_GROUPS]; /* 0x59cf10 */
@@ -320,7 +332,7 @@ typedef struct GameState {
     uint32_t unk_62659c;
     uint32_t unk_5b2f54;
     uint8_t unk_5b2f58, unk_630426, unk_5fa61d, unk_57e067;
-    uint32_t unk_6265a0, unk_57e020, unk_57e1b4, unk_5bb114, unk_5f7464, unk_630434;
+    uint32_t unk_6265a0, unk_57e020, unk_57e1b4, unk_5bb114, unk_5f7464, planet_cursor; /* 0x630434 planet_cursor: sector scan of phases 20/30 */
     uint8_t unk_593254, unk_5b2f60;
     /* 0x6303c0/c4: EMBOs counted during the planet pass (bignum_add in
      * 0x49704f, 0x4aa138); copied to `embos` and cleared at year start
@@ -334,8 +346,8 @@ typedef struct GameState {
     uint32_t unk_63042c, unk_638668, unk_626594, unk_57e1ac, unk_5bb10c;
     uint8_t unk_63041c, unk_630424, unk_63050e;
     uint8_t sim_phase;                  /* 0x5bb104: sim_update scheduler phase (0, 10, 15, 20, 30, 40..100) */
-    uint32_t unk_630488;
-    uint32_t unk_638694;                /* ver > 7100 */
+    uint32_t planet_deaths_last;        /* 0x630488: EMBO deaths (SOULs) last year */
+    uint32_t planet_deaths;             /* 0x638694: EMBO deaths this year, ver > 7100 */
     uint8_t unk_6301f4, unk_59ceb0;
     uint32_t unk_630508;
     uint8_t unk_5b2f61;
@@ -355,7 +367,7 @@ typedef struct GameState {
     uint8_t unk_630425;                 /* ver > 7009 */
     uint32_t unk_626598;                /* ver > 7099 */
     uint32_t lost_souls;                /* 0x5c5c10, ver > 7169: status bar "Lost: %s" */
-    uint8_t unk_6301f3;                 /* ver > 7109 */
+    uint8_t planet_aaaa;                /* 0x6301f3: planet average AAAA belief, ver > 7109 */
     uint32_t unk_638690, unk_593250;    /* ver > 7129 */
     uint32_t unk_57e09c;                /* ver > 7139 */
     uint8_t unk_5931c1, unk_63026c, unk_59324c, unk_63050d;  /* ver > 7159 */

@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "game/newworld.h"
 #include "game/savegame.h"
 
 GameState g_state;
@@ -69,12 +70,10 @@ void world_apply_loaded(GameState *gs)
     for (int pl = GS_PLANE_HELL; pl <= GS_PLANE_HEAVEN; pl += 2)
         if (g_state.plane[pl].stats.unk_80ef > 100)
             g_state.plane[pl].stats.unk_80ef = 0;
-    /* End of save_load_game 0x48f837. Between the selects the original
-     * runs 0x4506b6(0x19/0x18/0x17, 1) unless the view shows zone detail,
-     * and 0x452267(1) after Heaven and Hell (WP2, not ported). */
-    world_select_plane(GS_PLANE_MIDDLE);
-    world_select_plane(GS_PLANE_HEAVEN);
-    world_select_plane(GS_PLANE_HELL);
+    /* End of save_load_game 0x48f837: selects planes 2, 3, 1 and between
+     * them runs 0x4506b6(0x19/0x18/0x17, 1) unless the view shows zone
+     * detail, and 0x452267(1) after Heaven and Hell (game/newworld.c). */
+    build_after_load();
 }
 
 bool world_load(const char *path, char *err, size_t err_len)

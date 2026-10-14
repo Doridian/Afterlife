@@ -209,3 +209,97 @@ if(NOT EMSCRIPTEN)
         target_compile_options(world_test PRIVATE -Wall -Wextra)
     endif()
 endif()
+
+# tools/emu (differential tests against ALIFE.EXE under unicorn): the port as
+# a shared library for ctypes. Not built by default; tools/emu builds it in
+# build/emu itself. Package-specific C wrappers go in tools/emu/shims/*.c.
+if(NOT EMSCRIPTEN AND NOT WIN32)
+    file(GLOB AFTERLIFE_EMU_SHIMS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/emu/shims/*.c)
+    add_library(afterlife_port SHARED EXCLUDE_FROM_ALL tools/emu/port_shim.c ${AFTERLIFE_EMU_SHIMS}
+        $<TARGET_PROPERTY:afterlife_core,SOURCES>)
+    target_compile_definitions(afterlife_port PRIVATE $<TARGET_PROPERTY:afterlife_core,COMPILE_DEFINITIONS>)
+    target_include_directories(afterlife_port PRIVATE src)
+    target_link_libraries(afterlife_port PRIVATE SDL3::SDL3 m)
+endif()
+
+# The Planet (docs/game-map.md WP5): planet simulation, world generation,
+# coastline map and the Planetview window.
+target_sources(afterlife_core PRIVATE src/game/planet.c src/game/planet_gen.c src/game/planet_map.c
+    src/ui/planetview.c)
+if(NOT EMSCRIPTEN)
+    # tests/planet_test: steps the planet of each save for several years and
+    # checks invariants; tests/planetview_test renders the Planetview of a
+    # save headless into a PNG.
+    add_executable(planet_test tests/planet_test.c)
+    target_link_libraries(planet_test PRIVATE afterlife_core)
+    add_executable(planetview_test tests/planetview_test.c)
+    target_link_libraries(planetview_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(planet_test PRIVATE -Wall -Wextra)
+        target_compile_options(planetview_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# Information views (docs/game-map.md WP6a): the Graphview (graphs and the
+# yearly history records sim_update appends) and the Mapview (minimap).
+# They read the building tables of src/game/tables.c (WP2's
+# game_init_defaults fills them); CMake drops the duplicate if another
+# block lists it too.
+target_sources(afterlife_core PRIVATE src/ui/views.c src/ui/graphview.c src/ui/mapview.c
+    src/ui/mapview_outline.c src/game/tables.c)
+if(NOT EMSCRIPTEN)
+    # tests/views_test: loads each save, opens both views headless, every
+    # graph and Mapview layer through the synthetic mouse path, checks them
+    # against the save's data and writes PNGs.
+    add_executable(views_test tests/views_test.c tests/views_test_gfx.c)
+    target_link_libraries(views_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(views_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# SOUL flow (docs/game-map.md WP1b): SOUL groups, the road walk, the zone
+# scan, arrivals at Gates and siphons, and the Soulview trackers' sim side.
+# Needs WP1's realm.c (population), WP2's structure.c/build.c and tables.c;
+# CMake drops duplicates if their blocks list them too.
+target_sources(afterlife_core PRIVATE src/game/souls.c src/game/zones.c src/game/soultrack.c
+    src/game/realm.c src/game/structure.c src/game/build.c src/game/newworld.c src/game/tables.c)
+if(NOT EMSCRIPTEN)
+    # tests/souls_test: runs the SOUL phases on each save given and checks
+    # the population and SOUL bookkeeping invariants.
+    add_executable(souls_test tests/souls_test.c)
+    target_link_libraries(souls_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(souls_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# Build tools, structures, rotation and new worlds (docs/game-map.md WP2).
+# world.c runs build_after_load (newworld.c) when a save is applied.
+target_sources(afterlife_core PRIVATE src/game/build.c src/game/structure.c src/game/rotate.c
+    src/game/newworld.c src/game/tables.c)
+if(NOT EMSCRIPTEN)
+    # tests/build_test: places and destroys structures on each save given
+    # and checks the map invariants, rotates 4x, generates new worlds and
+    # (with a data dir) renders one to a PNG.
+    add_executable(build_test tests/build_test.c)
+    target_link_libraries(build_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(build_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# Simulation scheduler and realm economy (docs/game-map.md WP1): sim_update's
+# phase machine, the realm year (jobs, workers, wages, banks), population and
+# growth rules, the score. Calls into WP1b/WP2/WP5 (listed above); CMake drops
+# duplicate sources.
+target_sources(afterlife_core PRIVATE src/game/sim.c src/game/economy.c src/game/realm.c src/game/tables.c)
+if(NOT EMSCRIPTEN)
+    # tests/sim_test: runs the scheduler on each save given for N years with a
+    # stopped clock and checks the money and realm bookkeeping invariants.
+    add_executable(sim_test tests/sim_test.c)
+    target_link_libraries(sim_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(sim_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
