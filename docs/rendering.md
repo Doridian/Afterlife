@@ -19,7 +19,7 @@ Port code: `src/gfx/` (game side) and `plat_video_*` / `plat_cursor_*` in
 | 0x4cf400-0x4d056e | Bitmap fonts | `gfx/font.c` |
 | 0x4d08e0-0x4d13fc | Primitives (`gr_*`) and rectangle helpers | `gfx/draw.c` |
 | 0x4b8cd0-0x4b93fb | Mouse and cursor ("Ms") | `gfx/mouse.c` |
-| 0x4d05e0-0x4d0820 | Keyboard queue (`kb_*`) | named only, not ported here |
+| 0x4d05e0-0x4d08d6 | Keyboard queue (`kb_*`) | `game/input.c`, see [startup.md](startup.md#input-and-timer) |
 
 ## Surface model
 

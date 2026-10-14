@@ -46,21 +46,23 @@ int sys_register_task(SysInitFn owner, SysTaskFn shutdown, SysTaskFn suspend,
                       SysTaskFn resume, SysTaskFn idle);
 int sys_unregister_task(SysInitFn owner); /* 0x4c67f6 */
 
-/* 0x4c63f0: handles one window message (the port drains all pending
- * events), then runs every task's idle callback. The game calls this from
- * its main loop and from every modal loop. */
+/* 0x4c63f0: handles one window message (PeekMessage, then main_wnd_proc),
+ * then runs every task's idle callback. The game calls this from its main
+ * loop and from every modal loop. Port additions: the emulated 16 ms timer
+ * tick runs first (tm_poll), and the screen is presented at the end (the
+ * original drew straight to the window). */
 void sys_pump(void);
+/* Port: the PeekMessage / TranslateMessage / DispatchMessage part of
+ * sys_pump (also used by kb_wait_key). False if there was no event. */
+bool sys_dispatch_message(void);
 void sys_suspend(void); /* 0x4c666a: WM_ACTIVATE inactive / minimize */
 void sys_resume(void);  /* 0x4c66e3: WM_ACTIVATE active */
 
-/* Port: the window's close button was pressed (the original's main window
- * would get WM_CLOSE -> WM_DESTROY -> PostQuitMessage). */
+/* Port: the main window's close button was pressed (WM_CLOSE) while no
+ * window manager root existed. Once wm_initialize has run, WM_CLOSE goes
+ * to the root window as message 0x406 instead (forwarded to every
+ * top-level window, as in the original), and this stays false. */
 bool sys_quit_requested(void);
-
-/* Port: main_wnd_proc (0x4cb7ad) forwards key and mouse events to the
- * keyboard (0x4d06f1/0x4d070e/0x4d072b) and mouse (0x4b8f90, 0x4b901d..)
- * modules, which aren't ported yet. Until then they go to this hook. */
-void sys_set_event_hook(void (*hook)(const PlatEvent *ev));
 
 /* --- init sequence -------------------------------------------------------- */
 

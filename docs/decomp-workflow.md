@@ -66,7 +66,7 @@ src/platform/   SDL3 backend replacing GDI / winmm / USER32 / file I/O
 src/formats/    clean-room readers for data formats (may be replaced by decompiled originals)
 src/game/       decompiled game code ("VHUMOR"), split by original module where known (planned)
 src/compbun/    decompiled bundle/compression library (see docs/compbun.md)
-src/imuse/      decompiled iMUSE (planned)
+src/imuse/      decompiled iMUSE (see docs/imuse.md)
 tools/          Python helpers: CD extraction, bundle inspection
 docs/           format and binary notes
 ```
@@ -91,6 +91,7 @@ docs/           format and binary notes
 2. **Startup and INI parsing**: done, see [startup.md](startup.md) (init
    order, `ALIFE.INI` keys, main loop shape).
 3. **Rendering**: DIB blit paths, TILE drawing, FLI/FLC player, cursors.
-4. **iMUSE**: mixer and streamer onto `plat_audio_queue`.
+4. **iMUSE**: done, see [imuse.md](imuse.md) (all modules but save/restore;
+   output through `plat_audio_queue`).
 5. **Simulation**: the actual game. This is the bulk of `.text`.
 6. **UI**: menus, graph views, advisors (AKOS).

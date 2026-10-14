@@ -1,7 +1,7 @@
 /*
  * Startup, init order, task table and message pump. See startup.h and
- * docs/startup.md. Subsystems that belong to later steps are stubs here,
- * each labelled with its original address.
+ * docs/startup.md. Subsystems that aren't ported yet are stubs here, each
+ * labelled with its original address.
  */
 #include "game/startup.h"
 
@@ -14,7 +14,16 @@
 #include "compbun/cbres.h"
 #include "game/config.h"
 #include "game/ini.h"
+#include "game/input.h"
 #include "game/resource.h"
+#include "game/sound.h"
+#include "game/timer.h"
+#include "gfx/font.h"
+#include "gfx/mouse.h"
+#include "gfx/palette.h"
+#include "gfx/surface.h"
+#include "ui/controls.h"
+#include "ui/wm.h"
 
 char g_arg_ini_path[0x100];
 char g_arg_load_file[0x100];
@@ -77,6 +86,7 @@ void error_box(const char *title, bool fatal, const char *fmt, ...)
          * hides the main window, shows the box, then shuts down. */
         fprintf(stderr, "A Fatal error has occurred while running Afterlife.\n");
         sys_shutdown();
+        plat_shutdown();
         exit(1); /* exit(0) in the original */
     }
 }
@@ -147,7 +157,7 @@ int sys_unregister_task(SysInitFn owner)
 }
 
 /* ======================================================================== */
-/* Subsystems. Stubs belong to later steps (rendering, iMUSE, UI).           */
+/* Subsystems                                                                */
 /* ======================================================================== */
 
 /* --- He: game heap (MAGIC "HeInitialize") --- */
@@ -191,22 +201,26 @@ static int rc_initialize_from_ini(void)
 
 /* --- Di: display (MAGIC "DiInitialize") --- */
 
-/* Stub for the video side: the original asks GDI for the desktop size
- * (GetClientRect(GetDesktopWindow())) and BITSPIXEL * PLANES. */
+/* GetClientRect(GetDesktopWindow()) and GetDeviceCaps(BITSPIXEL * PLANES).
+ * The port always draws 8-bit, so it reports the 256-color desktop the
+ * game wants. An unknown desktop (headless) counts as 640x480, the
+ * smallest resolution the game supports. */
 static void di_get_desktop_mode(int *w, int *h, int *bpp)
 {
-    *w = 640;
-    *h = 480;
+    plat_video_desktop_size(w, h);
+    if (*w <= 0 || *h <= 0) {
+        *w = 640;
+        *h = 480;
+    }
     *bpp = 8;
 }
 
-/* Stub (di_enum_display_modes 0x4cd58f): EnumDisplaySettings, up to 20
- * modes at the current depth. Only checked with "Force display settings". */
+/* di_enum_display_modes (0x4cd58f): EnumDisplaySettings, up to 20 modes at
+ * the current depth; only checked with "Force display settings". The port
+ * goes fullscreen at any size, so every mode up to the desktop is valid. */
 static bool di_mode_available(int w, int h)
 {
-    (void)w;
-    (void)h;
-    return true;
+    return w > 0 && h > 0;
 }
 
 /* 0x4ca1c0 */
@@ -224,7 +238,17 @@ static int di_initialize(void)
                              "Afterlife is designed to run using a color depth of %d colors.",
                              1 << (g_config.color_depth & 31)) == 8) {
         sys_shutdown();
+        plat_shutdown();
         exit(0);
+    }
+    /* The video layer's parse of "Resolution" (MAX or WxH, clamped to the
+     * desktop). Same rules as cfg_read_display, whose result it replaces
+     * when the platform knows a different desktop size. */
+    int w = g_config.width, h = g_config.height;
+    char *res = ini_get_string(NULL, 0, "Resolution");
+    if (gfx_parse_resolution(res, &w, &h) && w > 0 && h > 0) {
+        g_config.width = w;
+        g_config.height = h;
     }
     /* di_save_system_palette (0x4cbedb) runs here. Then the low-memory
      * warnings: avail phys + page file < 10 MB ("Your machine is running low
@@ -234,61 +258,62 @@ static int di_initialize(void)
                   "The resolution you have selected (%dx%d) is invalid\n", g_config.width,
                   g_config.height);
 
-    /* di_create_identity_palette (0x4cb67a), di_clear_system_palette
-     * (0x4cb54c), di_set_main_window_size (0x4cd73a: CreateWindowExA, framed
-     * if smaller than the desktop, centred), two compatible DCs, the mouse
-     * clip rect and the squares tables. The video layer owns all of that. */
-    if (!plat_init(g_config.window_name, g_config.width, g_config.height))
+    /* Identity palette (0x4cb67a), di_clear_system_palette (0x4cb54c), the
+     * main window at the resolution (0x4cd73a: framed and centred if smaller
+     * than the desktop, else a desktop-sized popup), two memory DCs, the
+     * mouse clip and the color matching tables: gfx_init. */
+    plat_video_set_title(g_config.window_name);
+    if (!gfx_init(g_config.width, g_config.height, g_config.force_display)) {
+        error_box("MAGIC ERROR SetMainWindowSize", true, "Unable to create main window");
         return -1;
+    }
     return 0;
 }
 static void di_shutdown(void) /* 0x4ca6ac */
 {
-    plat_shutdown();
+    /* The window itself goes with plat_shutdown at the end of main(), so
+     * that sound (shut down after the display) still has its platform. */
+    gfx_shutdown();
 }
 static void di_suspend(void) {} /* 0x4ca713 */
 static void di_resume(void) {}  /* 0x4ca725 */
 
-/* --- Tm: timer --- */
+/* --- Tm: timer (game/timer.c) --- */
 
-/* 0x4d14e0: tm_start(16, 0x10000) -> timeSetEvent(16 ms, periodic). */
-static int tm_initialize(void) { return 0; }
-static void tm_shutdown(void) {} /* 0x4d150b */
-static void tm_suspend(void) {}  /* 0x4d152c */
-static void tm_resume(void) {}   /* 0x4d153e */
+/* --- Ms: mouse (gfx/mouse.c) --- */
 
-/* --- Ms: mouse --- */
-
-/* 0x4b8cd0: centres the cursor and sets the clip rect. */
-static int ms_initialize(void) { return 0; }
+/* 0x4b8cd0: centres the pointer and clips it to the screen. */
+static int ms_initialize(void)
+{
+    gfx_mouse_init();
+    return 0;
+}
 static void ms_shutdown(void) {} /* 0x4b8d28 */
 static void ms_suspend(void) {}  /* 0x4b8d3a */
 static void ms_resume(void) {}   /* 0x4b8d4c */
 
-/* --- Kb: keyboard --- */
+/* --- Kb: keyboard (game/input.c) --- */
 
-static int kb_initialize(void) { return 0; } /* 0x4d05e0: clears key state */
-static void kb_shutdown(void) {}             /* 0x4d05f7 */
-static void kb_suspend(void) {}              /* 0x4d0609 */
-static void kb_resume(void) {}               /* 0x4d061b */
+/* --- So: sound (HILEVEL "SoIntialize", game/sound.c) --- */
 
-/* --- So: sound (HILEVEL "SoIntialize") --- */
-
-static void vh_initialize(void) {}           /* 0x4d51d0: VHUMOR error, module and mem runtime */
-static void imuse_initialize(void) {}        /* 0x4d3ea0: iMUSE with the waveOut driver */
-static bool g_snd_initialized;              /* 0x6725ac */
+static void vh_initialize(void) {} /* 0x4d51d0: VHUMOR error, module and mem runtime */
+static int snd_initialize(void);
+static bool g_snd_initialized; /* 0x6725ac */
 
 /* 0x4b97e8. In the port it also takes compbun down, which the original
  * leaves to the VHUMOR module runtime. */
 static void snd_shutdown(void)
 {
-    if (g_snd_initialized)
-        compbun_shutdown();
+    if (!g_snd_initialized)
+        return;
+    sys_unregister_task(snd_initialize);
+    snd_shutdown_imuse();
+    compbun_shutdown();
     g_snd_initialized = false;
 }
-static void snd_suspend(void) {}             /* 0x4b9875 */
-static void snd_resume(void) {}              /* 0x4b98a0 */
-static void snd_idle(void) {}                /* 0x4b9d7c */
+static void snd_suspend(void) { snd_suspend_imuse(); } /* 0x4b9875 */
+static void snd_resume(void) { snd_resume_imuse(); }   /* 0x4b98a0 */
+static void snd_idle(void) { snd_idle_imuse(); }       /* 0x4b9d7c */
 
 /* 0x4b9510 */
 static int snd_initialize(void)
@@ -296,13 +321,19 @@ static int snd_initialize(void)
     cfg_read_sound(&g_config);
     if (!g_config.sound_enabled)
         return 0; /* "Sound = NONE": no buffers, no compbun, no iMUSE */
-    /* Here the original he_malloc()s the music and voice stream buffers
-     * (music_stream[0] and voice_stream[0] bytes, fatal if that fails). */
+    /* he_malloc of the music and voice stream buffers. The original checks
+     * each allocation separately ("Unable to allocate music buffer" /
+     * "voice buffer"). */
+    if (snd_alloc_buffers(&g_config) != 0)
+        error_box("HILEVEL ERROR SoIntialize", true, "Unable to allocate stream buffers (%d, %d bytes)",
+                  (int)g_config.music_stream[0], (int)g_config.voice_stream[0]);
     rc_hook_compbun();
     vh_initialize();
     compbun_init(1, 0);
-    /* iMUSE init data: main window, callbacks, mixer_channels voices. */
-    imuse_initialize();
+    /* iMUSE init data: main window, callbacks, mixer_channels voices. The
+     * original ignores imuse_initialize's result. */
+    if (snd_start_imuse(&g_config) != 0)
+        warning_box("HILEVEL ERROR SoIntialize", "iMUSE failed to initialize; no sound");
     sys_register_task(snd_initialize, snd_shutdown, snd_suspend, snd_resume, snd_idle);
     g_snd_initialized = true;
     return 0;
@@ -310,40 +341,83 @@ static int snd_initialize(void)
 
 /* --- palette cycling --- */
 
-static void pcyc_idle(void) {} /* 0x4cf108: rotates up to 100 palette ranges every 100 ms */
-
 /* 0x4ceba0 */
 static int pcyc_initialize(void)
 {
-    sys_register_task(pcyc_initialize, NULL, NULL, NULL, pcyc_idle);
+    gfx_cycle_init();
+    sys_register_task(pcyc_initialize, NULL, NULL, NULL, gfx_cycle_idle); /* idle 0x4cf108 */
     return 0;
 }
 static void pcyc_shutdown(void) {} /* 0x4cebe3 */
 
-/* --- cursors --- */
+/* --- fonts --- */
 
-static int cur_initialize(void) { return 0; } /* 0x4cf400: cursor table, default arrow */
-static void cur_shutdown(void) {}             /* 0x4cf444 */
+/* 0x4cf400: font cache, slot 0 = the built-in font. */
+static int font_initialize(void)
+{
+    gfx_font_init();
+    return 0;
+}
+static void font_shutdown(void) { gfx_font_shutdown(); } /* 0x4cf444 */
 
-/* --- Wm: window manager --- */
+/* --- Wm: window manager (ui/wm.c) --- */
 
-/* 0x4c1580: registers its task (0x4c1722, 0x4c176b, 0x4c177d, 0x4c178f),
- * hooks the mouse, timer and paint callbacks, and creates the root window
- * (wm_create_window 0x4c1bce) covering the screen. */
-static int wm_initialize(void) { return 0; }
-static void wm_shutdown(void) {} /* 0x4c1722 */
+/* kb_flush_one: the WM's keyboard source, the keyboard module's queue. */
+static bool wm_key_poll(int *type, int *key, int *ch)
+{
+    const KbEvent *e = kb_get_event();
+    if (!e)
+        return false;
+    *type = e->type;
+    *key = e->vk;
+    *ch = e->ch;
+    return true;
+}
 
-/* --- controls --- */
+static void wm_task_shutdown(void) { wm_shutdown(); } /* 0x4c1722 */
+static void wm_task_suspend(void) { wm_suspend(); }   /* 0x4c176b */
+static void wm_task_resume(void) { wm_resume(); }     /* 0x4c177d */
 
-/* 0x4ba100: registers (suspend 0x4ba14f, resume 0x4ba172, idle ctl_idle
- * 0x4bf68a: button blink, scroll auto-repeat). */
-static int ctl_initialize(void) { return 0; }
-static void ctl_shutdown(void) {} /* 0x4ba130 */
+/* 0x4c1580. The original registers its task first and takes it out again
+ * if the root window can't be created; ui/wm.c leaves that to the caller.
+ * Its kb_set_handler(wm_key_handler) becomes the key_poll hook, and the
+ * region builder's snd_idle calls the sound_idle hook. */
+static int wm_init_step(void)
+{
+    wm_hooks.key_poll = wm_key_poll;
+    wm_hooks.sound_idle = snd_idle_imuse;
+    sys_register_task(wm_initialize, wm_task_shutdown, wm_task_suspend, wm_task_resume, wm_idle);
+    if (wm_initialize() != 0) {
+        sys_unregister_task(wm_initialize);
+        return -1;
+    }
+    return 0;
+}
+
+/* --- controls (ui/controls.c) --- */
+
+static void ctl_task_suspend(void) { ctl_suspend(); } /* 0x4ba14f */
+static void ctl_task_resume(void) { ctl_resume(); }   /* 0x4ba172 */
+
+/* 0x4ba100: only registers the task (no shutdown; idle ctl_idle 0x4bf68a:
+ * button blink, scroll auto-repeat). The game's pause flag (0x5fa61c) is
+ * hooked up with ctl_set_pause_flag once the game module exists. */
+static int ctl_init_step(void)
+{
+    ctl_initialize();
+    sys_register_task(ctl_initialize, NULL, ctl_task_suspend, ctl_task_resume, ctl_idle);
+    return 0;
+}
 
 /* --- highlight palette --- */
 
-/* 0x4c6bd0: builds a 256-entry remap to the nearest colour 20% brighter. */
-static int pal_highlight_initialize(void) { return 0; }
+/* 0x4c6bd0: builds a 256-entry remap to the nearest colour 20% brighter
+ * (pal_build_highlight_remap 0x4c7d79). */
+static int pal_highlight_initialize(void)
+{
+    gfx_palette_build_highlight();
+    return 0;
+}
 static void pal_highlight_shutdown(void) {} /* 0x4c6be7 */
 
 /* ======================================================================== */
@@ -363,9 +437,9 @@ int sys_initialize(void)
         kb_initialize,            /* 0x4d05e0 */
         snd_initialize,           /* 0x4b9510  compbun_init, iMUSE */
         pcyc_initialize,          /* 0x4ceba0 */
-        cur_initialize,           /* 0x4cf400 */
-        wm_initialize,            /* 0x4c1580 */
-        ctl_initialize,           /* 0x4ba100 */
+        font_initialize,          /* 0x4cf400 */
+        wm_init_step,             /* 0x4c1580 */
+        ctl_init_step,            /* 0x4ba100 */
         pal_highlight_initialize, /* 0x4c6bd0 */
     };
     memset(g_tasks, 0, sizeof(g_tasks));
@@ -388,7 +462,7 @@ void sys_shutdown(void)
     pal_highlight_shutdown();
     ctl_shutdown();
     wm_shutdown();
-    cur_shutdown();
+    font_shutdown();
     pcyc_shutdown();
     di_shutdown();
     snd_shutdown();
@@ -401,39 +475,31 @@ void sys_shutdown(void)
     done = true;
 }
 
-static bool g_quit;
-static void (*g_event_hook)(const PlatEvent *ev);
-
 bool sys_quit_requested(void)
 {
-    return g_quit;
+    return app_close_requested();
 }
 
-void sys_set_event_hook(void (*hook)(const PlatEvent *ev))
+bool sys_dispatch_message(void)
 {
-    g_event_hook = hook;
-}
-
-/* main_wnd_proc (0x4cb7ad), the part the platform layer reports. */
-static void main_wnd_proc(const PlatEvent *ev)
-{
-    if (ev->type == PLAT_EV_QUIT)
-        g_quit = true;
-    if (g_event_hook)
-        g_event_hook(ev);
+    PlatEvent ev;
+    if (!plat_poll_event(&ev))
+        return false;
+    main_wnd_proc(&ev);
+    return true;
 }
 
 /* 0x4c63f0 */
 void sys_pump(void)
 {
-    PlatEvent ev;
-    while (plat_poll_event(&ev))
-        main_wnd_proc(&ev);
+    tm_poll(); /* port: the timeSetEvent thread's due ticks */
+    sys_dispatch_message();
     for (int i = 0; i < SYS_MAX_TASKS; i++)
         if (g_tasks[i].idle)
             g_tasks[i].idle();
-    /* The original also keeps a high-water mark of a tick counter
-     * (0x6727e4 = max(0x6727e4, 0x6727e0)). */
+    /* The original then updates the heap high-water mark (he_bytes_peak
+     * 0x6727e4 = max(peak, he_bytes_used 0x6727e0)). The port has no heap. */
+    gfx_present(); /* port: GDI drew to the window immediately */
     plat_yield();
 }
 

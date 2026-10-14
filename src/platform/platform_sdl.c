@@ -22,7 +22,9 @@ bool plat_init(const char *title, int width, int height)
         SDL_Log("SDL_Init: %s", SDL_GetError());
         return false;
     }
-    if (!SDL_CreateWindowAndRenderer(title, width, height, SDL_WINDOW_RESIZABLE, &g_window, &g_renderer)) {
+    /* Hidden until plat_video_set_mode, like the original's 1x1 window. */
+    if (!SDL_CreateWindowAndRenderer(title ? title : "", width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN,
+                                     &g_window, &g_renderer)) {
         SDL_Log("SDL_CreateWindowAndRenderer: %s", SDL_GetError());
         return false;
     }
@@ -33,13 +35,20 @@ bool plat_init(const char *title, int width, int height)
     g_palette = SDL_CreateSurfacePalette(g_indexed);
     g_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
     SDL_SetTextureScaleMode(g_texture, SDL_SCALEMODE_NEAREST);
+    /* WM_CHAR comes from SDL's text input events (see plat_poll_event). */
+    SDL_StartTextInput(g_window);
     return g_indexed && g_palette && g_texture;
+}
+
+void plat_video_set_title(const char *title)
+{
+    if (g_window)
+        SDL_SetWindowTitle(g_window, title ? title : "");
 }
 
 void plat_shutdown(void)
 {
-    if (g_audio)
-        SDL_DestroyAudioStream(g_audio);
+    plat_audio_close();
     SDL_DestroyTexture(g_texture);
     SDL_DestroySurface(g_indexed);
     SDL_DestroyRenderer(g_renderer);
@@ -87,6 +96,7 @@ bool plat_video_set_mode(int width, int height, bool fullscreen)
     SDL_SetWindowFullscreen(g_window, fullscreen);
     if (!fullscreen)
         SDL_SetWindowSize(g_window, width, height);
+    SDL_ShowWindow(g_window);
     return true;
 }
 
@@ -158,40 +168,260 @@ void plat_video_present(void)
     SDL_RenderPresent(g_renderer);
 }
 
+/* --- input events ---------------------------------------------------------
+ * One SDL event can stand for several window messages (a key down that
+ * TranslateMessage turns into WM_KEYDOWN + WM_CHAR, or a text event with
+ * several characters), so translated events go through a small FIFO. */
+
+#define PLAT_EVQ_LEN 64
+static PlatEvent g_evq[PLAT_EVQ_LEN];
+static int g_evq_head, g_evq_tail;
+
+static void evq_push(const PlatEvent *ev)
+{
+    int next = (g_evq_tail + 1) % PLAT_EVQ_LEN;
+    if (next == g_evq_head)
+        return; /* full: drop, like a full Windows message queue */
+    g_evq[g_evq_tail] = *ev;
+    g_evq_tail = next;
+}
+
+static bool evq_pop(PlatEvent *ev)
+{
+    if (g_evq_head == g_evq_tail)
+        return false;
+    *ev = g_evq[g_evq_head];
+    g_evq_head = (g_evq_head + 1) % PLAT_EVQ_LEN;
+    return true;
+}
+
+static void push_simple(PlatEventType type)
+{
+    PlatEvent ev = {0};
+    ev.type = type;
+    evq_push(&ev);
+}
+
+static void push_char(uint8_t ch)
+{
+    PlatEvent ev = {0};
+    ev.type = PLAT_EV_CHAR;
+    ev.ch = ch;
+    evq_push(&ev);
+}
+
+/* SDL key -> Windows virtual-key code. Letters and digits follow the
+ * keyboard layout (as VK_A.. do); everything else goes by position. */
+static int sdl_to_vk(SDL_Keycode key, SDL_Scancode sc)
+{
+    if (key >= 'a' && key <= 'z')
+        return (int)(key - 'a' + 'A');
+    if (key >= '0' && key <= '9')
+        return (int)key;
+    switch (key) {
+    case ';': return PLAT_VK_OEM_1;
+    case '=': return PLAT_VK_OEM_PLUS;
+    case ',': return PLAT_VK_OEM_COMMA;
+    case '-': return PLAT_VK_OEM_MINUS;
+    case '.': return PLAT_VK_OEM_PERIOD;
+    case '/': return PLAT_VK_OEM_2;
+    case '`': return PLAT_VK_OEM_3;
+    case '[': return PLAT_VK_OEM_4;
+    case '\\': return PLAT_VK_OEM_5;
+    case ']': return PLAT_VK_OEM_6;
+    case '\'': return PLAT_VK_OEM_7;
+    default: break;
+    }
+    if (sc >= SDL_SCANCODE_A && sc <= SDL_SCANCODE_Z)
+        return 'A' + (int)(sc - SDL_SCANCODE_A);
+    if (sc >= SDL_SCANCODE_1 && sc <= SDL_SCANCODE_9)
+        return '1' + (int)(sc - SDL_SCANCODE_1);
+    if (sc >= SDL_SCANCODE_F1 && sc <= SDL_SCANCODE_F12)
+        return PLAT_VK_F1 + (int)(sc - SDL_SCANCODE_F1);
+    if (sc >= SDL_SCANCODE_KP_1 && sc <= SDL_SCANCODE_KP_9)
+        return PLAT_VK_NUMPAD0 + 1 + (int)(sc - SDL_SCANCODE_KP_1);
+    switch (sc) {
+    case SDL_SCANCODE_0: return '0';
+    case SDL_SCANCODE_BACKSPACE: return PLAT_VK_BACK;
+    case SDL_SCANCODE_TAB: return PLAT_VK_TAB;
+    case SDL_SCANCODE_RETURN:
+    case SDL_SCANCODE_KP_ENTER: return PLAT_VK_RETURN;
+    case SDL_SCANCODE_LSHIFT:
+    case SDL_SCANCODE_RSHIFT: return PLAT_VK_SHIFT;
+    case SDL_SCANCODE_LCTRL:
+    case SDL_SCANCODE_RCTRL: return PLAT_VK_CONTROL;
+    case SDL_SCANCODE_LALT:
+    case SDL_SCANCODE_RALT: return PLAT_VK_MENU;
+    case SDL_SCANCODE_PAUSE: return PLAT_VK_PAUSE;
+    case SDL_SCANCODE_CAPSLOCK: return PLAT_VK_CAPITAL;
+    case SDL_SCANCODE_ESCAPE: return PLAT_VK_ESCAPE;
+    case SDL_SCANCODE_SPACE: return PLAT_VK_SPACE;
+    case SDL_SCANCODE_PAGEUP: return PLAT_VK_PRIOR;
+    case SDL_SCANCODE_PAGEDOWN: return PLAT_VK_NEXT;
+    case SDL_SCANCODE_END: return PLAT_VK_END;
+    case SDL_SCANCODE_HOME: return PLAT_VK_HOME;
+    case SDL_SCANCODE_LEFT: return PLAT_VK_LEFT;
+    case SDL_SCANCODE_UP: return PLAT_VK_UP;
+    case SDL_SCANCODE_RIGHT: return PLAT_VK_RIGHT;
+    case SDL_SCANCODE_DOWN: return PLAT_VK_DOWN;
+    case SDL_SCANCODE_PRINTSCREEN: return PLAT_VK_SNAPSHOT;
+    case SDL_SCANCODE_INSERT: return PLAT_VK_INSERT;
+    case SDL_SCANCODE_DELETE: return PLAT_VK_DELETE;
+    case SDL_SCANCODE_KP_0: return PLAT_VK_NUMPAD0;
+    case SDL_SCANCODE_KP_MULTIPLY: return PLAT_VK_MULTIPLY;
+    case SDL_SCANCODE_KP_PLUS: return PLAT_VK_ADD;
+    case SDL_SCANCODE_KP_MINUS: return PLAT_VK_SUBTRACT;
+    case SDL_SCANCODE_KP_PERIOD: return PLAT_VK_DECIMAL;
+    case SDL_SCANCODE_KP_DIVIDE: return PLAT_VK_DIVIDE;
+    case SDL_SCANCODE_NUMLOCKCLEAR: return PLAT_VK_NUMLOCK;
+    case SDL_SCANCODE_SCROLLLOCK: return PLAT_VK_SCROLL;
+    case SDL_SCANCODE_SEMICOLON: return PLAT_VK_OEM_1;
+    case SDL_SCANCODE_EQUALS: return PLAT_VK_OEM_PLUS;
+    case SDL_SCANCODE_COMMA: return PLAT_VK_OEM_COMMA;
+    case SDL_SCANCODE_MINUS: return PLAT_VK_OEM_MINUS;
+    case SDL_SCANCODE_PERIOD: return PLAT_VK_OEM_PERIOD;
+    case SDL_SCANCODE_SLASH: return PLAT_VK_OEM_2;
+    case SDL_SCANCODE_GRAVE: return PLAT_VK_OEM_3;
+    case SDL_SCANCODE_LEFTBRACKET: return PLAT_VK_OEM_4;
+    case SDL_SCANCODE_BACKSLASH: return PLAT_VK_OEM_5;
+    case SDL_SCANCODE_RIGHTBRACKET: return PLAT_VK_OEM_6;
+    case SDL_SCANCODE_APOSTROPHE: return PLAT_VK_OEM_7;
+    default: return 0;
+    }
+}
+
+/* The control characters TranslateMessage makes from a WM_KEYDOWN (SDL's
+ * text input only reports printable text). 0 = none. */
+static int control_char(int vk, SDL_Keymod mod)
+{
+    bool ctrl = (mod & SDL_KMOD_CTRL) != 0, alt = (mod & SDL_KMOD_ALT) != 0;
+    if (alt && !ctrl)
+        return 0; /* WM_SYSKEYDOWN -> WM_SYSCHAR, which the game ignores */
+    switch (vk) {
+    case PLAT_VK_BACK: return ctrl ? 0x7f : 0x08;
+    case PLAT_VK_TAB: return ctrl ? 0 : 0x09;
+    case PLAT_VK_RETURN: return ctrl ? 0x0a : 0x0d;
+    case PLAT_VK_ESCAPE: return 0x1b;
+    default: break;
+    }
+    if (ctrl && !alt) {
+        if (vk >= 'A' && vk <= 'Z')
+            return vk - 'A' + 1;
+        if (vk == PLAT_VK_OEM_4)
+            return 0x1b;
+        if (vk == PLAT_VK_OEM_5)
+            return 0x1c;
+        if (vk == PLAT_VK_OEM_6)
+            return 0x1d;
+    }
+    return 0;
+}
+
+/* SDL_EVENT_TEXT_INPUT (UTF-8) -> WM_CHAR per character, in Windows-1252
+ * (code points the game's fonts can't have are dropped). */
+static void push_text(const char *text, SDL_Keymod mod)
+{
+    if ((mod & SDL_KMOD_ALT) && !(mod & SDL_KMOD_CTRL))
+        return;
+    static const uint16_t k_cp1252[32] = {
+        0x20ac, 0, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160, 0x2039, 0x0152, 0, 0x017d, 0,
+        0, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014, 0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0, 0x017e,
+        0x0178};
+    const char *p = text;
+    while (p && *p) {
+        Uint32 cp = SDL_StepUTF8(&p, NULL);
+        if (cp == 0)
+            break;
+        if ((cp >= 0x20 && cp < 0x7f) || (cp >= 0xa0 && cp <= 0xff)) {
+            push_char((uint8_t)cp);
+            continue;
+        }
+        for (int i = 0; i < 32; i++)
+            if (k_cp1252[i] && k_cp1252[i] == cp)
+                push_char((uint8_t)(0x80 + i));
+    }
+}
+
+static void translate(SDL_Event *e)
+{
+    PlatEvent ev = {0};
+    switch (e->type) {
+    case SDL_EVENT_QUIT:
+        push_simple(PLAT_EV_QUIT);
+        break;
+    case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+        push_simple(PLAT_EV_CLOSE);
+        break;
+    case SDL_EVENT_WINDOW_FOCUS_GAINED:
+    case SDL_EVENT_WINDOW_FOCUS_LOST:
+        ev.type = PLAT_EV_ACTIVATE;
+        ev.active = e->type == SDL_EVENT_WINDOW_FOCUS_GAINED;
+        evq_push(&ev);
+        break;
+    case SDL_EVENT_WINDOW_MINIMIZED:
+        push_simple(PLAT_EV_MINIMIZE);
+        break;
+    case SDL_EVENT_WINDOW_RESTORED:
+        push_simple(PLAT_EV_RESTORE);
+        break;
+    case SDL_EVENT_WINDOW_EXPOSED:
+        push_simple(PLAT_EV_EXPOSE);
+        break;
+    case SDL_EVENT_KEY_DOWN:
+    case SDL_EVENT_KEY_UP:
+        ev.vk = sdl_to_vk(e->key.key, e->key.scancode);
+        if (!ev.vk)
+            break;
+        ev.type = e->type == SDL_EVENT_KEY_DOWN ? PLAT_EV_KEY_DOWN : PLAT_EV_KEY_UP;
+        evq_push(&ev);
+        if (e->type == SDL_EVENT_KEY_DOWN) {
+            int ch = control_char(ev.vk, e->key.mod);
+            if (ch)
+                push_char((uint8_t)ch);
+        }
+        break;
+    case SDL_EVENT_TEXT_INPUT:
+        push_text(e->text.text, SDL_GetModState());
+        break;
+    case SDL_EVENT_MOUSE_MOTION:
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        SDL_ConvertEventToRenderCoordinates(g_renderer, e);
+        if (e->type == SDL_EVENT_MOUSE_MOTION) {
+            ev.type = PLAT_EV_MOUSE_MOVE;
+            ev.x = (int)SDL_floorf(e->motion.x);
+            ev.y = (int)SDL_floorf(e->motion.y);
+        } else {
+            ev.type = e->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? PLAT_EV_MOUSE_DOWN : PLAT_EV_MOUSE_UP;
+            ev.button = e->button.button;
+            ev.x = (int)SDL_floorf(e->button.x);
+            ev.y = (int)SDL_floorf(e->button.y);
+        }
+        evq_push(&ev);
+        break;
+    default:
+        break;
+    }
+}
+
 bool plat_poll_event(PlatEvent *ev)
 {
     SDL_Event e;
-    while (SDL_PollEvent(&e)) {
-        memset(ev, 0, sizeof(*ev));
-        switch (e.type) {
-        case SDL_EVENT_QUIT:
-            ev->type = PLAT_EV_QUIT;
-            return true;
-        case SDL_EVENT_KEY_DOWN:
-        case SDL_EVENT_KEY_UP:
-            ev->type = e.type == SDL_EVENT_KEY_DOWN ? PLAT_EV_KEY_DOWN : PLAT_EV_KEY_UP;
-            ev->key = (int)e.key.key;
-            return true;
-        case SDL_EVENT_MOUSE_MOTION:
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        case SDL_EVENT_MOUSE_BUTTON_UP:
-            SDL_ConvertEventToRenderCoordinates(g_renderer, &e);
-            if (e.type == SDL_EVENT_MOUSE_MOTION) {
-                ev->type = PLAT_EV_MOUSE_MOVE;
-                ev->x = (int)e.motion.x;
-                ev->y = (int)e.motion.y;
-            } else {
-                ev->type = e.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? PLAT_EV_MOUSE_DOWN : PLAT_EV_MOUSE_UP;
-                ev->button = e.button.button;
-                ev->x = (int)e.button.x;
-                ev->y = (int)e.button.y;
-            }
-            return true;
-        default:
-            break;
+    while (!evq_pop(ev)) {
+        if (!SDL_PollEvent(&e))
+            return false;
+        /* Windows has at most one WM_MOUSEMOVE pending (it is made from the
+         * current position when the queue is read), so collapse a run of
+         * motion events into the last one. */
+        if (e.type == SDL_EVENT_MOUSE_MOTION) {
+            SDL_Event next;
+            while (SDL_PeepEvents(&next, 1, SDL_PEEKEVENT, SDL_EVENT_FIRST, SDL_EVENT_LAST) == 1 &&
+                   next.type == SDL_EVENT_MOUSE_MOTION && SDL_PollEvent(&next))
+                e = next;
         }
+        translate(&e);
     }
-    return false;
+    return true;
 }
 
 void plat_yield(void)
@@ -224,6 +454,25 @@ bool plat_audio_open(int rate)
     }
     SDL_ResumeAudioStreamDevice(g_audio);
     return true;
+}
+
+void plat_audio_close(void)
+{
+    if (g_audio)
+        SDL_DestroyAudioStream(g_audio);
+    g_audio = NULL;
+}
+
+void plat_audio_pause(bool paused)
+{
+    if (!g_audio)
+        return;
+    if (paused) {
+        SDL_PauseAudioStreamDevice(g_audio);
+        SDL_ClearAudioStream(g_audio);
+    } else {
+        SDL_ResumeAudioStreamDevice(g_audio);
+    }
 }
 
 void plat_audio_queue(const int16_t *frames, int frame_count)

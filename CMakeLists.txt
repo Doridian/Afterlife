@@ -97,3 +97,61 @@ if(NOT EMSCRIPTEN)
         target_compile_options(gfx_test PRIVATE -Wall -Wextra)
     endif()
 endif()
+
+# Input and timer (docs/startup.md): keyboard queue, main_wnd_proc, the
+# emulated 16 ms multimedia timer.
+target_sources(afterlife_core PRIVATE src/game/input.c src/game/timer.c)
+if(NOT EMSCRIPTEN)
+    # tests/input_test: synthetic SDL events through main_wnd_proc to the
+    # keyboard queue and mouse module, and the emulated timer.
+    add_executable(input_test tests/input_test.c)
+    target_link_libraries(input_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(input_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# Window manager and controls (docs/ui.md).
+target_sources(afterlife_core PRIVATE src/ui/wm.c src/ui/region.c src/ui/controls.c)
+if(NOT EMSCRIPTEN)
+    # tests/ui_region_test: region arithmetic and stacking, no game data.
+    # tests/ui_test: overlapping windows with bundle bitmaps, writes a PPM.
+    foreach(t ui_region_test ui_test)
+        add_executable(${t} tests/${t}.c)
+        target_link_libraries(${t} PRIVATE afterlife_core)
+        if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(${t} PRIVATE -Wall -Wextra)
+        endif()
+    endforeach()
+endif()
+
+# iMUSE (docs/imuse.md): the digital iMUSE library and the game's sound
+# slot module on top of it. The output goes to plat_audio_*.
+target_sources(afterlife_core PRIVATE
+    src/imuse/commands.c src/imuse/fades.c src/imuse/files.c src/imuse/groups.c
+    src/imuse/time.c src/imuse/triggers.c src/imuse/wave.c src/imuse/tracks.c
+    src/imuse/dispatch.c src/imuse/streamer.c src/imuse/mixer.c src/imuse/waveapi.c
+    src/game/sound.c)
+if(NOT EMSCRIPTEN AND NOT WIN32)
+    target_link_libraries(afterlife_core PUBLIC m)
+endif()
+if(NOT EMSCRIPTEN)
+    # tests/imuse_test: plays a music and an effect resource through iMUSE
+    # headless and writes the mix to a WAV.
+    add_executable(imuse_test tests/imuse_test.c)
+    target_link_libraries(imuse_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(imuse_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# Map tile renderer and map view (docs/map.md, docs/formats/tile.md).
+target_sources(afterlife_core PRIVATE src/gfx/tile_draw.c src/gfx/map_view.c)
+if(NOT EMSCRIPTEN)
+    # tests/map_render: tile_draw self-checks, zoom/effect sheets, synthetic and savegame maps.
+    add_executable(map_render tests/map_render.c)
+    target_link_libraries(map_render PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(map_render PRIVATE -Wall -Wextra)
+    endif()
+endif()

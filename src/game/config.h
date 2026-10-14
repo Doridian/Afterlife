@@ -38,8 +38,8 @@ typedef struct {
 
     /* snd_initialize 0x4b9510 */
     bool sound_enabled;          /* false if "Sound" == "NONE" (any case) */
-    int32_t music_stream[3];     /* "Music stream" 0x67259c, 0x6725a4, 0x6725a0 */
-    int32_t voice_stream[3];     /* "Voice stream" 0x67258c, 0x672594, 0x672590 */
+    int32_t music_stream[3];     /* "Music stream" size, critical, load: 0x67259c, 0x6725a4, 0x6725a0 */
+    int32_t voice_stream[3];     /* "Voice stream" size, critical, load: 0x67258c, 0x672594, 0x672590 */
     int mixer_channels;          /* "Mixer channels", default 8 */
 } AlConfig;
 
@@ -64,9 +64,9 @@ void cfg_read_display(AlConfig *cfg, int desktop_w, int desktop_h, int desktop_b
                       bool *depth_mismatch);
 
 /* snd_initialize (0x4b9510), INI part: "Sound", "Music stream", "Voice
- * stream", "Mixer channels". Only the first number of each stream setting
- * is used by ALIFE.EXE (the buffer size); the other two are parsed and
- * never read. */
+ * stream", "Mixer channels". Each stream setting is "size, critical,
+ * load": the stream buffer size and its refill thresholds, which iMUSE
+ * reads through buf_info (see docs/imuse.md). */
 void cfg_read_sound(AlConfig *cfg);
 
 /* cfg_save_games_dir (0x480375): copies "Save games" into out (>= 0x800
