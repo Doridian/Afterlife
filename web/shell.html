@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- The page of the WebAssembly build (emcc shell file). The canvas fills
+     the browser window and follows its size; web/pre.js has the glue. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Afterlife</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: #ddd;
+               font: 15px/1.4 system-ui, sans-serif; }
+  /* SDL takes the canvas size from its CSS size (times devicePixelRatio) */
+  #canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none;
+            border: 0; touch-action: none; }
+  .panel { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+           text-align: center; padding: 16px; box-sizing: border-box; }
+  .panel > div { max-width: 36em; }
+  .panel[hidden] { display: none; }
+  #status { pointer-events: none; }
+  #pick, #ended { background: #000; }
+  button, label.btn { font: inherit; padding: 6px 14px; margin: 4px; cursor: pointer; background: #333;
+                      color: #eee; border: 1px solid #777; border-radius: 4px; display: inline-block; }
+  input[type=file] { display: none; }
+  code { color: #fff; }
+  #pick-error { color: #f88; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+<div id="status" class="panel"><div id="status-text">Loading...</div></div>
+<div id="pick" class="panel" hidden><div>
+  <h2>Afterlife</h2>
+  <p>This build carries no game data. Pick the files from your Afterlife CD:
+     the <code>.000</code> bundles (at least <code>ALIFE.000</code>), <code>ALIFE.INI</code>,
+     <code>ALIFE.EXE</code> and the scenarios <code>ASCEN*.ASC</code>.
+     They stay in this browser's storage, so this is needed once.</p>
+  <label class="btn">Choose files...<input id="pick-files" type="file" multiple></label>
+  <label class="btn">Choose the CD folder...<input id="pick-dir" type="file" webkitdirectory></label>
+  <p id="pick-error"></p>
+</div></div>
+<div id="ended" class="panel" hidden><div>
+  <p id="ended-text">Afterlife has ended.</p>
+  <button onclick="location.reload()">Play again</button>
+</div></div>
+<script>
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    setStatus: function (text) {
+      var el = document.getElementById('status');
+      if (text) document.getElementById('status-text').textContent = text;
+      el.hidden = !text;
+    },
+  };
+  window.addEventListener('error', function (e) {
+    Module.setStatus('Error: ' + e.message);
+  });
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

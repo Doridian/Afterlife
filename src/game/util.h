@@ -16,6 +16,14 @@
 
 #include "game/state.h" /* Bignum */
 
+/* For globals the original writes but nothing reads, kept for reference
+ * (clang's -Wunused-but-set-global). */
+#if defined(__GNUC__) || defined(__clang__)
+#define WRITE_ONLY __attribute__((unused))
+#else
+#define WRITE_ONLY
+#endif
+
 /* ---- Random numbers -------------------------------------------------------
  *
  * The game uses the MSVC CRT rand() (0x4b1202): one global 32-bit state

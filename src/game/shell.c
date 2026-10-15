@@ -41,6 +41,7 @@
 #include "gfx/mouse.h"
 #include "gfx/palette.h"
 #include "gfx/surface.h"
+#include "platform/platform.h"
 #include "ui/about.h"
 #include "ui/advisors.h"
 #include "ui/controls.h"
@@ -654,13 +655,18 @@ void shell_menu_dispatch(WmWindow *item, unsigned id)
 
 static const char *mode_ext(int mode) { return mode == 2 ? "asc" : "alf"; }
 
-/* The save folder: INI "Save games" if it exists here, else the data dir. */
+/* The save folder: INI "Save games" if it exists here, else the data dir
+ * (port: the platform's own place first, plat_save_dir). */
 const char *shell_save_dir_override;
 
 static void save_dir(char *out, size_t n)
 {
     if (shell_save_dir_override) {
         snprintf(out, n, "%s", shell_save_dir_override);
+        return;
+    }
+    if (plat_save_dir()) {
+        snprintf(out, n, "%s", plat_save_dir());
         return;
     }
     char ini[0x800];

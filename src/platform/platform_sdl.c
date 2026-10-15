@@ -85,8 +85,14 @@ bool plat_init(const char *title, int width, int height)
         return false;
     }
     /* Hidden until plat_video_set_mode, like the original's 1x1 window. */
-    if (!SDL_CreateWindowAndRenderer(title ? title : "", width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY,
-                                     &g_window, &g_renderer)) {
+    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#ifdef __EMSCRIPTEN__
+    /* WebGL from the start: SDL would otherwise recreate the window for the
+     * renderer, and destroying it leaves an inline 1x1 CSS size on the
+     * canvas (with devicePixelRatio != 1), which hides the page's sizing. */
+    flags |= SDL_WINDOW_OPENGL;
+#endif
+    if (!SDL_CreateWindowAndRenderer(title ? title : "", width, height, flags, &g_window, &g_renderer)) {
         SDL_Log("SDL_CreateWindowAndRenderer: %s", SDL_GetError());
         return false;
     }
@@ -234,6 +240,17 @@ void plat_window_open(const PlatWindowState *saved, int pref_w, int pref_h)
     if (!g_window)
         return;
     g_managed = true;
+#ifdef __EMSCRIPTEN__
+    /* The page's CSS sizes the canvas (web/shell.html) and the browser
+     * window resizes it; SDL_SetWindowSize would fight that. Fullscreen
+     * needs a user gesture, so it isn't restored either. */
+    (void)saved, (void)pref_w, (void)pref_h;
+    SDL_GetWindowSize(g_window, &g_wstate.w, &g_wstate.h);
+    g_wstate.x = g_wstate.y = PLAT_WINDOW_POS_DEFAULT;
+    g_wstate.fullscreen = g_wstate.maximized = false;
+    SDL_ShowWindow(g_window);
+    return;
+#endif
     SDL_Rect ub = usable_bounds();
     float d = desktop_density();
     int k = g_ui_scale_req;
@@ -305,6 +322,9 @@ void plat_window_resize(int w, int h)
 {
     if (!g_window || w <= 0 || h <= 0)
         return;
+#ifdef __EMSCRIPTEN__
+    return; /* the browser window sizes the canvas (plat_window_open) */
+#endif
     if (g_wstate.fullscreen)
         plat_window_set_fullscreen(false);
     if (g_wstate.maximized) {
@@ -628,7 +648,14 @@ static void translate(SDL_Event *e)
     PlatEvent ev = {0};
     switch (e->type) {
     case SDL_EVENT_QUIT:
+#ifdef __APPLE__
+        /* macOS: Cmd+Q / the app menu's Quit (and logout, which SDL holds
+         * off until the app quits) are how a user closes an app there, so
+         * they ask like the close button does. */
+        push_simple(PLAT_EV_CLOSE);
+#else
         push_simple(PLAT_EV_QUIT);
+#endif
         break;
     case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
         push_simple(PLAT_EV_CLOSE);
@@ -693,7 +720,13 @@ static void translate(SDL_Event *e)
              * synthetic events can carry any modifier bits */
             SDL_Keymod held = SDL_GetModState();
             bool alt = (g_alt_held || (held & SDL_KMOD_ALT)) && !(g_ctrl_held || (held & SDL_KMOD_CTRL));
-            if (e->key.scancode == SDL_SCANCODE_F11 || (enter && alt)) {
+            bool toggle = e->key.scancode == SDL_SCANCODE_F11 || (enter && alt);
+#ifdef __APPLE__
+            /* and the macOS shortcut, Ctrl+Cmd+F (F11 shows the desktop there) */
+            if (e->key.scancode == SDL_SCANCODE_F && (held & SDL_KMOD_GUI) && (held & SDL_KMOD_CTRL))
+                toggle = true;
+#endif
+            if (toggle) {
                 if (!e->key.repeat)
                     plat_window_set_fullscreen(!g_wstate.fullscreen);
                 g_swallow_sc = e->key.scancode;
@@ -857,6 +890,29 @@ bool plat_pref_path(const char *name, char *out, size_t out_len)
     SDL_snprintf(out, out_len, "%s%s", dir, name);
     SDL_free(dir);
     return true;
+}
+
+const char *plat_save_dir(void)
+{
+#ifdef __EMSCRIPTEN__
+    /* the pref folder, which web/pre.js keeps in IndexedDB (written back
+     * whenever a file there is closed); the data folder is the package
+     * built in, or the files the player picked */
+    static char dir[1024];
+    if (!dir[0]) {
+        char *p = SDL_GetPrefPath("Afterlife", "Afterlife");
+        if (!p)
+            return NULL;
+        SDL_strlcpy(dir, p, sizeof(dir));
+        SDL_free(p);
+        size_t n = strlen(dir);
+        if (n > 1 && dir[n - 1] == '/')
+            dir[n - 1] = '\0';
+    }
+    return dir;
+#else
+    return NULL;
+#endif
 }
 
 bool plat_data_path(const char *name, char *out, size_t out_len)

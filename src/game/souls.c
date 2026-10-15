@@ -42,7 +42,7 @@ static int32_t walk_depth;      /* 0x63905c: road walk recursion depth */
 static int32_t walk_max_depth;  /* 0x6390b8 */
 
 /* Statistics the original keeps but never reads. */
-static uint32_t stat_yields;        /* 0x639060 */
+static uint32_t stat_yields WRITE_ONLY;        /* 0x639060 */
 static uint32_t stat_zone_visits;   /* 0x6390d0 */
 static uint32_t stat_walks;         /* 0x6390dc */
 static uint32_t stat_groups_walked; /* 0x6390cc */
@@ -50,7 +50,7 @@ static uint8_t stat_65fe5c;         /* 0x65fe5c */
 
 /* souls_flow's resume point (0x65fe40 x, 0x65fe44 y) and done flag. */
 static uint8_t flow_x, flow_y;
-static uint32_t flow_done = 1; /* 0x65fe3c */
+static uint32_t flow_done WRITE_ONLY = 1; /* 0x65fe3c */
 
 static SoulGroup *grp(unsigned g) { return &g_state.soul_groups[g & (GS_SOUL_GROUPS - 1)]; }
 static int32_t grp_next(unsigned g) { return (int32_t)grp(g)->next; }

@@ -198,6 +198,11 @@ bool plat_data_path(const char *name, char *out, size_t out_len);
 /* Port-only: `name` in the user's writable settings folder (created if
  * needed; ~/.local/share/Afterlife/Afterlife/ on Linux). */
 bool plat_pref_path(const char *name, char *out, size_t out_len);
+/* Where saved games go when the platform has its own place for them
+ * (WebAssembly: the pref folder, which web/pre.js keeps in IndexedDB; the
+ * data folder there is a package in memory), else NULL (the INI "Save
+ * games", else the data dir). */
+const char *plat_save_dir(void);
 
 /* A native file picker (port: the original has its own slot dialogs).
  * Asynchronous: begin opens it (false if there is none, e.g. headless or

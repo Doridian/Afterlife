@@ -632,8 +632,8 @@ static void center_main(int cx, int cy)
 static void mapview_help(WmWindow *c)
 {
     static const char *const layers[8] = {
-        "This button sets the Mapview to display the PERMANENT/TEMPORARY POPULATION RATIOS of the currently "
-        "selected realm.",
+        ("This button sets the Mapview to display the PERMANENT/TEMPORARY POPULATION RATIOS of the currently "
+         "selected realm."),
         "This button sets the Mapview to display the EFFECTIVENESS LEVELS of the currently selected realm.",
         "This button sets the Mapview to display the various INFLUENCES at work in the currently selected realm.",
         "This button sets the Mapview to display the FULLNESS of the currently selected realm.",

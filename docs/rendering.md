@@ -165,6 +165,18 @@ Port behaviour, on every run regardless of the enhancements switch
   (`plat_video_screenshot`), answering message boxes with Enter. Run it on
   a headless compositor (`weston --backend=headless` with its own
   `WAYLAND_DISPLAY`, `DISPLAY` unset) so nothing appears on a desktop.
+- **macOS**: Ctrl+Cmd+F toggles fullscreen too (F11 shows the desktop
+  there), and Cmd+Q / the app menu's Quit ask like the close button
+  (`PLAT_EV_CLOSE`) instead of ending at once like SIGTERM does elsewhere.
+  Sizes work the same on Retina screens: SDL's window coordinates are
+  points, the desktop and window are measured in pixels
+  (`pixel_density`), so the faithful mode draws at native pixels and the
+  UI scale (enhancements) is what makes it larger.
+- **Web** ([web.md](web.md)): the page's CSS sizes the canvas to the
+  browser window (times `devicePixelRatio`), so `plat_window_open` and
+  `plat_window_resize` leave the size alone and nothing is restored from
+  ALIFEPORT.INI; resizing the browser window is a window resize.
+  Fullscreen is the canvas going fullscreen (Alt+Enter or F11).
 
 The original can't do any of this: its main window is created once at the
 resolution (0x4cd73a), WM_WINDOWPOSCHANGING adds SWP_NOSIZE, and on

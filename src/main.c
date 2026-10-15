@@ -9,7 +9,8 @@
  *                  [--port-ini=FILE] [--window-size=WxH] [--fullscreen | --windowed]
  *                  [--window-test=DIR] [--debug-window]
  *   DATA_DIR stands in for the original's install folder (default: the
- *   folder of FILE.INI if one is given, else "orig"). FILE.INI is resolved
+ *   folder of FILE.INI if one is given, else "orig", in the current folder
+ *   or next to the executable). FILE.INI is resolved
  *   in it (default ALIFE.ini, matched case-insensitively). --quit exits right
  *   after initialisation (for testing). The rest are port settings
  *   (game/enhance.h, docs/enhancements.md), overriding ALIFEPORT.INI.
@@ -187,6 +188,25 @@ static void save_window_state(void)
         enhance_save_window_state();
 }
 
+/* No DATA_DIR: "orig" in the current folder, else "orig" next to the
+ * executable (SDL_GetBasePath: inside an app bundle on macOS, its
+ * Contents/Resources), as a program started from a file manager or the
+ * Dock doesn't run in its own folder. */
+static const char *default_data_dir(void)
+{
+    static char path[1024];
+    SDL_PathInfo info;
+    if (SDL_GetPathInfo("orig", &info) && info.type == SDL_PATHTYPE_DIRECTORY)
+        return "orig";
+    const char *base = SDL_GetBasePath();
+    if (base) {
+        snprintf(path, sizeof path, "%sorig", base);
+        if (SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY)
+            return path;
+    }
+    return "orig";
+}
+
 int main(int argc, char **argv)
 {
     bool quit_after_init = false;
@@ -224,7 +244,7 @@ int main(int argc, char **argv)
         dir = n ? ini_dir : "/";
         ini_name = slash + 1;
     }
-    plat_set_data_dir(dir ? dir : "orig");
+    plat_set_data_dir(dir ? dir : default_data_dir());
     ini_set_path(ini_name);
 
     /* app_register_class (0x4cd892): the window class and a hidden 1x1

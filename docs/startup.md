@@ -34,7 +34,9 @@ win_main 0x4c62e0       WinMain(hInstance, 0, cmdline, nCmdShow)
 ```
 
 Port differences: no single-instance check or chdir. The data directory (first
-plain argument, else the folder of a given .INI, else `orig`) takes the place of
+plain argument, else the folder of a given .INI, else `orig` in the current
+folder or next to the executable; on the web the folder `web/pre.js` passes, see
+[web.md](web.md)) takes the place of
 the exe folder, and every file name, INI included, is resolved in it
 case-insensitively (DOS drive letters stripped). Only `-x` and `/?` count as
 switches, so absolute Unix paths work. `--quit` exits after init.

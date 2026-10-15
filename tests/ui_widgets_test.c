@@ -160,7 +160,6 @@ static void click(int x, int y)
 /* ------------------------------------------------------------ windows */
 
 static intptr_t g_last_command = -1;
-static int g_commands;
 static intptr_t g_list_sel = -1;
 static int g_enter_count;
 static intptr_t g_enter_id;
@@ -171,7 +170,6 @@ static intptr_t main_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t b)
     switch (msg) {
     case WM_MSG_MENU_COMMAND:
         g_last_command = a;
-        g_commands++;
         return 0;
     case WM_MSG_VSCROLL:
     case WM_MSG_HSCROLL:

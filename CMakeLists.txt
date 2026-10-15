@@ -67,14 +67,54 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 if(EMSCRIPTEN)
-    # The game keeps its original blocking main loop, so we need ASYNCIFY to
-    # yield to the browser from plat_yield()/plat_delay_ms().
+    # The web build (docs/web.md). The game keeps its original blocking loops
+    # (the main loop and every modal dialog pump through sys_pump), so
+    # ASYNCIFY lets plat_yield()/plat_delay_ms() return to the browser.
     set(AFTERLIFE_WASM_DATA "" CACHE PATH
-        "Directory of game files to bundle into the web build (e.g. a dir holding only MEDIUM.000)")
-    set_target_properties(afterlife PROPERTIES SUFFIX ".html")
-    target_link_options(afterlife PRIVATE -sASYNCIFY -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=64MB)
+        "Folder with the game files to build into the web build (else the page asks for them)")
+    set(AFTERLIFE_WASM_FILES "" CACHE STRING
+        "Files of AFTERLIFE_WASM_DATA to package (default: ALIFE.INI, the bundles it names, ALIFE.EXE, ASCEN*.ASC)")
+    set_target_properties(afterlife PROPERTIES SUFFIX ".html"
+        LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/pre.js")
+    target_link_options(afterlife PRIVATE
+        -sASYNCIFY -sASYNCIFY_STACK_SIZE=65536
+        -sSTACK_SIZE=8MB -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=64MB
+        -sEXIT_RUNTIME -sFORCE_FILESYSTEM -lidbfs.js -sENVIRONMENT=web
+        "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
+        "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/pre.js")
     if(AFTERLIFE_WASM_DATA)
-        target_link_options(afterlife PRIVATE "--preload-file=${AFTERLIFE_WASM_DATA}@/orig")
+        # Data file names are matched case-insensitively, like the game does.
+        file(GLOB _all RELATIVE "${AFTERLIFE_WASM_DATA}" "${AFTERLIFE_WASM_DATA}/*")
+        set(_want ${AFTERLIFE_WASM_FILES})
+        if(NOT _want)
+            set(_want ALIFE.INI ALIFE.EXE)
+            foreach(f ${_all})
+                string(TOUPPER "${f}" F)
+                if(F MATCHES "^ASCEN.*\\.ASC$")
+                    list(APPEND _want "${F}")
+                elseif(F STREQUAL "ALIFE.INI")
+                    # the bundles the INI names ("CD Path", "Resource file")
+                    file(STRINGS "${AFTERLIFE_WASM_DATA}/${f}" _lines REGEX "^(CD Path|Resource file)")
+                    foreach(l ${_lines})
+                        string(REGEX REPLACE "^[^=]*= *([^\r]*[^ \r])?.*$" "\\1" v "${l}")
+                        string(REGEX REPLACE "^.*[\\/:]" "" v "${v}")
+                        string(TOUPPER "${v}" v)
+                        list(APPEND _want "${v}")
+                    endforeach()
+                endif()
+            endforeach()
+        endif()
+        list(TRANSFORM _want TOUPPER)
+        set(_packed "")
+        foreach(f ${_all})
+            string(TOUPPER "${f}" F)
+            if(F IN_LIST _want AND NOT IS_DIRECTORY "${AFTERLIFE_WASM_DATA}/${f}")
+                target_link_options(afterlife PRIVATE "--preload-file=${AFTERLIFE_WASM_DATA}/${f}@/orig/${f}")
+                set_property(TARGET afterlife APPEND PROPERTY LINK_DEPENDS "${AFTERLIFE_WASM_DATA}/${f}")
+                list(APPEND _packed "${f}")
+            endif()
+        endforeach()
+        message(STATUS "Web build data (${AFTERLIFE_WASM_DATA}): ${_packed}")
     endif()
 endif()
 

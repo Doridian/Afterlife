@@ -59,7 +59,7 @@ static int g_drawn;                       /* 0x651c7c: a graph is on screen (ena
 static int g_dragging;                    /* 0x651c84 */
 static int g_grab_x, g_grab_y;            /* 0x4f3054, 0x4f3050 */
 static uint8_t g_pct[8];                  /* 0x651c70: HAHA HOHO OPRA OCRA ALF RALF SUMA SUSA percentages */
-static uint32_t g_last_year;              /* 0x651c80: year of the last history sample */
+static uint32_t g_last_year WRITE_ONLY;              /* 0x651c80: year of the last history sample */
 
 /* zone kind colours: 0x651c38 (structures), 0x651c48 / 0x651c58 (population bars) */
 static const uint8_t col_38[9] = {0x0a, 0x0b, 0x0d, 0x1d, 0x0f, 0x0c, 0x0e, 0x10, 0x10};
@@ -1431,8 +1431,8 @@ static void series_help(int i, int x, int y)
         "This button toggles HEAVEN POPULATION in and out of the History Graph.",
         "This button toggles HELL POPULATION in and out of the History Graph.",
         "This button toggles TOTAL PENNIES FROM HEAVEN in and out of the History Graph.",
-        "This button toggles SOUL RATE in and out of this graph.  The SOUL RATE is the number of Pennies you get "
-        "for every SOUL you process.",
+        ("This button toggles SOUL RATE in and out of this graph.  The SOUL RATE is the number of Pennies you get "
+         "for every SOUL you process."),
         "This button toggles PENNY INFLOW in and out of the History Graph.",
         "This button toggles PENNY OUTFLOW in and out of the History Graph.",
         "This button toggles SOUL LOSSES in and out of the History Graph.",

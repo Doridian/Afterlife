@@ -11,8 +11,9 @@ Status: **playable.** All of `ALIFE.EXE`'s game code is ported:
 
 The differential emulator tests check the simulation against the original.
 It's a non-matching decompilation: the code behaves like the original but
-doesn't compile to the same bytes. Linux is the main platform so far; the
-macOS and WebAssembly builds still need checking against the current game.
+doesn't compile to the same bytes. Linux is the main platform. The
+WebAssembly build runs the full game in a browser. macOS builds and passes
+the data-less tests in CI, but nobody has played it on a Mac yet.
 
 This repository contains **no game data files or original code** (only the
 texts and number tables from `ALIFE.EXE` the port needs, as C data in the
@@ -48,9 +49,31 @@ cmake --build --preset native
 build/native/afterlife orig/
 ```
 
-There's also a `debug` preset with ASan/UBSan, and a `wasm` preset
-(`emcmake cmake --preset wasm -DAFTERLIFE_WASM_DATA=/dir/with/data`), which
-hasn't been updated for the full game yet.
+There's also a `debug` preset with ASan/UBSan.
+
+**macOS**: `brew install cmake ninja sdl3`, then the same commands. Without
+a `DATA_DIR` argument the port looks for `orig/` in the current folder, then
+next to the executable. Ctrl+Cmd+F toggles fullscreen and Cmd+Q asks before
+quitting. On a Retina screen the faithful mode draws at native pixels, so
+it looks small; turn on the enhancements and leave the UI scale on automatic.
+
+**WebAssembly** (Emscripten, [docs/web.md](docs/web.md)):
+
+```sh
+emcmake cmake --preset wasm -DAFTERLIFE_WASM_DATA=$PWD/orig
+cmake --build --preset wasm
+cd build/wasm && python3 -m http.server 8000   # http://localhost:8000/afterlife.html
+```
+
+`AFTERLIFE_WASM_DATA` builds the game files the port needs into
+`afterlife.data` (about 150 MB with the CD's `ALIFE.INI`). Don't publish such
+a build. Without it the page asks for the files once and keeps them in the
+browser. Saves and the port settings are kept in the browser too
+(IndexedDB). The canvas follows the browser window. Alt+Enter or F11 toggles
+fullscreen. `?arg=...` in the URL passes command-line options.
+
+CI (`.github/workflows/build.yml`) builds on Linux and macOS, runs the tests
+that need no game data, and builds the WebAssembly target.
 
 ## Running
 
@@ -79,8 +102,9 @@ high-resolution screens. [docs/enhancements.md](docs/enhancements.md) lists
 them all.
 
 The port keeps its own settings in `ALIFEPORT.INI` in the SDL preferences
-folder (`~/.local/share/Afterlife/Afterlife/` on Linux), so the original's
-`ALIFE.INI` stays untouched.
+folder (`~/.local/share/Afterlife/Afterlife/` on Linux,
+`~/Library/Application Support/Afterlife/Afterlife/` on macOS, IndexedDB in
+the browser), so the original's `ALIFE.INI` stays untouched.
 
 ## Tests
 
@@ -112,6 +136,7 @@ side by side with the port, on real saves, and compares state and RNG. See
   [docs/ui.md](docs/ui.md), [docs/map.md](docs/map.md),
   [docs/imuse.md](docs/imuse.md), [docs/compbun.md](docs/compbun.md):
   subsystem notes
+- [docs/web.md](docs/web.md): the WebAssembly build
 - [docs/enhancements.md](docs/enhancements.md): what the enhancements flag changes
 - [docs/formats/](docs/formats/): file formats (JIFF bundles, compression,
   FLC, TILE, AKOS, ALSV saves)
