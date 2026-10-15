@@ -15,6 +15,11 @@ doesn't compile to the same bytes. Linux is the main platform. The
 WebAssembly build runs the full game in a browser. macOS builds and passes
 the data-less tests in CI, but nobody has played it on a Mac yet.
 
+**Play it in your browser:** <https://doridian.github.io/Afterlife/> (the page
+asks for your CD once; see [WebAssembly](#building) below).
+
+![A late-game city: the Karma rail network, a packed town and the SOUL count](docs/img/screenshot.png)
+
 This repository contains **no game data files or original code** (only the
 texts and number tables from `ALIFE.EXE` the port needs, as C data in the
 modules that use them). The game data comes from the original CD, which a
