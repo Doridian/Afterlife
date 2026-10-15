@@ -76,6 +76,9 @@ void plat_shutdown(void);
 /* The main window's caption (INI "Window name"). */
 void plat_video_set_title(const char *title);
 
+/* The window's icon, w * h RGBA pixels; on the web, the page's favicon. */
+void plat_window_set_icon(const uint8_t *rgba, int w, int h);
+
 /* 8-bit indexed framebuffer, plat_video_pitch() * height bytes, rows top to
  * bottom. */
 uint8_t *plat_video_framebuffer(void);

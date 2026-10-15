@@ -168,15 +168,15 @@ static uint32_t rd32(const uint8_t *p)
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
 }
 
-/* Decodes an RT_CURSOR resource: hotspot (2 x u16), BITMAPINFOHEADER with
- * doubled height, color table, XOR bitmap, 1-bit AND mask, rows bottom-up.
- * Screen-inverting pixels (AND 1, XOR non-black) come out opaque black. */
-static PlatCursor *decode_cursor(const uint8_t *d, uint32_t len)
+/* Decodes the image of an RT_CURSOR or RT_ICON resource to w * h RGBA
+ * (malloc'd): BITMAPINFOHEADER with doubled height, color table, XOR bitmap,
+ * 1-bit AND mask, rows bottom-up. Screen-inverting pixels (AND 1, XOR
+ * non-black) come out opaque black. */
+static uint8_t *decode_dib(const uint8_t *bih, uint32_t len, int *out_w, int *out_h)
 {
-    if (len < 4 + 40)
+    const uint8_t *d = bih;
+    if (len < 40)
         return NULL;
-    int hx = rd16(d), hy = rd16(d + 2);
-    const uint8_t *bih = d + 4;
     int32_t w = (int32_t)rd32(bih + 4), h = (int32_t)rd32(bih + 8) / 2;
     unsigned bpp = rd16(bih + 14);
     uint32_t ncol = rd32(bih + 32);
@@ -219,7 +219,19 @@ static PlatCursor *decode_cursor(const uint8_t *d, uint32_t len)
             }
         }
     }
-    PlatCursor *pc = plat_cursor_create(rgba, w, h, hx, hy);
+    *out_w = w;
+    *out_h = h;
+    return rgba;
+}
+
+/* An RT_CURSOR resource: hotspot (2 x u16), then the image. */
+static PlatCursor *decode_cursor(const uint8_t *d, uint32_t len)
+{
+    int w, h;
+    uint8_t *rgba = len >= 4 ? decode_dib(d + 4, len - 4, &w, &h) : NULL;
+    if (!rgba)
+        return NULL;
+    PlatCursor *pc = plat_cursor_create(rgba, w, h, rd16(d), rd16(d + 2));
     free(rgba);
     return pc;
 }
@@ -237,6 +249,27 @@ PlatCursor *gfx_cursor_load(unsigned id)
         return NULL;
     const uint8_t *cur = exe_res_find(EXE_RT_CURSOR, rd16(grp + 6 + 12), &len);
     return cur ? decode_cursor(cur, len) : NULL;
+}
+
+/* Port-only: the original's window class takes LoadIconA(hInstance, id)
+ * (app_register_class, 0x4cd892); the port gives that icon to the window
+ * (the browser tab's favicon on the web). Group icon `id`'s first image. */
+void gfx_window_icon_load(unsigned id)
+{
+    uint32_t len;
+    if (!exe_res_open("ALIFE.EXE"))
+        return;
+    const uint8_t *grp = exe_res_find(EXE_RT_GROUP_ICON, id, &len);
+    /* NEWHEADER (6 bytes) + first 14-byte entry; its last u16 is the
+     * RT_ICON id. */
+    if (!grp || len < 6 + 14 || rd16(grp + 4) == 0)
+        return;
+    const uint8_t *ico = exe_res_find(EXE_RT_ICON, rd16(grp + 6 + 12), &len);
+    int w, h;
+    uint8_t *rgba = ico ? decode_dib(ico, len, &w, &h) : NULL;
+    if (rgba)
+        plat_window_set_icon(rgba, w, h);
+    free(rgba);
 }
 
 /* 0x4b9164 */

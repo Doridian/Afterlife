@@ -83,6 +83,9 @@ them as usual.
   ([rendering.md](rendering.md#port-window)). The window is created with
   `SDL_WINDOW_OPENGL`: otherwise SDL recreates it for the WebGL renderer, and
   destroying a window leaves an inline 1x1 CSS size on a HiDPI canvas.
+- The favicon is the game's icon (group icon 101 of `ALIFE.EXE`), set when
+  the display starts (`plat_window_set_icon`, a PNG data URL). Natively it
+  is the window's icon. Until then the page has an empty one.
 - Alt+Enter and F11 make the canvas fullscreen. SDL keeps F1-F12 and
   Backspace from the browser, so F5 saves instead of reloading.
 - URL arguments: each `?arg=` is passed on the command line after the data

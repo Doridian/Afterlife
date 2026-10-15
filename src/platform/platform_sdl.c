@@ -115,6 +115,44 @@ void plat_video_set_title(const char *title)
         SDL_SetWindowTitle(g_window, title ? title : "");
 }
 
+#ifdef __EMSCRIPTEN__
+/* The pixels drawn on a canvas, as a PNG data URL in the page's
+ * <link rel="icon">. */
+EM_JS(void, web_set_favicon, (const uint8_t *rgba, int w, int h), {
+    try {
+        var c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        var ctx = c.getContext('2d');
+        var img = ctx.createImageData(w, h);
+        img.data.set(HEAPU8.subarray(rgba, rgba + w * h * 4));
+        ctx.putImageData(img, 0, 0);
+        var link = document.querySelector('link[rel~="icon"]');
+        if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            document.head.appendChild(link);
+        }
+        link.type = 'image/png';
+        link.href = c.toDataURL('image/png');
+    } catch (e) {
+        console.warn('Afterlife: favicon failed', e);
+    }
+});
+#endif
+
+void plat_window_set_icon(const uint8_t *rgba, int w, int h)
+{
+#ifdef __EMSCRIPTEN__
+    web_set_favicon(rgba, w, h);
+#else
+    SDL_Surface *s = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA32, (void *)rgba, w * 4);
+    if (s && g_window)
+        SDL_SetWindowIcon(g_window, s);
+    SDL_DestroySurface(s);
+#endif
+}
+
 void plat_shutdown(void)
 {
     plat_audio_close();

@@ -12,7 +12,9 @@
 #include <stdint.h>
 
 #define EXE_RT_CURSOR 1
+#define EXE_RT_ICON 3
 #define EXE_RT_GROUP_CURSOR 12
+#define EXE_RT_GROUP_ICON 14
 
 /* Loads `name` (looked up in the data dir) once; later calls are no-ops.
  * Returns false if it isn't there or isn't a PE image. */

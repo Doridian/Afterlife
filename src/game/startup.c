@@ -274,6 +274,7 @@ static int di_initialize(void)
      * than the desktop, else a desktop-sized popup), two memory DCs, the
      * mouse clip and the color matching tables: gfx_init. */
     plat_video_set_title(g_config.window_name);
+    gfx_window_icon_load(101); /* the window class's icon */
     /* Port: a normal resizable window (docs/rendering.md "Port window"):
      * the last size and place (ALIFEPORT.INI), else Resolution if it
      * fits, else 80 % of the desktop; "Force display settings" starts it
