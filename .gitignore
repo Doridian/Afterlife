@@ -32,3 +32,6 @@ __pycache__/
 /.venv/
 
 .playwright-mcp
+
+# Node modules (the TypeScript compiler for web/)
+/node_modules/

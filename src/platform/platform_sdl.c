@@ -868,7 +868,7 @@ void plat_delay_ms(uint32_t ms)
 #endif
 }
 
-/* The web build plays through an AudioWorklet (web/audio.js), not SDL's audio
+/* The web build plays through an AudioWorklet (web/audio.ts), not SDL's audio
  * stream: SDL's ScriptProcessorNode callback adds latency to every sound. */
 #ifdef __EMSCRIPTEN__
 /* About two blocks of the mixer (46 ms each at 22050 Hz). */
@@ -982,7 +982,7 @@ bool plat_pref_path(const char *name, char *out, size_t out_len)
 const char *plat_save_dir(void)
 {
 #ifdef __EMSCRIPTEN__
-    /* the pref folder, which web/pre.js keeps in IndexedDB (written back
+    /* the pref folder, which web/pre.ts keeps in IndexedDB (written back
      * whenever a file there is closed); the data folder is the package
      * built in, or the files the player picked */
     static char dir[1024];

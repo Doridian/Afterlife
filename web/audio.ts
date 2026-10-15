@@ -11,8 +11,20 @@
 // how many frames it has consumed, so the queue length is exact (the worklet
 // counts what it played or dropped; frames still in flight are the difference).
 
-var afAudio = null;
+// The output: the context, its worklet node (once loaded), and the frames
+// handed over before the node existed.
+interface AfAudio {
+  ctx: AudioContext;
+  node: AudioWorkletNode | null;
+  sent: number;
+  consumed: number;
+  pending: Int16Array[];
+  pendingFrames: number;
+}
 
+var afAudio: AfAudio | null = null;
+
+// The worklet's code, as a string: it runs in the audio thread.
 var afAudioWorkletSource = [
   'class Feed extends AudioWorkletProcessor {',
   '  constructor() {',
@@ -73,7 +85,7 @@ var afAudioWorkletSource = [
 
 // Browsers start audio only after a user gesture; the context is resumed on
 // the first one (SDL did the same).
-function afAudioResumeOnGesture(ctx) {
+function afAudioResumeOnGesture(ctx: AudioContext): void {
   var resume = function () {
     ctx.resume();
     ['pointerdown', 'keydown', 'touchend'].forEach(function (t) {
@@ -86,12 +98,12 @@ function afAudioResumeOnGesture(ctx) {
 }
 
 // Returns 1 if the output is set up (it starts once the worklet has loaded).
-function afAudioOpen(rate) {
+function afAudioOpen(rate: number): number {
   if (typeof AudioWorkletNode === 'undefined' || typeof AudioContext === 'undefined') {
     return 0;
   }
   afAudioClose();
-  var ctx;
+  var ctx: AudioContext;
   try {
     ctx = new AudioContext({ sampleRate: rate, latencyHint: 'interactive' });
   } catch (e) {
@@ -101,14 +113,15 @@ function afAudioOpen(rate) {
   var url = URL.createObjectURL(new Blob([afAudioWorkletSource], { type: 'application/javascript' }));
   ctx.audioWorklet.addModule(url).then(function () {
     URL.revokeObjectURL(url);
-    if (!afAudio || afAudio.ctx !== ctx) return;
+    var state = afAudio;
+    if (!state || state.ctx !== ctx) return;
     var node = new AudioWorkletNode(ctx, 'feed', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
-    node.port.onmessage = function (e) { afAudio.consumed = e.data; };
+    node.port.onmessage = function (e) { if (afAudio) afAudio.consumed = e.data; };
     node.connect(ctx.destination);
-    afAudio.node = node;
-    afAudio.pending.forEach(function (chunk) { node.port.postMessage({ frames: chunk }, [chunk.buffer]); });
-    afAudio.pending = [];
-    afAudio.pendingFrames = 0;
+    state.node = node;
+    state.pending.forEach(function (chunk) { node.port.postMessage({ frames: chunk }, [chunk.buffer]); });
+    state.pending = [];
+    state.pendingFrames = 0;
   }).catch(function (e) {
     console.warn('audio: worklet failed to load', e);
   });
@@ -117,7 +130,7 @@ function afAudioOpen(rate) {
 }
 
 // frames: an Int16Array of interleaved stereo, copied out of the heap.
-function afAudioQueue(ptr, frameCount) {
+function afAudioQueue(ptr: number, frameCount: number): void {
   if (!afAudio) return;
   var chunk = HEAP16.slice(ptr >> 1, (ptr >> 1) + frameCount * 2);
   afAudio.sent += frameCount;
@@ -129,12 +142,12 @@ function afAudioQueue(ptr, frameCount) {
   }
 }
 
-function afAudioQueued() {
+function afAudioQueued(): number {
   return afAudio ? afAudio.sent - afAudio.consumed : 0;
 }
 
 // Drops everything queued (pause).
-function afAudioClear() {
+function afAudioClear(): void {
   if (!afAudio) return;
   if (afAudio.node) {
     afAudio.node.port.postMessage({ clear: true });
@@ -145,7 +158,7 @@ function afAudioClear() {
   }
 }
 
-function afAudioClose() {
+function afAudioClose(): void {
   if (!afAudio) return;
   afAudio.ctx.close();
   afAudio = null;

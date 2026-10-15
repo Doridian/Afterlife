@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "lib": ["ES2019", "DOM"],
+    "module": "esnext",
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "useUnknownInCatchVariables": true,
+    "noEmitOnError": true,
+    "rootDir": ".",
+    "outDir": "../build/web-js"
+  },
+  "files": ["emscripten.d.ts", "iso9660.ts", "zip.ts", "audio.ts", "pre.ts"]
+}

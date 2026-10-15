@@ -28,6 +28,9 @@ jobs:
       - name: Install Ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
 
+      - name: Install the TypeScript compiler
+        run: npm ci
+
       - name: Configure
         run: emcmake cmake --preset wasm
 

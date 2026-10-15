@@ -74,17 +74,41 @@ if(EMSCRIPTEN)
         "Folder with the game files to build into the web build (else the page asks for them)")
     set(AFTERLIFE_WASM_FILES "" CACHE STRING
         "Files of AFTERLIFE_WASM_DATA to package (default: ALIFE.INI, the bundles it names, ALIFE.EXE, ASCEN*.ASC)")
+    # The page's glue is TypeScript (web/*.ts, docs/web.md): tsc compiles it
+    # into the build folder, and the JavaScript goes to emcc as --pre-js.
+    # Install the compiler once with `npm ci` in the repository root.
+    find_program(AFTERLIFE_TSC tsc HINTS "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/.bin" REQUIRED
+        DOC "The TypeScript compiler (npm ci)")
+    set(AFTERLIFE_WEB_JS_DIR "${CMAKE_CURRENT_BINARY_DIR}/web-js")
+    # the --pre-js order: the readers first, pre.js (which uses them) last
+    set(AFTERLIFE_WEB_GLUE
+        "${AFTERLIFE_WEB_JS_DIR}/iso9660.js"
+        "${AFTERLIFE_WEB_JS_DIR}/zip.js"
+        "${AFTERLIFE_WEB_JS_DIR}/audio.js"
+        "${AFTERLIFE_WEB_JS_DIR}/pre.js")
+    add_custom_command(OUTPUT ${AFTERLIFE_WEB_GLUE}
+        COMMAND "${AFTERLIFE_TSC}" -p "${CMAKE_CURRENT_SOURCE_DIR}/web/tsconfig.json"
+            --outDir "${AFTERLIFE_WEB_JS_DIR}"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/web/tsconfig.json"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/emscripten.d.ts"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/iso9660.ts"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/zip.ts"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/audio.ts"
+            "${CMAKE_CURRENT_SOURCE_DIR}/web/pre.ts"
+        COMMENT "Compiling the web glue (TypeScript)"
+        VERBATIM)
+    add_custom_target(afterlife_web_glue DEPENDS ${AFTERLIFE_WEB_GLUE})
+    add_dependencies(afterlife afterlife_web_glue)
     set_target_properties(afterlife PROPERTIES SUFFIX ".html"
-        LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/pre.js;${CMAKE_CURRENT_SOURCE_DIR}/web/iso9660.js;${CMAKE_CURRENT_SOURCE_DIR}/web/zip.js;${CMAKE_CURRENT_SOURCE_DIR}/web/audio.js")
+        LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${AFTERLIFE_WEB_GLUE}")
     target_link_options(afterlife PRIVATE
         -sASYNCIFY -sASYNCIFY_STACK_SIZE=65536
         -sSTACK_SIZE=8MB -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=64MB
         -sEXIT_RUNTIME -sFORCE_FILESYSTEM -lidbfs.js -sENVIRONMENT=web
-        "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
-        "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/iso9660.js"
-        "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/zip.js"
-        "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/audio.js"
-        "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/pre.js")
+        "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html")
+    foreach(glue IN LISTS AFTERLIFE_WEB_GLUE)
+        target_link_options(afterlife PRIVATE "--pre-js=${glue}")
+    endforeach()
     if(AFTERLIFE_WASM_DATA)
         # Data file names are matched case-insensitively, like the game does.
         file(GLOB _all RELATIVE "${AFTERLIFE_WASM_DATA}" "${AFTERLIFE_WASM_DATA}/*")

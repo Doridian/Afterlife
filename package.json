@@ -1,0 +1,11 @@
+{
+  "name": "afterlife-web",
+  "private": true,
+  "description": "Build tools for the TypeScript glue of the WebAssembly build (web/*.ts, docs/web.md)",
+  "scripts": {
+    "build:web": "tsc -p web"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

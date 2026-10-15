@@ -21,7 +21,7 @@ Module['preRun'] = Module['preRun'] || [];
   var DATA_DB = 'afterlife-game-data', DATA_STORE = 'files';
   var params = new URLSearchParams(location.search);
 
-  function hasGameData(dir) {
+  function hasGameData(dir: string): boolean {
     try {
       return FS.readdir(dir).some(function (n) { return n.toUpperCase() === 'ALIFE.INI'; });
     } catch (e) {
@@ -30,20 +30,20 @@ Module['preRun'] = Module['preRun'] || [];
   }
 
   // The files the port reads; anything else on the CD is skipped.
-  function wanted(name) {
+  function wanted(name: string): boolean {
     var n = name.toUpperCase();
     return /\.000$/.test(n) || n === 'ALIFE.INI' || n === 'ALIFE.EXE' || /^ASCEN.*\.ASC$/.test(n);
   }
 
   // A long step's bar: its label with the percentage, and the share done.
-  function progress(label, done, total) {
+  function progress(label: string, done: number, total: number): void {
     var share = total ? Math.min(done / total, 1) : 0;
     Module['setStatus'](label + ' ' + Math.floor(share * 100) + '%');
     Module['setProgress'](share);
   }
 
   // The bytes of a Blob, as Uint8Array; onBytes(n) is called as chunks arrive.
-  function readBlob(blob, onBytes) {
+  function readBlob(blob: Blob, onBytes: (n: number) => void): Promise<Uint8Array> {
     if (!blob.stream) {
       return blob.arrayBuffer().then(function (buf) {
         onBytes(buf.byteLength);
@@ -51,7 +51,7 @@ Module['preRun'] = Module['preRun'] || [];
       });
     }
     var out = new Uint8Array(blob.size), at = 0, reader = blob.stream().getReader();
-    function pump() {
+    function pump(): Promise<Uint8Array> {
       return reader.read().then(function (r) {
         if (r.done)
           return out;
@@ -65,8 +65,8 @@ Module['preRun'] = Module['preRun'] || [];
   }
 
   // --- the picked files' store: name -> Blob ---------------------------
-  function openDataDb(cb) {
-    var req;
+  function openDataDb(cb: (db: IDBDatabase | null) => void): void {
+    var req: IDBOpenDBRequest;
     try {
       req = indexedDB.open(DATA_DB, 1);
     } catch (e) {
@@ -81,14 +81,14 @@ Module['preRun'] = Module['preRun'] || [];
   }
 
   // Copies the stored files into dir; cb() when done (also on failure).
-  function loadStoredData(dir, cb) {
+  function loadStoredData(dir: string, cb: () => void): void {
     openDataDb(function (db) {
       if (!db)
         return cb();
       var store = db.transaction(DATA_STORE, 'readonly').objectStore(DATA_STORE);
       var keys = store.getAllKeys(), vals = store.getAll();
       vals.onsuccess = function () {
-        var names = keys.result, blobs = vals.result, left = blobs.length;
+        var names = keys.result, blobs: Blob[] = vals.result, left = blobs.length;
         db.close();
         if (!left)
           return cb();
@@ -115,7 +115,7 @@ Module['preRun'] = Module['preRun'] || [];
     });
   }
 
-  function storeData(files, total, cb) {
+  function storeData(files: File[], total: number, cb: () => void): void {
     openDataDb(function (db) {
       if (!db)
         return cb();
@@ -143,15 +143,15 @@ Module['preRun'] = Module['preRun'] || [];
   }
 
   // Shows the picker of web/shell.html; puts the files into dir.
-  function pickData(dir, done) {
+  function pickData(dir: string, done: () => void): void {
     Module['setStatus']('');
-    var panel = document.getElementById('pick');
-    var error = document.getElementById('pick-error');
+    var panel = document.getElementById('pick') as HTMLElement;
+    var error = document.getElementById('pick-error') as HTMLElement;
     panel.hidden = false;
-    function take(list) {
-      var image = Array.prototype.find.call(list, function (f) { return /\.(zip|iso|bin|img)$/i.test(f.name); });
+    function take(list: FileList): void {
+      var image = Array.prototype.find.call(list, function (f: File) { return /\.(zip|iso|bin|img)$/i.test(f.name); }) as File | undefined;
       if (image) {
-        // a CD image or a zip: its game files are read out of it (web/iso9660.js, web/zip.js)
+        // a CD image or a zip: its game files are read out of it (web/iso9660.ts, web/zip.ts)
         error.textContent = '';
         panel.hidden = true;
         Module['setStatus']('Reading the CD...');
@@ -160,16 +160,16 @@ Module['preRun'] = Module['preRun'] || [];
           Iso9660.extract(image, wanted);
         read.then(function (files) {
           use(files);
-        }, function (e) {
+        }, function (e: Error) {
           Module['setStatus']('');
           panel.hidden = false;
           error.textContent = e.message;
         });
         return;
       }
-      use(Array.prototype.filter.call(list, function (f) { return wanted(f.name); }));
+      use(Array.prototype.filter.call(list, function (f: File) { return wanted(f.name); }) as File[]);
     }
-    function use(files) {
+    function use(files: File[]): void {
       if (!files.some(function (f) { return f.name.toUpperCase() === 'ALIFE.INI'; }) ||
           !files.some(function (f) { return /\.000$/i.test(f.name); })) {
         Module['setStatus']('');
@@ -192,9 +192,9 @@ Module['preRun'] = Module['preRun'] || [];
         });
       });
     }
-    document.getElementById('pick-files').onchange = function (e) { take(e.target.files); };
-    document.getElementById('pick-dir').onchange = function (e) { take(e.target.files); };
-    document.getElementById('pick-image').onchange = function (e) { take(e.target.files); };
+    (document.getElementById('pick-files') as HTMLInputElement).onchange = function (e) { take((e.target as HTMLInputElement).files as FileList); };
+    (document.getElementById('pick-dir') as HTMLInputElement).onchange = function (e) { take((e.target as HTMLInputElement).files as FileList); };
+    (document.getElementById('pick-image') as HTMLInputElement).onchange = function (e) { take((e.target as HTMLInputElement).files as FileList); };
   }
 
   Module['preRun'].push(function () {
@@ -204,7 +204,7 @@ Module['preRun'] = Module['preRun'] || [];
       // an Emscripten without autoPersist (before 4.0.11): write back now and then
       setInterval(function () { FS.syncfs(false, function () {}); }, 3000);
       Module['onExit'] = (function (onExit) {
-        return function (status) {
+        return function (status: number) {
           FS.syncfs(false, function () {});
           onExit(status);
         };
@@ -213,7 +213,7 @@ Module['preRun'] = Module['preRun'] || [];
     FS.mkdir(USER);
     addRunDependency('afterlife-storage');
     Module['setStatus']('Loading saved games...');
-    function start(dir) {
+    function start(dir: string): void {
       var args = Module['arguments'];
       args.push(dir);
       params.getAll('arg').forEach(function (a) { args.push(a); });
@@ -245,13 +245,13 @@ Module['preRun'] = Module['preRun'] || [];
     });
   });
 
-  Module['onExit'] = function (status) {
-    document.getElementById('ended').hidden = false;
+  Module['onExit'] = function (status: number) {
+    (document.getElementById('ended') as HTMLElement).hidden = false;
     if (status)
-      document.getElementById('ended-text').textContent = 'Afterlife has ended (exit code ' + status + ').';
+      (document.getElementById('ended-text') as HTMLElement).textContent = 'Afterlife has ended (exit code ' + status + ').';
   };
-  Module['onAbort'] = function (what) {
-    document.getElementById('ended').hidden = false;
-    document.getElementById('ended-text').textContent = 'Afterlife has crashed: ' + what;
+  Module['onAbort'] = function (what: string) {
+    (document.getElementById('ended') as HTMLElement).hidden = false;
+    (document.getElementById('ended-text') as HTMLElement).textContent = 'Afterlife has crashed: ' + what;
   };
 })();
