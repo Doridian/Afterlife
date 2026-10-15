@@ -16,10 +16,10 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
-      SDL_VIDEO_DRIVER: offscreen
+      # On macOS SDL makes every window OpenGL when the driver supports it,
+      # and offscreen's EGL is missing there: use dummy (no GL) instead.
+      SDL_VIDEO_DRIVER: ${{ startsWith(matrix.os, 'macos') && 'dummy' || 'offscreen' }}
       SDL_AUDIO_DRIVER: dummy
-      # offscreen has no OpenGL/EGL on macOS: render in software
-      SDL_RENDER_DRIVER: software
     steps:
       - uses: actions/checkout@v4
 
