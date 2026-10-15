@@ -18,6 +18,8 @@ jobs:
     env:
       SDL_VIDEO_DRIVER: offscreen
       SDL_AUDIO_DRIVER: dummy
+      # offscreen has no OpenGL/EGL on macOS: render in software
+      SDL_RENDER_DRIVER: software
     steps:
       - uses: actions/checkout@v4
 
