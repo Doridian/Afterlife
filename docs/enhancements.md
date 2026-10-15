@@ -6,6 +6,10 @@ By default the port behaves like the original, bugs included. The
 - fixes for obvious bugs of the original, and
 - quality-of-life additions, starting with the UI scale.
 
+The resizable port window, its fullscreen toggle (Alt+Enter, F11) and its
+remembered geometry are port behaviour, not enhancements: they are on in
+every run ([rendering.md](rendering.md#port-window)).
+
 Some deviations can't be switched off: where the original reads or writes
 memory it doesn't own, the port can't reproduce that, so those guards are
 always on (listed below under *Always on*).
@@ -14,10 +18,10 @@ always on (listed below under *Always on*).
 
 | Where | How |
 |---|---|
-| Settings file | `ALIFEPORT.INI` in the user's settings folder (`plat_pref_path`, `~/.local/share/Afterlife/Afterlife/` on Linux), or the file `--port-ini=FILE` names. A `[Port]` section with `Enhancements = 0/1` and `UI scale = 0..4` (0 = automatic). ALIFE.INI is left alone: the original reads it, and it has no sections. |
+| Settings file | `ALIFEPORT.INI` in the user's settings folder (`plat_pref_path`, `~/.local/share/Afterlife/Afterlife/` on Linux), or the file `--port-ini=FILE` names. A `[Port]` section with `Enhancements = 0/1` and `UI scale = 0..4` (0 = automatic). The same file keeps the port window's state (`Window size`, `Window position`, `Maximized`, `Fullscreen`, see [rendering.md](rendering.md#port-window)), which isn't an enhancement. ALIFE.INI is left alone: the original reads it, and it has no sections. |
 | Command line | `--enhancements`, `--no-enhancements`, `--ui-scale=N`, `--port-ini=FILE`. They override the file for this run and aren't saved. |
 | Environment | `AFTERLIFE_ENHANCEMENTS=1` / `0` (between the file and the command line). The tests use it (`enhance_init_env`). |
-| In game | Global menu > **Port Options...** (port-only item, a message box with *Enhance*, *Scale* and *Done*). The switch applies at once; a UI scale change applies at the next start. Each change is saved to the settings file. |
+| In game | Global menu > **Port Options...** (port-only item, the Port Options window below). Every change applies at once; OK saves it to the settings file, Cancel puts the old settings back. |
 
 Precedence: command line > environment > file > default (off).
 
@@ -40,23 +44,41 @@ does. Neither is known to be reached by the shipped saves and lessons
 
 ## UI scale
 
-At `Resolution=MAX` the port runs at the screen's native pixels (e.g.
-2560x1600), where the 1996 UI is tiny. With the enhancements on, UI scale k
-makes the game see a desktop k times smaller (`plat_video_desktop_size`),
-so `MAX` gives a 1280x800 framebuffer at k = 2, and the presentation scales
-it back up by the largest whole factor that fits, nearest-neighbour (crisp),
-centred. A smaller `Resolution` gives a framed window k times its size.
-Mouse positions are mapped back through the same layout (`present_to_fb`),
-and pointer warps forward (`present_from_fb`).
+At native pixels (e.g. a 2560x1600 panel) the 1996 UI is tiny. With the
+enhancements on, UI scale k makes the game's screen k times smaller than
+the port window's pixels (`present_logical_size`): a 2048x1280 window
+gives a 1024x640 screen at k = 2, presented back at k x k pixels per
+framebuffer pixel, nearest-neighbour (crisp). Mouse positions are mapped
+back through the same layout (`present_to_fb`), and pointer warps forward
+(`present_from_fb`).
 
 - `UI scale = 0` (automatic) picks from the desktop's pixel density: 1 below
   140 %, 2 from 140 % to below 240 % (so 150-200 % gives 2x), then 3, 4.
-- The scale is clamped to 1..4 and so that the scaled desktop is still at
-  least 640x480 (the title art's size).
+- The scale is clamped to 1..4, and the scale in effect is lowered while
+  the window is smaller than 640x480 times it (the game needs a 640x480
+  screen; `plat_ui_scale` is the scale in effect).
 - With the enhancements off the scale is always 1.
-- It applies at the next start: the game's windows are laid out for the
-  screen size at startup, so changing it live would need every window
-  rebuilt.
+- It applies live: the screen is reallocated and the game's windows laid
+  out again, as when the window is resized
+  ([rendering.md](rendering.md#port-window)).
+
+## Port Options window
+
+`src/ui/portopts.c`, Global menu > Port Options... It is built from the
+game's own toolkit like its message box: the message box background
+(bitmap 0x260) stretched in 10 px strips, the message box's bitmap buttons
+(0x227) and a horizontal scrollbar used as a slider.
+
+| Control | What |
+|---|---|
+| Enhancements | A toggle button, *On* / *Off*. Applies at once. |
+| UI scale | The slider: *Auto*, *1x* .. *4x*, with the value (and the scale in effect for Auto, or when the window is too small) above it. Inactive without the enhancements: grey labels, no thumb, input ignored. A track click, an arrow or a thumb drag applies when the mouse button is released (a live relayout under a dragged thumb would move the window away from the pointer); Left / Right apply at once. |
+| OK | Keeps the settings and saves ALIFEPORT.INI (Enter). |
+| Cancel | Puts the settings from before the window opened back (Esc). |
+
+`E` toggles the enhancements. The window is modal (it holds the mouse
+capture and pauses the game like a message box) and is centred again
+after each relayout.
 
 ## Always on
 
@@ -81,8 +103,12 @@ faithfully. These guards stay on regardless of the switch (marked
 
 ## Tests
 
-- `enhance_test` (no data): the settings round trip, the switches and
-  their precedence, the layout and mouse mapping at scales 1-3, the
-  automatic scale and its clamping.
+- `enhance_test` (no data): the settings round trip (the window state
+  too), the switches and their precedence, the window options, the layout
+  and mouse mapping at scales 1-3, the automatic scale and its clamping,
+  the port window's logical size.
+- `display_test`: the live UI scale at every setting and the Port Options
+  window through injected clicks (toggle, slider, OK saves, Cancel
+  restores).
 - `badthings_test_enh` and `tutorial_test_enh`: the two tests that cover
   gated code, run again with `AFTERLIFE_ENHANCEMENTS=1`.

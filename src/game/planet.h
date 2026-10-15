@@ -39,9 +39,7 @@
  * Planetview, sounds) go through g_planet_hooks so this module stays free of
  * window code; hooks left NULL are skipped.
  *
- * Data tables that live in ALIFE.EXE (tech levels, disasters, tech names)
- * are unpacked from its compiled-in data (gfx/exe_res.h, src/data) by
- * planet_tables_load().
+ * The data tables (tech levels, disasters, tech names) are g_planet_tables.
  */
 #ifndef GAME_PLANET_H
 #define GAME_PLANET_H
@@ -80,7 +78,7 @@ enum {
     TENET_SUSA = 8, /* single */
 };
 
-/* ---- Data tables from ALIFE.EXE ---------------------------------------- */
+/* ---- Data tables ------------------------------------------------------- */
 
 typedef struct PlanetTechInfo { /* 0x64f048, 0x14 bytes per tech level */
     uint32_t capacity;      /* +0x00: EMBOs a sector holds comfortably */
@@ -100,19 +98,17 @@ typedef struct PlanetDisasterInfo { /* 0x66c780, 4 bytes each */
 } PlanetDisasterInfo;
 
 typedef struct PlanetTables {
-    bool loaded;
     PlanetTechInfo tech[PLANET_TECHS];
     int8_t tech_sin[32][7];        /* 0x64f178: sin shift per tech step (0x498681; 16 rows, the rest is what follows in .rdata, read like the original would) */
     int8_t belief_index[9];        /* 0x66c918: soul type bit of each tenet (0x4aaca0) */
     PlanetDisasterInfo disaster[PLANET_DISASTERS];
-    char tech_name[PLANET_TECHS][24];    /* 0x66c740 -> "Fire" ... */
-    char tech_blurb[PLANET_TECHS][640];  /* the texts of 0x49b05c's announcement */
+    const char *tech_name[PLANET_TECHS];  /* 0x66c740: "Fire" ... */
+    const char *tech_blurb[PLANET_TECHS]; /* the texts of 0x49b05c's announcement */
 } PlanetTables;
 
-extern PlanetTables g_planet_tables;
+extern const PlanetTables g_planet_tables;
 
-/* Unpacks the tables from ALIFE.EXE's data (exe_res). Safe to call
- * again. Always true with the generated src/data. */
+/* Always true: the tables are static data (kept for its callers). */
 bool planet_tables_load(void);
 
 /* ---- Runtime state (not saved) ----------------------------------------- */

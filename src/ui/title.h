@@ -51,6 +51,12 @@ typedef enum {
     TITLE_STAGE_FADE,     /* a palette fade */
 } TitleStage;
 TitleStage title_stage(void);
+/* Port-only: true while the intro and the animated title run (they hold
+ * pointers into the main window's surface; game/display.c waits). */
+bool title_holds_surface(void);
+/* Port-only: the main window changed size; the menu background and
+ * buttons are laid out again for it. */
+void title_relayout(void);
 
 /* 0x426460 title_run: returns non-zero if the player quit. */
 int title_run(void);

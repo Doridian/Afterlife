@@ -13,7 +13,6 @@
 #include "gfx/draw.h"
 #include "gfx/font.h"
 #include "ui/controls.h"
-#include "ui/exe_text.h"
 #include "ui/views.h"
 
 #define FONT 500
@@ -60,11 +59,13 @@ WmWindow *soulview_window(void) { return g_win; }
 
 /* ---- status lines ------------------------------------------------------------ */
 
-/* sin / virtue names (0x66c658 Hell, 0x66c600 Heaven), as the original
- * indexes them (8 reads the pointer after the table) */
+/* sin / virtue names; the original indexes past its tables for the zone
+ * kinds above 6 (generic zoning), which gives no name */
 static const char *kind_name(int plane, unsigned k)
 {
-    return exe_stri(plane == GS_PLANE_HELL ? 0x66c658 : 0x66c600, k);
+    if (k >= 7)
+        return "";
+    return plane == GS_PLANE_HELL ? views_sin_names[k] : views_virtue_names[k];
 }
 
 /* 0x47f259 */
@@ -81,7 +82,7 @@ void soulview_status(unsigned i)
     font_colors(0x1a, 0x1a);
     fill(&status_area, 100);
     soulview_soul_name(t->unk_08, name);
-    snprintf(buf, sizeof buf, exe_fmt(0x66aab4, "ssd", "%s - %s  (#%d)"), exe_str(0x66aaa8), name,
+    snprintf(buf, sizeof buf, "%s - %s  (#%d)" /* 0x66aab4 */, "Soulview" /* 0x66aaa8 */, name,
              (int)blk()->selected + 1);
     wm_set_title(g_win, buf);
     views_draw_title(g_win);
@@ -95,38 +96,39 @@ void soulview_status(unsigned i)
     buf[0] = 0;
     switch (t->unk_00[0]) {
     case TRACK_RESIDENT: /* "Punished for ENVY" / "Rewarded for ..." */
-        snprintf(buf, sizeof buf, exe_fmt(0x66abbc, "ss", "%sed for %s"), exe_str(hell ? 0x66abac : 0x66abb4),
-                 kind_name(t->unk_10, t->unk_11));
+        snprintf(buf, sizeof buf, "%sed for %s" /* 0x66abbc */,
+                 (hell ? "Punish" /* 0x66abac */ : "Reward" /* 0x66abb4 */), kind_name(t->unk_10, t->unk_11));
         break;
     case TRACK_WALKING: {
         int8_t cat = (int8_t)t->unk_1b;
         if (cat < 14)
-            snprintf(buf, sizeof buf, exe_fmt(0x66aac4, "s", "Walking towards %s"), kind_name(t->unk_10, cat & 7));
+            snprintf(buf, sizeof buf, "Walking towards %s" /* 0x66aac4 */, kind_name(t->unk_10, cat & 7));
         else if (cat == 14)
-            snprintf(buf, sizeof buf, "%s", exe_str(0x66aad8));
+            snprintf(buf, sizeof buf, "%s", "Walking towards Karma Station" /* 0x66aad8 */);
         else if (t->unk_1b == 0xff) /* (not reached: -1 is < 14) */
-            snprintf(buf, sizeof buf, exe_fmt(0x66aaf8, "s", "Walking towards %s"), kind_name(t->unk_10, t->unk_11));
+            snprintf(buf, sizeof buf, "Walking towards %s" /* 0x66aaf8 */, kind_name(t->unk_10, t->unk_11));
         else if (cat == 15)
-            snprintf(buf, sizeof buf, "%s", exe_str(0x66ab0c));
+            snprintf(buf, sizeof buf, "%s", "Walking towards a Gate" /* 0x66ab0c */);
         else
-            snprintf(buf, sizeof buf, "%s", exe_str(0x66ab24));
+            snprintf(buf, sizeof buf, "%s", "Walking towards unknown" /* 0x66ab24 */);
         break;
     }
     case TRACK_REINCARNATED:
-        snprintf(buf, sizeof buf, "%s", exe_str(0x66ab3c));
+        snprintf(buf, sizeof buf, "%s", "Reincarnated to planet" /* 0x66ab3c */);
         break;
     case TRACK_LOST:
-        snprintf(buf, sizeof buf, "%s", exe_str(0x66abd4));
+        snprintf(buf, sizeof buf, "%s", "Lost forever" /* 0x66abd4 */);
         break;
     case TRACK_GATE:
-        snprintf(buf, sizeof buf, "%s", exe_str(0x66abe4));
+        snprintf(buf, sizeof buf, "%s", "Exited through a Gate" /* 0x66abe4 */);
         break;
     case TRACK_TRAINING:
-        snprintf(buf, sizeof buf, exe_fmt(0x66ab64, "s", "Training to become a%s"),
-                 exe_str(hell ? 0x66ab54 : 0x66ab5c));
+        snprintf(buf, sizeof buf, "Training to become a%s" /* 0x66ab64 */,
+                 (hell ? " Demon" /* 0x66ab54 */ : "n Angel" /* 0x66ab5c */));
         break;
     case TRACK_OMNIBOLGE:
-        snprintf(buf, sizeof buf, exe_fmt(0x66ab94, "s", "Disappearing into a%s"), exe_str(hell ? 0x66ab7c : 0x66ab88));
+        snprintf(buf, sizeof buf, "Disappearing into a%s" /* 0x66ab94 */,
+                 (hell ? "n Omnibolge" /* 0x66ab7c */ : " Love Dome" /* 0x66ab88 */));
         break;
     }
     GfxRect a = r;
@@ -135,14 +137,14 @@ void soulview_status(unsigned i)
     r.bottom += fh + 1;
     int years = soultrack_years_left(t);
     if (years < 0)
-        snprintf(buf, sizeof buf, "%s", exe_str(0x66abfc));
+        snprintf(buf, sizeof buf, "%s", "Permanent resident" /* 0x66abfc */);
     else
-        snprintf(buf, sizeof buf, exe_fmt(0x66ac10, "d", "Years left at location:  %d"), years);
+        snprintf(buf, sizeof buf, "Years left at location:  %d" /* 0x66ac10 */, years);
     a = r;
     gfx_font_draw_text(g_win->surface, r.left, r.top, &a, &a, buf, GFX_TEXT_NOJUSTIFY);
     r.top += fh + 1;
     r.bottom += fh + 1;
-    snprintf(buf, sizeof buf, exe_fmt(0x66ac2c, "s", "Believes in %sism"), exe_stri(0x664918, t->unk_12));
+    snprintf(buf, sizeof buf, "Believes in %sism" /* 0x66ac2c */, t->unk_12 < 16 ? views_belief_names[t->unk_12] : "");
     a = r;
     gfx_font_draw_text(g_win->surface, r.left, r.top, &a, &a, buf, GFX_TEXT_NOJUSTIFY);
     wm_redraw(g_win, &status_area);
@@ -302,34 +304,35 @@ bool soulview_track_cell(int x, int y)
 /* 0x47f9f9: right click on a button */
 static void soulview_help(WmWindow *c)
 {
-    uint32_t va = 0x66ae1c; /* "I have no idea what this button does." */
+    const char *text = "I have no idea what this button does." /* 0x66ae1c */;
     switch ((int)wm_get_data(c, 0)) {
     case SOULVIEW_CLOSE:
-        va = 0x66ac48;
+        text = "This button CLOSES the Soulview." /* 0x66ac48 */;
         break;
     case 1:
-        va = wm_is_minimized(c->parent) ? 0x66add4 : 0x66adf8;
+        text = wm_is_minimized(c->parent) ? "This button MAXIMIZES the window" /* 0x66add4 */
+                                          : "This button MINIMIZES the window" /* 0x66adf8 */;
         break;
     case SOULVIEW_PICTURE:
-        va = 0x66ac6c;
+        text = "This button brings up a PICTURE of the current SOUL's appearance in life." /* 0x66ac6c */;
         break;
     case SOULVIEW_DATA:
-        va = 0x66acb8;
+        text = "This button brings up some DATA about the current SOUL's deeds." /* 0x66acb8 */;
         break;
     case SOULVIEW_TRACK:
-        va = 0x66acf8;
+        text = "This button toggles the TRACKING of the SOUL through the Afterlife." /* 0x66acf8 */;
         break;
     case SOULVIEW_NEXT:
-        va = 0x66ad70;
+        text = "This button shows the NEXT tracked soul slot." /* 0x66ad70 */;
         break;
     case SOULVIEW_PREV:
-        va = 0x66ad3c;
+        text = "This button shows the PREVIOUS tracked soul slot." /* 0x66ad3c */;
         break;
     case SOULVIEW_CENTER:
-        va = 0x66ada0;
+        text = "This button CENTERS the map on the current soul." /* 0x66ada0 */;
         break;
     }
-    views_control_help(c, exe_str(va));
+    views_control_help(c, text);
 }
 
 static void clicked(int id)
@@ -421,10 +424,11 @@ static intptr_t soulview_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t b)
             gfx_font_select(FONT);
             font_colors(0x1a, 0x1a);
             GfxRect r = pic_area;
-            snprintf(buf, sizeof buf, exe_fmt(0x66a9b4, "dd", "%d, %d"), t->unk_00[2], t->unk_00[3]);
+            snprintf(buf, sizeof buf, "%d, %d" /* 0x66a9b4 */, t->unk_00[2], t->unk_00[3]);
             gfx_font_draw_text(w->surface, r.left, r.top, &r, &r, buf, GFX_TEXT_NOJUSTIFY);
             r = pic_area;
-            snprintf(buf, sizeof buf, exe_fmt(0x66a9d0, "s", "%s soul"), exe_str(t->unk_0c != 0 ? 0x66a9bc : 0x66a9c8));
+            snprintf(buf, sizeof buf, "%s soul" /* 0x66a9d0 */,
+                     (t->unk_0c != 0 ? "Permanent" /* 0x66a9bc */ : "Temp" /* 0x66a9c8 */));
             gfx_font_draw_text(w->surface, r.left, r.top + 10, &r, &r, buf, GFX_TEXT_NOJUSTIFY);
             wm_redraw(w, &pic_area);
         }
@@ -490,7 +494,7 @@ bool soulview_create(void)
         gfx_surface_destroy(bg);
         return false;
     }
-    wm_set_title(g_win, exe_str(0x66a9a8));
+    wm_set_title(g_win, "Soulview" /* 0x66a9a8 */);
     gfx_blit(g_win->surface, 0, 0, bg->width, bg->height, bg, 0, 0);
     gfx_surface_destroy(bg);
     memset(g_text, 0, sizeof g_text);

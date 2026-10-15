@@ -12,7 +12,6 @@
 #include "gfx/draw.h"
 #include "gfx/font.h"
 #include "ui/controls.h"
-#include "ui/exe_text.h"
 #include "ui/views.h"
 
 #define FONT 500
@@ -142,40 +141,44 @@ void macro_refresh(void)
     if (!g_set.auto_bal) {
         if (g_set.manual) {
             unsigned p = (unsigned)g_set.focus * 100 / 0xff;
-            snprintf(buf, sizeof buf, exe_fmt(0x660218, "d", "%d%%"), (int)p);
+            snprintf(buf, sizeof buf, "%d%%" /* 0x660218 */, (int)p);
             text(0x134, 0x35, buf);
-            snprintf(buf, sizeof buf, exe_fmt(0x660220, "d", "%d%%"), (int)(100 - p));
+            snprintf(buf, sizeof buf, "%d%%" /* 0x660220 */, (int)(100 - p));
             text(0x14, 0x35, buf);
         }
     } else {
-        text(0x134, 0x35, exe_str(0x660208)); /* "AUTO" */
-        text(0x14, 0x35, exe_str(0x660210));
+        text(0x134, 0x35, "AUTO" /* 0x660208 */);
+        text(0x14, 0x35, "AUTO" /* 0x660210 */);
     }
     redraw(0x13, 0x30, 0x33, 0x3f);
     redraw(0x133, 0x150, 0x33, 0x3f);
-    uint32_t va = g_set.lock ? 0x660228 : g_set.unlock ? 0x660234 : 0x660244;
+    const char *mode = g_set.lock     ? "LOCK tiles."   /* 0x660228 */
+                       : g_set.unlock ? "UNLOCK tiles." /* 0x660234 */
+                                      : "IGNORE lock status." /* 0x660244 */;
     GfxRect r = {0x46, 0x92, 0x43, 0x58};
-    gfx_font_draw_text(g_win->surface, 0x46, 0x44, &r, &r, exe_str(va), 0);
+    gfx_font_draw_text(g_win->surface, 0x46, 0x44, &r, &r, mode, 0);
     r = (GfxRect){0x44, 0x92, 0x43, 0x58};
     wm_redraw(g_win, &r);
-    va = g_set.auto_bal ? 0x660258 : g_set.manual ? 0x66026c : 0x660284;
+    mode = g_set.auto_bal ? "AUTO BALANCE tiles."     /* 0x660258 */
+           : g_set.manual ? "MANUALLY BALANCE tiles." /* 0x66026c */
+                          : "IGNORE balance status." /* 0x660284 */;
     r = (GfxRect){0xe3, 0x14a, 0x43, 0x58};
-    gfx_font_draw_text(g_win->surface, 0xe5, 0x44, &r, &r, exe_str(va), 0);
+    gfx_font_draw_text(g_win->surface, 0xe5, 0x44, &r, &r, mode, 0);
     wm_redraw(g_win, &r);
     if (!g_done) {
         int n = macro_apply(false);
-        snprintf(buf, sizeof buf, exe_fmt(0x6602bc, "s", "This setting would affect %s structures."),
+        snprintf(buf, sizeof buf, "This setting would affect %s structures." /* 0x6602bc */,
                  fmt_thousands(num, (uint32_t)n));
         text(0x19, 0x152, buf);
         if (n != 0) {
-            snprintf(buf, sizeof buf, exe_fmt(0x6602e8, "s", "Activating it would cost %s Pennies."),
+            snprintf(buf, sizeof buf, "Activating it would cost %s Pennies." /* 0x6602e8 */,
                      fmt_thousands(num, g_cost));
             text(0x19, 0x15c, buf);
         }
         redraw(0xd, 0x10d, 0x150, 0x165);
         views_select_plane(saved);
     } else {
-        text(0x19, 0x152, exe_str(0x66029c));
+        text(0x19, 0x152, "Done implementing settings..." /* 0x66029c */);
         redraw(0xd, 0x10d, 0x150, 0x165);
     }
 }
@@ -236,25 +239,40 @@ static void macro_help(WmWindow *c)
     char buf[200];
     const char *t = NULL;
     if (id == 1)
-        t = exe_str(wm_is_minimized(c->parent) ? 0x660684 : 0x6606a8);
+        t = wm_is_minimized(c->parent) ? "This button MAXIMIZES the window." /* 0x660684 */
+                                       : "This button MINIMIZES the window." /* 0x6606a8 */;
     else if (id >= MACRO_HELL_KIND && id < MACRO_HELL_KIND + 7) {
-        snprintf(buf, sizeof buf, exe_fmt(0x660310, "s", "This button toggles all %s PUNISHMENTS."),
-                 exe_stri(0x66c658, (unsigned)(id - MACRO_HELL_KIND)));
+        snprintf(buf, sizeof buf,
+                 "This button toggles all %s PUNISHMENTS in and out of the Macromanager." /* 0x660310 */,
+                 views_sin_names[id - MACRO_HELL_KIND]);
         t = buf;
     } else if (id >= MACRO_HEAVEN_KIND && id < MACRO_HEAVEN_KIND + 7) {
-        snprintf(buf, sizeof buf, exe_fmt(0x660358, "s", "This button toggles all %s REWARDS."),
-                 exe_stri(0x66c600, (unsigned)(id - MACRO_HEAVEN_KIND)));
+        snprintf(buf, sizeof buf, "This button toggles all %s REWARDS in and out of the Macromanager." /* 0x660358 */,
+                 views_virtue_names[id - MACRO_HEAVEN_KIND]);
         t = buf;
     } else {
-        static const uint32_t va[] = {
-            [MACRO_HELL_KIND + 7 - 0x6c] = 0x66039c, [MACRO_HEAVEN_KIND + 7 - 0x6c] = 0x6603ec,
-            [MACRO_ALL_HELL - 0x6c] = 0x660438,      [MACRO_ALL_HEAVEN - 0x6c] = 0x66047c,
-            [MACRO_IMPLEMENT - 0x6c] = 0x660628,     [MACRO_LOCK - 0x6c] = 0x6604bc,
-            [MACRO_UNLOCK - 0x6c] = 0x660508,        [MACRO_AUTO - 0x6c] = 0x6605b0,
-            [MACRO_MANUAL - 0x6c] = 0x660558,        [MACRO_CLOSE - 0x6c] = 0x66065c,
+        static const char *const help[] = {
+            [MACRO_HELL_KIND + 7 - 0x6c] =
+                "This button toggles GENERIC PUNISHMENT ZONING in and out of the Macromanager." /* 0x66039c */,
+            [MACRO_HEAVEN_KIND + 7 - 0x6c] =
+                "This button toggles GENERIC REWARD ZONING in and out of the Macromanager." /* 0x6603ec */,
+            [MACRO_ALL_HELL - 0x6c] =
+                "This button toggles ALL PUNISHMENTS in and out of the Macromanager." /* 0x660438 */,
+            [MACRO_ALL_HEAVEN - 0x6c] =
+                "This button toggles ALL REWARDS in and out of the Macromanager." /* 0x66047c */,
+            [MACRO_IMPLEMENT - 0x6c] = "This button PERFORMS the changes you have selected." /* 0x660628 */,
+            [MACRO_LOCK - 0x6c] =
+                "This button toggles whether you want to LOCK the selected Fate Structures." /* 0x6604bc */,
+            [MACRO_UNLOCK - 0x6c] =
+                "This button toggles whether you want to UNLOCK the selected Fate Structures." /* 0x660508 */,
+            [MACRO_AUTO - 0x6c] = "This button toggles whether you want to AUTO BALANCE the selected Fate Structures.  "
+                                  "Auto Balancing is VERY expensive." /* 0x6605b0 */,
+            [MACRO_MANUAL - 0x6c] =
+                "This button toggles whether you want to MANUALLY BALANCE the selected Fate Structures." /* 0x660558 */,
+            [MACRO_CLOSE - 0x6c] = "This button CLOSES the Macromanager." /* 0x66065c */,
         };
-        if (id >= 0x6c && id <= MACRO_CLOSE && va[id - 0x6c])
-            t = exe_str(va[id - 0x6c]);
+        if (id >= 0x6c && id <= MACRO_CLOSE && help[id - 0x6c])
+            t = help[id - 0x6c];
     }
     if (t)
         views_control_help(c, t);
@@ -269,32 +287,33 @@ static void reset_settings(uint8_t manual)
 }
 
 /* a message box (macro_hooks.message, else ctl_message_box) */
-static int ask(const char *title, const char *text, uint32_t buttons_va, int n)
+static int ask(const char *title, const char *text, const char *buttons)
 {
-    char b[64];
-    exe_buttons(buttons_va, n, b, sizeof b);
     if (macro_hooks.message)
-        return macro_hooks.message(title, text, b);
-    return ctl_message_box(-1, -1, title, text, b, 0);
+        return macro_hooks.message(title, text, buttons);
+    return ctl_message_box(-1, -1, title, text, buttons, 0);
 }
 
 static void implement(void)
 {
     char buf[200], num[FMT_NUM_LEN];
     if (g_cost == 0) {
-        ask(exe_str(0x6601f8), exe_str(0x6601bc), 0x6601b4, 1);
+        ask("Well, gee..." /* 0x6601f8 */, "This MacroManager setting doesn't affect any structures..." /* 0x6601bc */,
+            "&Oops.\0" /* 0x6601b4 */);
         press(MACRO_IMPLEMENT, false);
         return;
     }
     if (!bignum_ge_int(g_state.pennies, (int32_t)g_cost)) {
-        ask(exe_str(0x6601a8), exe_str(0x660160), 0x660154, 1);
+        ask("Nice try..." /* 0x6601a8 */,
+            "You don't have the necessary Pennies to make this sweeping adjustment!" /* 0x660160 */,
+            "&Phooey!\0" /* 0x660154 */);
         press(MACRO_IMPLEMENT, false);
         return;
     }
     if (g_state.pennies.hi == 0) {
-        snprintf(buf, sizeof buf, exe_fmt(0x66011c, "s", "This will cost %s Pennies.  Are you sure?"),
+        snprintf(buf, sizeof buf, "This will cost %s Pennies.  Are you sure?" /* 0x66011c */,
                  fmt_thousands(num, g_cost));
-        if (ask(NULL, buf, 0x660148, 2) == 2) {
+        if (ask(NULL, buf, "&Yes\0~&No!\0" /* 0x660148 */) == 2) {
             press(MACRO_IMPLEMENT, false);
             return;
         }
@@ -435,7 +454,11 @@ static intptr_t macro_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t b)
         break;
     case WM_MSG_RBUTTONDOWN:
         if (w == g_win && x > 0x41 && x < 0x11a && y > 0x13 && y < 0x3b && views_hooks.help_balloon)
-            views_hooks.help_balloon(w->rect.left + x, w->rect.top + y, 0xa0, exe_str(0x660020));
+            views_hooks.help_balloon(
+                w->rect.left + x, w->rect.top + y, 0xa0,
+                "This slider controls the FOCUS of the selected tiles' funding. Sliding to the left will steer the "
+                "focus towards Research, which benefits PERMANENT residents.  Sliding to the right will shift the "
+                "focus to Production, which benefits TEMPORARY residents." /* 0x660020 */);
         break;
     case WM_MSG_LBUTTONUP:
         if (w != g_win)
@@ -462,9 +485,13 @@ static intptr_t macro_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t b)
 /* ---- creation --------------------------------------------------------------------- */
 
 /* 0x4619f0: the kinds' labels, in the order the original draws them */
-static const uint32_t k_labels[2][9] = {
-    {0x65feac, 0x65fec0, 0x65fed4, 0x65feec, 0x65ff00, 0x65ff14, 0x65ff28, 0x65ff3c, 0x65ff50},
-    {0x65ff64, 0x65ff78, 0x65ff88, 0x65ff9c, 0x65ffb0, 0x65ffc4, 0x65ffdc, 0x65fff0, 0x660000},
+static const char *const k_labels[2][9] = {
+    {"ENVY Punishments" /* 0x65feac */, "AVARICE Punishments" /* 0x65fec0 */, "GLUTTONY Punishments" /* 0x65fed4 */,
+     "SLOTH Punishments" /* 0x65feec */, "LUST Punishments" /* 0x65ff00 */, "WRATH Punishments" /* 0x65ff14 */,
+     "PRIDE Punishments" /* 0x65ff28 */, "GENERIC Punishments" /* 0x65ff3c */, "ALL PUNISHMENTS!!" /* 0x65ff50 */},
+    {"CONTENTMENT Rewards" /* 0x65ff64 */, "CHARITY Rewards" /* 0x65ff78 */, "TEMPERANCE Rewards" /* 0x65ff88 */,
+     "DILIGENCE Rewards" /* 0x65ff9c */, "CHASTITY Rewards" /* 0x65ffb0 */, "PEACEFULNESS Rewards" /* 0x65ffc4 */,
+     "HUMILITY Rewards" /* 0x65ffdc */, "GENERIC Rewards" /* 0x65fff0 */, "ALL REWARDS!!" /* 0x660000 */},
 };
 
 static void labels(void)
@@ -472,10 +499,10 @@ static void labels(void)
     gfx_font_select(FONT);
     font_colors(0x1a, 0x13);
     for (int i = 0; i < 9; i++)
-        text(0x14, 0x66 + 0x18 * i, exe_str(k_labels[0][i]));
+        text(0x14, 0x66 + 0x18 * i, k_labels[0][i]);
     font_colors(0x1a, 0x13);
     for (int i = 0; i < 9; i++)
-        text(0xcc, 0x66 + 0x18 * i, exe_str(k_labels[1][i]));
+        text(0xcc, 0x66 + 0x18 * i, k_labels[1][i]);
     font_colors(0x13, 0x13);
     macro_refresh();
 }
@@ -496,7 +523,7 @@ bool macro_create(void)
         gfx_surface_destroy(bg);
         return false;
     }
-    wm_set_title(g_win, exe_str(0x660010));
+    wm_set_title(g_win, "Macromanager" /* 0x660010 */);
     gfx_blit(g_win->surface, 0, 0, bg->width, bg->height, bg, 0, 0);
     gfx_surface_destroy(bg);
     for (int id = MACRO_HELL_KIND; id <= MACRO_CLOSE; id++) {

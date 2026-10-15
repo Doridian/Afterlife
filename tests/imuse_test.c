@@ -18,7 +18,7 @@
  *     must keep playing past its length and end once the hook is set to
  *     0x80, with no silent gap at the jump.
  *  4. Duration, silence, clipping and the 17x17 pan table against
- *     ALIFE.EXE's copy (0x6771a0, from src/data).
+ *     ALIFE.EXE's copy (0x6771a0).
  *
  * Writes OUT_DIR/imuse_sfx.wav and OUT_DIR/imuse_mix.wav (22050 Hz stereo).
  */
@@ -31,7 +31,6 @@
 #include "game/config.h"
 #include "game/resource.h"
 #include "game/sound.h"
-#include "gfx/exe_res.h"
 #include "imuse/imuse.h"
 #include "imuse/waveapi.h"
 #include "platform/platform.h"
@@ -189,17 +188,34 @@ static void on_marker(const char *marker, const intptr_t args[10])
         snprintf(g_first_marker, sizeof(g_first_marker), "%s (arg %ld)", marker ? marker : "(null)", (long)args[0]);
 }
 
-/* The pan table at 0x6771a0 in ALIFE.EXE (its data is compiled in). */
+/* The original's pan table (0x6771a0), [volume][pan]. */
+static const uint8_t k_pan_table[17][17] = {
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2},
+    {0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3},
+    {0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4},
+    {0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5},
+    {0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 6, 6, 6, 6, 6},
+    {0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 7},
+    {0, 1, 2, 2, 3, 4, 4, 5, 6, 6, 7, 7, 7, 8, 8, 8, 8},
+    {0, 1, 2, 3, 3, 4, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9, 9},
+    {0, 1, 2, 3, 4, 5, 6, 6, 7, 8, 8, 9, 9, 10, 10, 10, 10},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 10, 10, 11, 11, 11, 11},
+    {0, 1, 2, 3, 5, 6, 7, 8, 8, 9, 10, 11, 11, 11, 12, 12, 12},
+    {0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12, 12, 13, 13, 13},
+    {0, 1, 3, 4, 5, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 14},
+    {0, 1, 3, 4, 6, 7, 8, 10, 11, 12, 12, 13, 14, 14, 15, 15, 15},
+    {0, 2, 3, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 15, 16, 16, 16},
+};
+
 static void check_pan_table(void)
 {
-    uint32_t avail = 0;
-    const uint8_t *tab = exe_res_va(0x6771a0, &avail);
-    int ok = tab && avail >= 17 * 17;
     int diff = 0;
-    for (int v = 0; ok && v < 17; v++)
+    for (int v = 0; v < 17; v++)
         for (int p = 0; p < 17; p++)
-            diff += tab[v * 17 + p] != imuse_mixer_pan_level(v, p);
-    check(ok && diff == 0, "pan table = round(v sin(p pi/32)) matches ALIFE.EXE 0x6771a0");
+            diff += k_pan_table[v][p] != imuse_mixer_pan_level(v, p);
+    check(diff == 0, "pan table = round(v sin(p pi/32)) matches ALIFE.EXE 0x6771a0");
 }
 
 int main(int argc, char **argv)

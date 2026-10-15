@@ -18,83 +18,120 @@
 
 #include "game/enhance.h"
 #include "game/util.h"
-#include "gfx/exe_res.h"
 
-PlanetTables g_planet_tables;
 PlanetRuntime g_planet;
 PlanetHooks g_planet_hooks;
 
 /* ---- Tables ------------------------------------------------------------------ */
 
-static const uint8_t *exe_bytes(uint32_t va, uint32_t n)
-{
-    uint32_t avail = 0;
-    const uint8_t *p = exe_res_va(va, &avail);
-    return p && avail >= n ? p : NULL;
-}
-
-static uint32_t rd32le(const uint8_t *p)
-{
-    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
-}
-
-static void exe_string(uint32_t va, char *out, size_t size)
-{
-    uint32_t avail = 0;
-    const uint8_t *p = va ? exe_res_va(va, &avail) : NULL;
-    size_t i = 0;
-    for (; p && i + 1 < size && i < avail && p[i]; i++)
-        out[i] = (char)p[i];
-    out[i] = 0;
-}
-
-/* The announcement texts are immediates in planet_tech_update (0x49b05c). */
-static const uint32_t k_blurb_va[PLANET_TECHS] = {
-    0x66c938, 0x66c9c0, 0x66cae8, 0x66cc38, 0x66cd68, 0x66ce44, 0x66cf08, 0x66d01c,
-    0x66d15c, 0x66d284, 0x66d3fc, 0x66d5dc, 0x66d798, 0x66d9dc, 0x66dc18,
+const PlanetTables g_planet_tables = {
+    /* 0x64f048: {capacity, unk_04, sea_range, land_range, birth_rate, unk_0d, death_rate, terrain_mask} */
+    .tech =
+        {
+            {5000, 0, 0, 0, 204, 0, 164, 0x1},        /* Fire */
+            {5500, 0, 0, 0, 154, 0, 134, 0x1},        /* Pottery */
+            {6000, 0, 0, 0, 144, 0, 130, 0x1},        /* Irrigation */
+            {6000, 0, 1, 0, 134, 0, 124, 0x1},        /* Boating */
+            {6000, 0, 1, 0, 130, 0, 122, 0x1},        /* Philosophy */
+            {6000, 0, 2, 0, 126, 0, 119, 0x1},        /* Navigation */
+            {7000, 0, 3, 0, 110, 0, 104, 0x1},        /* Industrialization */
+            {7500, 0, 4, 2, 99, 0, 94, 0x1},          /* Mass Transit */
+            {7500, 0, 4, 2, 83, 0, 78, 0x1},          /* Medicine */
+            {7500, 0, 4, 6, 66, 0, 62, 0x1},          /* Aviation */
+            {7500, 0, 5, 7, 48, 0, 45, 0x1},          /* Nuclear Technology */
+            {8000, 0, 5, 8, 40, 0, 36, 0x3},          /* Gravity Control */
+            {8500, 1, 5, 10, 40, 0, 37, 0x3},         /* Climate Control */
+            {8500, 2, 5, 10, 40, 0, 38, 0xffffffff},  /* Weather Control */
+            {10500, 2, 5, 10, 40, 0, 38, 0xffffffff}, /* Advanced Golf */
+        },
+    /* 0x64f178 (rows 16-31 are the data that follows, which the original reads past the 16 tech steps) */
+    .tech_sin =
+        {
+            {0, 0, 0, 0, 0, 0, 0},        {0, 0, 0, 0, 0, 0, 0},         {0, 0, 0, 0, 0, 0, 0},
+            {0, 0, 0, 0, 0, 0, 0},        {-1, -1, 0, 0, 0, 0, 0},       {0, 0, 0, -1, 0, 0, 0},
+            {2, 2, 2, 2, 1, 0, 0},        {0, 1, 0, 1, 0, 2, 0},         {0, 0, -1, 1, 0, 0, 0},
+            {0, 0, 0, 0, 0, 0, 0},        {0, 0, 0, 0, 0, 1, 2},         {0, 0, 0, 1, 0, 0, 0},
+            {0, 0, 0, -1, 0, 0, -1},      {-1, -1, -1, 0, -1, -1, 0},    {2, 2, 2, 2, 2, 2, 2},
+            {0, 0, 0, 0, 0, 0, 0},        {64, 66, 68, 70, -95, 95, 93}, {91, 89, 0, 0, 0, 0, 0},
+            {0, 0, 10, 11, 13, 29, 15},   {12, 14, 16, 34, 35, 36, 37},  {39, 41, 42, 44, 45, 34, 35},
+            {36, 37, 39, 41, 42, 44, 45}, {34, 35, 36, 37, 39, 41, 42},  {44, 45, 34, 35, 36, 37, 39},
+            {41, 42, 44, 45, 34, 35, 36}, {37, 39, 41, 42, 44, 45, 34},  {35, 36, 37, 39, 41, 42, 44},
+            {45, 34, 35, 36, 37, 39, 41}, {42, 44, 45, 0, -1, -1, -1},   {-1, 49, 17, 75, 0, 72, 17},
+            {75, 0, 0, 0, 0, 0, 6},       {0, 0, 6, 0, 1, 0, 0},
+        },
+    .belief_index = {0, 0, 1, 2, 3, 0, 4, 0, 8}, /* 0x66c918 */
+    /* 0x66c780: {min_tech, max_tech, radius, kill_percent} */
+    .disaster = {{0, 12, 0, 100},
+                 {0, 0, 4, 20},
+                 {0, 0, 6, 25},
+                 {0, 2, 2, 15},
+                 {3, 4, 4, 15},
+                 {5, 6, 3, 20},
+                 {7, 10, 4, 20},
+                 {10, 11, 5, 20},
+                 {11, 0, 7, 20},
+                 {11, 0, 0, 60}},
+    .tech_name = {"Fire", "Pottery", "Irrigation", "Boating", "Philosophy", "Navigation", "Industrialization",
+                  "Mass Transit", "Medicine", "Aviation", "Nuclear Technology", "Gravity Control", "Climate Control",
+                  "Weather Control", "Advanced Golf"}, /* 0x66c740 */
+    /* the announcements (immediates in planet_tech_update 0x49b05c) */
+    .tech_blurb =
+        {
+            /* 0x66c938 */
+            "",
+            /* 0x66c9c0 */
+            "  With Pottery, EMBOs can stockpile foodstuffs to guard against times of crisis, allowing more EMBOs to "
+            "live in the same area.  ",
+            /* 0x66cae8 */
+            "  Irrigation makes farms more productive, reducing food shortages and allowing cities to grow larger.  "
+            "Water plants regularly, and they grow; who would've thunk?",
+            /* 0x66cc38 */
+            "  Boating allows EMBOs to cross short distances over water.  Maybe someday we'll find the answer to "
+            "that age old question, \"Daddy, is the world really as flat your head?\"",
+            /* 0x66cd68 */
+            "  EMBOs now spend more of their time contemplating difficult, and often controversial, issues and less "
+            "time fighting and bickering.",
+            /* 0x66ce44 */
+            "  EMBOs can now build larger, sturdier vessels capable of venturing further from shore.",
+            /* 0x66cf08 */
+            "  Giant factories spur urban job growth, attracting more and more EMBOs from rural areas into the "
+            "cities.",
+            /* 0x66d01c */
+            "  Beep! Beep! \"Move it, buddy!\"  Transportation speed and efficiency increase dramatically, allowing "
+            "EMBOs more leisure time for vacations and just plain exploring.",
+            /* 0x66d15c */
+            "  Medicine evolves from folklore and wives' tales into a true science increasing both the life "
+            "expectancy and the quality of life for all EMBOs, achew!",
+            /* 0x66d284 */
+            "  No longer relegated to using the cumbersome flying snails of the past, modern EMBOs utilize large "
+            "flying machines to travel across the world.",
+            /* 0x66d3fc */
+            "  Besides making blindingly beautiful watch dials, radioactive materials make nifty energy sources that "
+            "power entire cities and allow ships to stay out at sea almost indefinitely.  Don't forget to put those "
+            "control rods back in!",
+            /* 0x66d5dc */
+            "  \"Will this contraption really float?\"  EMBOs can use Gravity Control Technology to not only build "
+            "some really cool flying toys but also just about any flying or floating object imaginable regardless of "
+            "its size or weight, even floating cities!",
+            /* 0x66d798 */
+            "  Brrrr!  It can get pretty cold living on top of Mount Evertall.  Never fear, with Climate Control "
+            "<TM> you too can feel just as warm and cozy on top of a mountain as you do on top of a beach.",
+            /* 0x66d9dc */
+            "  Been planning that Arctic ski trip but shivered at the thought of year-round, sub-zero temperatures?  "
+            "Well, now you can thanks to the micro-miracle of Weather Control!  Unlike Climate Control, which allows "
+            "only limited control of one's environment, Weather Control gives any EMBO the ability to completely "
+            "control his or her environment.  Hurry, before the polar caps melt away!",
+            /* 0x66dc18 */
+            "The EMBOs have just discovered the pinnacle of scientic and social achievement; a discovery so vast in "
+            "scope that it defies description.\n"
+            "Sire, the EMBOs have discovered Advanced Golf!!",
+        },
 };
 
-bool planet_tables_load(void)
-{
-    PlanetTables *t = &g_planet_tables;
-    if (t->loaded)
-        return true;
-    const uint8_t *tech = exe_bytes(0x64f048, 0x14 * PLANET_TECHS);
-    const uint8_t *sin = exe_bytes(0x64f178, sizeof t->tech_sin);
-    const uint8_t *bel = exe_bytes(0x66c918, 9);
-    const uint8_t *dis = exe_bytes(0x66c780, 4 * PLANET_DISASTERS);
-    const uint8_t *names = exe_bytes(0x66c740, 4 * PLANET_TECHS);
-    if (!tech || !sin || !bel || !dis || !names)
-        return false;
-    for (int i = 0; i < PLANET_TECHS; i++) {
-        const uint8_t *e = tech + i * 0x14;
-        PlanetTechInfo *ti = &t->tech[i];
-        ti->capacity = rd32le(e);
-        ti->unk_04 = rd32le(e + 4);
-        ti->sea_range = (uint16_t)(e[8] | e[9] << 8);
-        ti->land_range = (uint16_t)(e[10] | e[11] << 8);
-        ti->birth_rate = e[12];
-        ti->unk_0d = e[13];
-        ti->death_rate = (uint16_t)(e[14] | e[15] << 8);
-        ti->terrain_mask = rd32le(e + 16);
-        exe_string(rd32le(names + i * 4), t->tech_name[i], sizeof t->tech_name[i]);
-        exe_string(k_blurb_va[i], t->tech_blurb[i], sizeof t->tech_blurb[i]);
-    }
-    memcpy(t->tech_sin, sin, sizeof t->tech_sin);
-    memcpy(t->belief_index, bel, 9);
-    for (int i = 0; i < PLANET_DISASTERS; i++) {
-        t->disaster[i].min_tech = dis[i * 4];
-        t->disaster[i].max_tech = dis[i * 4 + 1];
-        t->disaster[i].radius = dis[i * 4 + 2];
-        t->disaster[i].kill_percent = dis[i * 4 + 3];
-    }
-    t->loaded = true;
-    return true;
-}
+bool planet_tables_load(void) { return true; }
 
 static const PlanetTechInfo *tech_info(unsigned tech)
 {
-    assert(g_planet_tables.loaded);
     /* The original indexes without a check; levels stay <= 14. */
     return &g_planet_tables.tech[tech < PLANET_TECHS ? tech : PLANET_TECHS - 1];
 }

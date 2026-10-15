@@ -40,7 +40,10 @@ case-insensitively (DOS drive letters stripped). Only `-x` and `/?` count as
 switches, so absolute Unix paths work. `--quit` exits after init.
 `--enhancements`, `--no-enhancements`, `--ui-scale=N` and `--port-ini=FILE`
 are the port's own settings, kept in `ALIFEPORT.INI` outside ALIFE.INI (see
-[enhancements.md](enhancements.md)).
+[enhancements.md](enhancements.md)). `--window-size=WxH`, `--fullscreen` and
+`--windowed` set the port window (saved at exit with the rest of its state),
+`--window-test=DIR` runs the real-window self-check (see
+[rendering.md](rendering.md#port-window)).
 
 ## ALIFE.INI
 
@@ -62,7 +65,7 @@ last line (this happens with `Window name` and `Savepath`).
 | `Resource file` | rc_initialize | Local bundle (FULL.000, MEDIUM.000 or `None`). Searched before the CD, failure ignored | **fatal**, same message |
 | `Color depth` | di_initialize 0x4ca1c0 | Expected bits per pixel. `DONT CARE` (any case) skips the check. If it differs from the desktop, an OK/Cancel warning appears, and Cancel exits | no check |
 | `Force display settings` | di_initialize | `ON` (exact): switch display mode (`di_display_mode` bit 4) and require the resolution in the EnumDisplaySettings list ("The resolution you have selected (%dx%d) is invalid") | off |
-| `Resolution` | di_initialize | `MAX` (exact) or `%dx%d`, clamped to the desktop. Smaller than the desktop gives a framed window (mode 2), otherwise a desktop-sized popup (mode 1) | desktop size |
+| `Resolution` | di_initialize | `MAX` (exact) or `%dx%d`, clamped to the desktop. Smaller than the desktop gives a framed window (mode 2), otherwise a desktop-sized popup (mode 1). Port: only the port window's first size when ALIFEPORT.INI has none; the screen then follows the window | desktop size |
 | `Window name` | di_initialize | Main window caption | (last INI line, see the quirk above) |
 | `Sound` | snd_initialize 0x4b9510 | `NONE` (any case): no sound at all, and no compbun or iMUSE init | on |
 | `Music stream` | snd_initialize | `size, critical, load`: the music stream buffer (he_malloc'd) and its refill thresholds, read by iMUSE through `buf_info` (0x4b9eb5, `{buf, size, loadSize, criticalSize}` at 0x672598): streams below `critical` bytes are refilled first, `load` bytes at a time. See imuse.md | 204800, 153600, 32768 |
@@ -133,7 +136,7 @@ handles, for the main window:
 | WM_ACTIVATE inactive | `app_active` 0x672934 (initially 1) → 0 and `sys_suspend` 0x4c666a (task suspends, then di, tm, ms, kb, null, he). A desktop-sized window goes to the bottom of the Z order |
 | WM_ACTIVATE active | ignored while `app_minimized` 0x67292c. Otherwise topmost if desktop-sized, re-push the palette (`di_set_palette(NULL, 10, 236)`), and if inactive: `app_active` = 1, `sys_resume` 0x4c66e3 (reverse order, then task resumes) |
 | WM_SYSCOMMAND | SC_MINIMIZE: `app_minimized` = 1 and suspend. SC_RESTORE: `app_minimized` = 0 (resume follows with WM_ACTIVATE). SC_MOVE and SC_SCREENSAVE are swallowed |
-| WM_WINDOWPOSCHANGING | adds SWP_NOSIZE: the window can't be resized |
+| WM_WINDOWPOSCHANGING | adds SWP_NOSIZE: the window can't be resized (the port's window can: `PLAT_EV_RESIZE`, below) |
 | WM_KEYDOWN, WM_SYSKEYDOWN | `kb_on_key_down(wParam)` 0x4d06f1 |
 | WM_KEYUP, WM_SYSKEYUP | `kb_on_key_up(wParam)` 0x4d070e |
 | WM_CHAR | `kb_on_char(wParam)` 0x4d072b (WM_SYSCHAR is not handled) |
@@ -238,9 +241,13 @@ The platform layer (`plat_poll_event`) turns SDL events into one
 (Backspace 8, Tab 9, Enter 13, Escape 27, Ctrl+letter 1-26; nothing with Alt,
 as WM_SYSCHAR is ignored), mouse move (runs of motion events are collapsed,
 as Windows does with WM_MOUSEMOVE) and buttons, focus (WM_ACTIVATE),
-minimize/restore (WM_SYSCOMMAND), expose (WM_PAINT), close (WM_CLOSE).
+minimize/restore (WM_SYSCOMMAND), expose (WM_PAINT), close (WM_CLOSE),
+and the port-only `PLAT_EV_RESIZE` (the port window changed size:
+`display_request_relayout`; Alt+Enter and F11, the fullscreen toggle,
+are handled in the platform and never become events).
 `sys_pump` keeps the original shape: `tm_poll()` (port), one event through
-`main_wnd_proc`, the idle tasks, then `gfx_present()` (port: GDI drew to the
+`main_wnd_proc`, `display_idle()` (port: a pending relayout of the port
+window, at most every 100 ms), the idle tasks, then `gfx_present()` (port: GDI drew to the
 window at once) and `plat_yield()`. WM_CLOSE sends 0x406 to the window
 manager's root (which forwards it to the top-level windows); before
 wm_initialize it sets `sys_quit_requested()` instead. Mouse capture is
@@ -292,4 +299,5 @@ sys_shutdown.
 Display mode list (any size is accepted with "Force display settings"), the
 system palette save/restore, memory status warnings, the game heap (malloc
 instead), vh_initialize, the controls' pause flag (no game module yet),
-WM_DISPLAYCHANGE. game_main is `src/game/shell.c` (see game-map.md WP7).
+WM_DISPLAYCHANGE (the port window's live relayout covers the same ground,
+see [rendering.md](rendering.md#port-window)). game_main is `src/game/shell.c` (see game-map.md WP7).

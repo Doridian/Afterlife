@@ -355,6 +355,51 @@ intptr_t wm_screen_resized(int width, int height)
     return wm_send(NULL, NULL, WM_MSG_SCREEN_RESIZED, width, height);
 }
 
+bool wm_resize_surface(WmWindow *w, int width, int height, int dx, int dy, uint8_t fill)
+{
+    if (!w || width <= 0 || height <= 0)
+        return false;
+    if (w->surface) {
+        GfxSurface *s = gfx_surface_create(width, height);
+        if (!s)
+            return false;
+        if (fill)
+            gfx_fill_rect(s, 0, 0, width, height, fill);
+        gfx_blit(s, dx, dy, w->surface->width, w->surface->height, w->surface, 0, 0);
+        gfx_surface_destroy(w->surface);
+        w->surface = s;
+    }
+    w->rect.right = w->rect.left + width - 1;
+    w->rect.bottom = w->rect.top + height - 1;
+    return true;
+}
+
+static bool fit_rect(GfxRect *r, const GfxRect *area)
+{
+    int x = r->left, y = r->top;
+    if (r->right > area->right)
+        x -= r->right - area->right;
+    if (r->bottom > area->bottom)
+        y -= r->bottom - area->bottom;
+    if (x < area->left)
+        x = area->left;
+    if (y < area->top)
+        y = area->top;
+    if (x == r->left && y == r->top)
+        return false;
+    rect_move_to(r, x, y);
+    return true;
+}
+
+bool wm_fit_into(WmWindow *w, const GfxRect *area)
+{
+    if (!w || !area)
+        return false;
+    if (w->minimized)
+        fit_rect(&w->restore_rect, area);
+    return fit_rect(&w->rect, area);
+}
+
 /* -------------------------------------------------------------- frame */
 
 /* 0x4c5f7a. The original stores the inset rect in parent coordinates
@@ -596,7 +641,7 @@ static void free_window(WmWindow *w)
 
 /* 0x4c6220: the menu bar's close and minimize buttons are only shown when
  * the game fills the desktop */
-static void menubar_update_buttons(WmWindow *menubar)
+void wm_menubar_update_buttons(WmWindow *menubar)
 {
     if (!menubar)
         return;
@@ -643,7 +688,7 @@ static void create_menubar(WmWindow *w)
     bar->min_button = ctl_button_create(bar, &r, 0x231, 0x404, bmp_min);
     if (!bar->min_button)
         gfx_surface_destroy(bmp_min);
-    menubar_update_buttons(bar);
+    wm_menubar_update_buttons(bar);
 }
 
 /* 0x4c1bce */

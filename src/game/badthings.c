@@ -14,7 +14,6 @@
 #include "game/realm.h"
 #include "game/structure.h"
 #include "game/util.h"
-#include "ui/exe_text.h"
 
 BadThingsHooks g_badthings_hooks;
 
@@ -54,13 +53,10 @@ void bt_select_plane(int plane)
     if (g_badthings_hooks.select_plane)
         g_badthings_hooks.select_plane(plane);
 }
-void bt_message(uint32_t title_va, uint32_t text_va, uint32_t button_va)
+void bt_message(const char *title, const char *text, const char *buttons)
 {
-    if (!g_badthings_hooks.message)
-        return;
-    char buttons[64];
-    exe_buttons(button_va, 1, buttons, sizeof buttons);
-    g_badthings_hooks.message(exe_str(title_va), exe_str(text_va), buttons);
+    if (g_badthings_hooks.message)
+        g_badthings_hooks.message(title, text, buttons);
 }
 
 /* ---- Freeze / Blues (0x441b7a-0x4425a1) ------------------------------------------- */
@@ -353,7 +349,8 @@ void bt_disco_end(void)
 {
     g_state.unk_5b2f61 &= 0x7f;
     bt_music_fade(0xb4);
-    bt_message(0x65f950, 0x65f918, 0x65f910);
+    bt_message("It's About Time" /* 0x65f950 */, "Vinnie the Disco Inferno guy has boogied out of Hell!" /* 0x65f918 */,
+               "&Cool!\0" /* 0x65f910 */);
 }
 
 /* 0x445064 */
@@ -441,23 +438,52 @@ void badthings_cheat(void)
 
 /* ---- bad_thing_start 0x43dc3c ------------------------------------------------------ */
 
-/* message box texts (original addresses for exe_str): {title, text, button} */
+/* message box texts: {title, text, button} */
 typedef struct Msg {
-    uint32_t t, s, b;
+    const char *t, *s, *b;
 } Msg;
 static const Msg k_started[BAD_THINGS] = {
-    {0x65f188, 0x65f158, 0x65f14c}, {0x65f218, 0x65f1ec, 0x65f1e4}, {0x65f308, 0x65f2e8, 0x65f2e0},
-    {0x65f3d4, 0x65f3bc, 0x65f3b4}, {0x65f47c, 0x65f448, 0x65f43c}, {0x65f524, 0x65f4f8, 0x65f4ec},
-    {0x65f5d0, 0x65f598, 0x65f58c}, {0x65f66c, 0x65f640, 0x65f638},
+    {"Trouble in Paradise!" /* 0x65f188 */, "The Birds of Paradise are flying over Heaven!" /* 0x65f158 */,
+     "&Oh no!\0" /* 0x65f14c */},
+    {"Hellzapoppin!" /* 0x65f218 */, "The Bats Out Of Hell have been unleashed!" /* 0x65f1ec */,
+     "&Argh!\0" /* 0x65f1e4 */},
+    {"Heaven's got a Problem!" /* 0x65f308 */, "Heaven is getting the Blues!" /* 0x65f2e8 */,
+     "&Darn!\0" /* 0x65f2e0 */},
+    {"Brrrrrr!" /* 0x65f3d4 */, "Hell is Freezing Over!" /* 0x65f3bc */, "&Rats!\0" /* 0x65f3b4 */},
+    {"Proboscis Problems" /* 0x65f47c */, "The Heaven Nose is sniffing up everything in sight!" /* 0x65f448 */,
+     "&Nertz!\0" /* 0x65f43c */},
+    {"Tsk, tsk, tsk..." /* 0x65f524 */, "Heaven is Going to Hell in a Handbasket!" /* 0x65f4f8 */,
+     "&Bogus!\0" /* 0x65f4ec */},
+    {"Snake Eyes..." /* 0x65f5d0 */, "The Paradise Pair of Dice are thundering across Heaven!" /* 0x65f598 */,
+     "&Craps!\0" /* 0x65f58c */},
+    {"Burn Baby, Burn..." /* 0x65f66c */, "Hell is being assaulted by a Disco Inferno!" /* 0x65f640 */,
+     "&Oy...\0" /* 0x65f638 */},
 };
 /* "not now" (for 2 and 3: it's already there) */
 static const Msg k_refused[BAD_THINGS] = {
-    {0x65f140, 0x65f10c, 0x65f100}, {0x65f1d8, 0x65f1a8, 0x65f1a0}, {0x65f264, 0x65f238, 0x65f228},
-    {0x65f350, 0x65f328, 0x65f320}, {0x65f428, 0x65f3ec, 0x65f3e0}, {0x65f4dc, 0x65f49c, 0x65f490},
-    {0x65f57c, 0x65f544, 0x65f538}, {0x65f62c, 0x65f5ec, 0x65f5e0},
+    {"Not now..." /* 0x65f140 */, "The Birds of Paradise are currently unavailable!" /* 0x65f10c */,
+     "&Phooey!\0" /* 0x65f100 */},
+    {"Hold it!" /* 0x65f1d8 */, "The Bats out of Hell are currently unavailable!" /* 0x65f1a8 */,
+     "&Wah!\0" /* 0x65f1a0 */},
+    {"Oh, for Pete's sake..." /* 0x65f264 */, "Heaven's already got the Blues right now." /* 0x65f238 */,
+     "That &Bites!\0" /* 0x65f228 */},
+    {"The devil you say..." /* 0x65f350 */, "Hell's already frozen enough right now." /* 0x65f328 */,
+     "&Wah!\0" /* 0x65f320 */},
+    {"It snot funny..." /* 0x65f428 */, "The Heaven Nose is running amok somewhere else right now." /* 0x65f3ec */,
+     "&Boogers!\0" /* 0x65f3e0 */},
+    {"Wicker woes..." /* 0x65f4dc */, "Heaven doesn't want to go to Hell in a Handbasket right now." /* 0x65f49c */,
+     "&Ieeee!\0" /* 0x65f490 */},
+    {"Lucky devil..." /* 0x65f57c */, "The Paradise Pair of Dice don't wanna roll right now." /* 0x65f544 */,
+     "&Hooplah!\0" /* 0x65f538 */},
+    {"Bummer..." /* 0x65f62c */, "Hell's scene isn't hip enough for the Disco Inferno right now." /* 0x65f5ec */,
+     "&Shucks!\0" /* 0x65f5e0 */},
 };
 /* the realm has no roads to freeze */
-static const Msg k_no_roads[2] = {{0x65f2c0, 0x65f284, 0x65f27c}, {0x65f39c, 0x65f370, 0x65f368}};
+static const Msg k_no_roads[2] = {
+    {"A momentary lapse of mojo..." /* 0x65f2c0 */,
+     "Your Heaven is incapable of getting the Blues right now." /* 0x65f284 */, "&Ok.\0" /* 0x65f27c */},
+    {"It's hot, hot, hot..." /* 0x65f39c */, "Your Hell is too tiny to freeze right now." /* 0x65f370 */,
+     "&Cool.\0" /* 0x65f368 */}};
 
 static void msg(const Msg *m) { bt_message(m->t, m->s, m->b); }
 
@@ -545,7 +571,8 @@ void bad_thing_start(int which)
         break;
     }
     default:
-        bt_message(0x65f6ac, 0x65f68c, 0x65f680);
+        bt_message("Somebody Call Mike..." /* 0x65f6ac */, "This is an unknown disaster!" /* 0x65f68c */,
+                   "&Kewl...\0" /* 0x65f680 */);
         break;
     }
 }

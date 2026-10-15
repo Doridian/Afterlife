@@ -21,13 +21,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "data/exe_data.h"
 #include "game/shell.h"
 #include "game/timer.h"
 #include "game/util.h"
 #include "gfx/draw.h"
 #include "gfx/font.h"
 #include "gfx/surface.h"
+#include "ui/about_int.h"
 #include "ui/controls.h"
 #include "ui/news.h"
 
@@ -271,9 +271,8 @@ static void credit_draw(const Credit *c, WmWindow *w, const GfxRect *clip)
 
 /* ---- the script ------------------------------------------------------------------------ */
 
-/* Runs 0x4addfb's call sequence, decoded into ops by tools/extract_exe.py
- * (data/credits_script.c): the credits_add calls in order and the two
- * rand_range switches. Returns the number of entries added. */
+/* Runs 0x4addfb's call sequence (ui/about_credits.c): the credits_add calls
+ * in order and the two rand_range switches. Returns the number of entries added. */
 static int run_script(void)
 {
     uint32_t locals[256] = {0};

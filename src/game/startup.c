@@ -13,6 +13,8 @@
 
 #include "compbun/cbres.h"
 #include "game/config.h"
+#include "game/display.h"
+#include "game/enhance.h"
 #include "game/ini.h"
 #include "game/input.h"
 #include "game/resource.h"
@@ -272,6 +274,16 @@ static int di_initialize(void)
      * than the desktop, else a desktop-sized popup), two memory DCs, the
      * mouse clip and the color matching tables: gfx_init. */
     plat_video_set_title(g_config.window_name);
+    /* Port: a normal resizable window (docs/rendering.md "Port window"):
+     * the last size and place (ALIFEPORT.INI), else Resolution if it
+     * fits, else 80 % of the desktop; "Force display settings" starts it
+     * fullscreen. The game's screen is the window's pixels divided by the
+     * UI scale, and follows the window from then on (game/display.c). */
+    plat_window_open(&g_port_settings.window, g_config.resolution_max ? 0 : g_config.width,
+                     g_config.resolution_max ? 0 : g_config.height);
+    if (g_config.force_display && !plat_window_fullscreen())
+        plat_window_set_fullscreen(true);
+    plat_video_target_size(&g_config.width, &g_config.height);
     if (!gfx_init(g_config.width, g_config.height, g_config.force_display)) {
         error_box("MAGIC ERROR SetMainWindowSize", true, "Unable to create main window");
         return -1;
@@ -508,6 +520,7 @@ void sys_pump(void)
         sys_pump_hook(); /* port: tests feed synthetic input here */
     tm_poll(); /* port: the timeSetEvent thread's due ticks */
     sys_dispatch_message();
+    display_idle(); /* port: the port window's relayout after a resize */
     for (int i = 0; i < SYS_MAX_TASKS; i++)
         if (g_tasks[i].idle)
             g_tasks[i].idle();

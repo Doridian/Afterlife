@@ -16,7 +16,6 @@
 #include "gfx/draw.h"
 #include "gfx/font.h"
 #include "ui/controls.h"
-#include "ui/exe_text.h"
 #include "ui/news.h"
 #include "ui/views.h"
 
@@ -32,35 +31,36 @@ static const GfxRect k_diff_rect = {243, 346, 115, 124};
 #define INFO_BG 0x65
 #define BUTTON_COLORS 0x13131313u
 
-/* texts in ALIFE.EXE */
-#define TEXT_SAVE_GAME 0x66c090
-#define TEXT_SAVE_SCENARIO 0x66c09c
-#define TEXT_SAVE 0x66c0ac
-#define TEXT_CANCEL_SAVE 0x66c0b4
-#define TEXT_OVERWRITE_BUTTONS 0x66c0bc
-#define TEXT_OVERWRITE 0x66c0c8
-#define TEXT_OVERWRITE_TITLE 0x66c0e8
-#define TEXT_YEAR 0x66bff8
-#define TEXT_EASY 0x66c004
-#define TEXT_MEDIUM 0x66c018
-#define TEXT_HARD 0x66c02c
-#define TEXT_LOAD_GAME 0x66c214
-#define TEXT_LOAD_SCENARIO 0x66c220
-#define TEXT_LOAD 0x66c230
-#define TEXT_CANCEL_LOAD 0x66c238
-#define TEXT_DELETE_TITLE 0x66c364
-#define TEXT_DELETE 0x66c374
-#define TEXT_CANCEL_DELETE 0x66c37c
-#define TEXT_DELETE_BUTTONS 0x66c384
-#define TEXT_DELETE_ASK 0x66c390
-#define TEXT_DELETE_ASK_TITLE 0x66c3a0
-#define TEXT_HELP_CLOSE 0x66c3b0
-#define TEXT_HELP_LOAD_GAME 0x66c3d0
-#define TEXT_HELP_LOAD_SCENARIO 0x66c404
-#define TEXT_HELP_SAVE 0x66c438
-#define TEXT_HELP_DELETE 0x66c46c
-#define TEXT_HELP_TITLE 0x66c4a4
-#define TEXT_HELP_UNKNOWN 0x66c4f8
+/* texts */
+#define TEXT_SAVE_GAME "Save a Game"                                                 /* 0x66c090 */
+#define TEXT_SAVE_SCENARIO "Save a Scenario"                                         /* 0x66c09c */
+#define TEXT_SAVE "Save"                                                             /* 0x66c0ac */
+#define TEXT_CANCEL_SAVE "Cancel"                                                    /* 0x66c0b4 */
+#define TEXT_OVERWRITE_BUTTONS "&Yes\0~&No\0"                                        /* 0x66c0bc */
+#define TEXT_OVERWRITE "Overwrite existing save game?"                               /* 0x66c0c8 */
+#define TEXT_OVERWRITE_TITLE "Save A Game"                                           /* 0x66c0e8 */
+#define TEXT_YEAR "Year:  %lu"                                                       /* 0x66bff8 */
+#define TEXT_EASY "Difficulty:  EASY"                                                /* 0x66c004 */
+#define TEXT_MEDIUM "Difficulty:  MEDIUM"                                            /* 0x66c018 */
+#define TEXT_HARD "Difficulty:  HARD"                                                /* 0x66c02c */
+#define TEXT_LOAD_GAME "Load a Game"                                                 /* 0x66c214 */
+#define TEXT_LOAD_SCENARIO "Load a Scenario"                                         /* 0x66c220 */
+#define TEXT_LOAD "Load"                                                             /* 0x66c230 */
+#define TEXT_CANCEL_LOAD "Cancel"                                                    /* 0x66c238 */
+#define TEXT_DELETE_TITLE "Delete a Game"                                            /* 0x66c364 */
+#define TEXT_DELETE "Delete"                                                         /* 0x66c374 */
+#define TEXT_CANCEL_DELETE "Cancel"                                                  /* 0x66c37c */
+#define TEXT_DELETE_BUTTONS "&Yes\0~&No\0"                                           /* 0x66c384 */
+#define TEXT_DELETE_ASK "Delete game?"                                               /* 0x66c390 */
+#define TEXT_DELETE_ASK_TITLE "Delete A Game"                                        /* 0x66c3a0 */
+#define TEXT_HELP_CLOSE "This button CLOSES the window."                             /* 0x66c3b0 */
+#define TEXT_HELP_LOAD_GAME "This button LOADS the selected savegame from disk."     /* 0x66c3d0 */
+#define TEXT_HELP_LOAD_SCENARIO "This button LOADS the selected scenario from disk." /* 0x66c404 */
+#define TEXT_HELP_SAVE "This button SAVES the selected savegame to disk."            /* 0x66c438 */
+#define TEXT_HELP_DELETE "This button permanently DELETES the selected savegame."    /* 0x66c46c */
+#define TEXT_HELP_TITLE                                                                                                \
+    "This edit control allows you to type in a DESCRIPTION for the selected savegame." /* 0x66c4a4 */
+#define TEXT_HELP_UNKNOWN "I have no idea what this button does."                      /* 0x66c4f8 */
 
 #define KEY_ENTER 0x0d
 #define KEY_ESC 0x1b
@@ -262,7 +262,7 @@ static void draw_info(bool current)
     font_colors(500, FG, BG);
     char buf[256];
     /* "Year: %lu" */
-    const char *fmt = exe_str(TEXT_YEAR), *pct = strchr(fmt, '%');
+    const char *fmt = TEXT_YEAR, *pct = strchr(fmt, '%');
     if (pct && strncmp(pct, "%lu", 3) == 0 && !strchr(pct + 3, '%'))
         snprintf(buf, sizeof buf, "%.*s%u%s", (int)(pct - fmt), fmt, (unsigned)year, pct + 3);
     else
@@ -272,7 +272,7 @@ static void draw_info(bool current)
     gfx_font_draw_text(sd.win->surface, r.left, r.top, &k_year_rect, &r, buf, GFX_TEXT_NOJUSTIFY);
     wm_redraw(sd.win, &k_year_rect);
     if (sd.mode == 1) {
-        snprintf(buf, sizeof buf, "%s", exe_str(level == 1 ? TEXT_EASY : level == 2 ? TEXT_MEDIUM : TEXT_HARD));
+        snprintf(buf, sizeof buf, "%s", level == 1 ? TEXT_EASY : level == 2 ? TEXT_MEDIUM : TEXT_HARD);
         fill(&k_diff_rect, INFO_BG);
         r = k_diff_rect;
         gfx_font_draw_text(sd.win->surface, r.left, r.top, &k_diff_rect, &r, buf, GFX_TEXT_NOJUSTIFY);
@@ -356,7 +356,7 @@ static void help(WmWindow *c)
     int id = (int)wm_get_data(c, 0);
     int x = ((c->rect.right - c->rect.left) >> 1) + sd.win->rect.left + c->rect.left;
     int y = ((c->rect.bottom - c->rect.top) >> 1) + sd.win->rect.top + c->rect.top;
-    uint32_t t = TEXT_HELP_UNKNOWN;
+    const char *t = TEXT_HELP_UNKNOWN;
     switch (id) {
     case SLOTDLG_ID_TITLE:
         t = TEXT_HELP_TITLE;
@@ -376,14 +376,14 @@ static void help(WmWindow *c)
     default:
         break;
     }
-    help_balloon_show(x, y, 0x78, exe_str(t), true, true);
+    help_balloon_show(x, y, 0x78, t, true, true);
 }
 
 /* ======================================================================== */
 /* The common window                                                         */
 /* ======================================================================== */
 
-static WmWindow *button(int x, int y, uint32_t id, uint32_t bmp_id, uint32_t label)
+static WmWindow *button(int x, int y, uint32_t id, uint32_t bmp_id, const char *label)
 {
     GfxSurface *bmp = gfx_load_bmp_resource(bmp_id, NULL);
     if (!bmp)
@@ -395,7 +395,7 @@ static WmWindow *button(int x, int y, uint32_t id, uint32_t bmp_id, uint32_t lab
         return NULL;
     }
     if (label)
-        ctl_button_set_label(b, exe_str(label), 500, BUTTON_COLORS, true);
+        ctl_button_set_label(b, label, 500, BUTTON_COLORS, true);
     return b;
 }
 
@@ -417,7 +417,7 @@ static void cancel(WmWindow *w)
 }
 
 /* the window, its picture and the close button; NULL on failure */
-static bool open_window(WmProc proc, uint32_t title)
+static bool open_window(WmProc proc, const char *title)
 {
     GfxSurface *bg = gfx_load_bmp_resource(0x25d, NULL);
     if (!bg)
@@ -430,7 +430,7 @@ static bool open_window(WmProc proc, uint32_t title)
         gfx_surface_destroy(bg);
         return false;
     }
-    wm_set_title(sd.win, exe_str(title));
+    wm_set_title(sd.win, title);
     gfx_blit(sd.win->surface, 0, 0, bg->width, bg->height, bg, 0, 0);
     gfx_surface_destroy(bg);
     list_send(CTL_LIST_SCROLL, 0, 0);
@@ -506,9 +506,7 @@ static int save_selected(WmWindow *w, WmWindow *field)
         list_send(CTL_LIST_ROW_RECT, (intptr_t)&row, -1);
         int x = row.left, y = row.top;
         wm_point_to_screen(sd.list, &x, &y);
-        char buttons[32];
-        if (ctl_message_box(x, y, exe_str(TEXT_OVERWRITE_TITLE), exe_str(TEXT_OVERWRITE),
-                            exe_buttons(TEXT_OVERWRITE_BUTTONS, 2, buttons, sizeof buttons), 0) == 1) {
+        if (ctl_message_box(x, y, TEXT_OVERWRITE_TITLE, TEXT_OVERWRITE, TEXT_OVERWRITE_BUTTONS, 0) == 1) {
             slot = (int)list_send(CTL_LIST_GET_DATA, -1, 0);
             r = save_to(slot, sd.text ? ctl_text_get(sd.text) : title);
             wm_post(w, w, MSG_CLOSE, 0, 0);
@@ -726,7 +724,9 @@ static int open_load(int mode, bool choose)
     sd.mode = mode;
     sd.choose = false;
     /* (0x494112 has its own copies of the texts) */
-    if (!open_window(load_proc, choose ? (mode == 1 ? 0x66c338 : 0x66c344) : mode == 1 ? TEXT_LOAD_GAME : TEXT_LOAD_SCENARIO))
+    if (!open_window(load_proc, choose ? (mode == 1 ? "Load a Game" /* 0x66c338 */ : "Load a Scenario" /* 0x66c344 */)
+                                : mode == 1 ? TEXT_LOAD_GAME
+                                            : TEXT_LOAD_SCENARIO))
         return fail();
     int best = fill_list(mode);
     list_send(CTL_LIST_SELECT, mode == 1 ? best : 0, 0);
@@ -737,8 +737,8 @@ static int open_load(int mode, bool choose)
         return fail();
     GfxRect r = {0, close->width - 1, 0, close->height - 1};
     sd.win->close_button = ctl_button_create(sd.win, &r, SLOTDLG_ID_CANCEL, CTL_STYLE_BITMAP, close);
-    if (!button(0x10b, 0x8b, SLOTDLG_ID_LOAD, 0x227, choose ? 0x66c354 : TEXT_LOAD) ||
-        !button(0x10b, 0xa7, SLOTDLG_ID_CANCEL, 0x227, choose ? 0x66c35c : TEXT_CANCEL_LOAD))
+    if (!button(0x10b, 0x8b, SLOTDLG_ID_LOAD, 0x227, choose ? "Load" /* 0x66c354 */ : TEXT_LOAD) ||
+        !button(0x10b, 0xa7, SLOTDLG_ID_CANCEL, 0x227, choose ? "Cancel" /* 0x66c35c */ : TEXT_CANCEL_LOAD))
         return fail();
     views_draw_title(sd.win);
     wm_send(sd.win, sd.win, CTL_LIST_MSG_SELECTED, (intptr_t)sd.list, -1);
@@ -800,9 +800,7 @@ static void delete_selected(WmWindow *w)
     wm_point_to_screen(sd.list, &x, &y);
     if (list_send(CTL_LIST_COUNT, 0, 0) == 0)
         return;
-    char buttons[32];
-    if (ctl_message_box(x, y, exe_str(TEXT_DELETE_ASK_TITLE), exe_str(TEXT_DELETE_ASK),
-                        exe_buttons(TEXT_DELETE_BUTTONS, 2, buttons, sizeof buttons), 0) == 1) {
+    if (ctl_message_box(x, y, TEXT_DELETE_ASK_TITLE, TEXT_DELETE_ASK, TEXT_DELETE_BUTTONS, 0) == 1) {
         int slot = (int)list_send(CTL_LIST_GET_DATA, -1, 0);
         wm_activate(w);
         unsigned count = (unsigned)list_send(CTL_LIST_COUNT, 0, 0);

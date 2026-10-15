@@ -58,7 +58,7 @@ void bt_music_fade(int ms);
 void bt_select_plane(int plane);
 /* a one-button message box with the title, text and button read from
  * ALIFE.EXE at the given addresses */
-void bt_message(uint32_t title_va, uint32_t text_va, uint32_t button_va);
+void bt_message(const char *title, const char *text, const char *buttons);
 
 /* 0x445064: the sprite of heading d (1 east, 2 south, 3 west, 4 north in
  * map terms) for the view rotation: entry (d' * 2 - 2) */

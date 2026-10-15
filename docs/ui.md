@@ -21,7 +21,10 @@ Tests: `build/ui_region_test` (no game data),
   unless `WM_F_NOSURFACE`, its own 8-bit surface of that size. Game code
   draws into `w->surface` and then calls `wm_redraw(w, rect)` to put it on
   screen. The surface is not resized when the window is (moving or
-  resizing only changes the rectangle).
+  resizing only changes the rectangle). Port-only: `wm_resize_surface`
+  gives a window a new surface (the port window's relayout uses it for the
+  main window and its scrollbar tracks), `wm_fit_into` moves a window back
+  inside an area, `menu_bar_resize` re-lays out a menu bar at a new width.
 - Windows form a tree under a screen-sized **root** (`wm_root`, 0x672704)
   created by `wm_initialize`. The root has no surface and paints nothing:
   the game covers the screen with its main view.
@@ -124,7 +127,7 @@ per call.
 | 0x40 | mouse entered (a = 1) / left | |
 | 0x45 | shown (a) / hidden | minimize button redraw; hiding an icon closes the gap |
 | 0x47 | capture lost (a = new capture) | |
-| 0x200 | screen resized (a, b) | |
+| 0x200 | screen resized (a, b) | (no window procedure of ALIFE.EXE handles it) |
 | 0x208 | before create (a = rect, editable) | |
 | 0x400 | release resources | controls free their bitmap |
 | 0x401 | menu bar close button | |
@@ -493,7 +496,9 @@ wm_set_input_live(true);             /* or call it from the attract mode code */
 
 Shutdown order: `ctl_shutdown`, then `wm_shutdown`. The main window's
 WM_CLOSE becomes `wm_send(wm_root(), wm_root(), WM_MSG_CLOSE, 0, 0)` and
-WM_DISPLAYCHANGE `wm_screen_resized(w, h)`.
+WM_DISPLAYCHANGE `wm_screen_resized(w, h)`. The port calls it from the
+port window's relayout (`game/display.c`, see
+[rendering.md](rendering.md#port-window)).
 
 ## Verification
 

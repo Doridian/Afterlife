@@ -11,8 +11,6 @@
  *                      influence controls (amount slider, Wield button,
  *                      sin sliders / tenet buttons / scientist info, cost)
  *
- * Texts, word lists and colour tables are looked up in ALIFE.EXE's data
- * (exe_res_va, compiled in from src/data) by their original addresses.
  * Window-local state (0x66c7a8-0x66c914) is in `pv` below.
  */
 #include "ui/planetview.h"
@@ -29,11 +27,11 @@
 #include "game/util.h"
 #include "game/world.h"
 #include "gfx/draw.h"
-#include "gfx/exe_res.h"
 #include "gfx/font.h"
 #include "gfx/surface.h"
 #include "platform/platform.h"
 #include "ui/controls.h"
+#include "ui/views.h"
 
 PlanetviewHooks planetview_hooks;
 
@@ -107,7 +105,6 @@ static struct {
     bool dragging;                                        /* 0x66c90c */
     int grab_x, grab_y;                                   /* 0x506c38 / 0x4f4230 */
     uint32_t blink_time;                                  /* 0x66c914 */
-    uint8_t sin_colours[8][9];                            /* 0x64f1f7: [0][1..7] per sin, [s][0..8] virtue .. sin */
 
     WmWindow *disaster;     /* 0x66c7d0 */
     bool d_dragging;        /* 0x66c908 */
@@ -124,53 +121,17 @@ static struct {
 
 /* ---- Small helpers ------------------------------------------------------------ */
 
-/* A NUL-terminated string at `va` in ALIFE.EXE, or "". */
-static const char *xs(uint32_t va)
-{
-    uint32_t avail = 0;
-    const uint8_t *p = va ? exe_res_va(va, &avail) : NULL;
-    if (!p || !memchr(p, 0, avail))
-        return "";
-    return (const char *)p;
-}
+/* The sin layer's colours: [0][1..7] per sin, [s][0..8] virtue .. sin. */
+static const uint8_t k_sin_colours[8][9] = {
+    /* 0x64f1f7 */
+    {0x00, 0x0a, 0x0b, 0x0d, 0x1d, 0x0f, 0x0c, 0x0e, 0x10}, {0x22, 0x23, 0x24, 0x25, 0x27, 0x29, 0x2a, 0x2c, 0x2d},
+    {0x22, 0x23, 0x24, 0x25, 0x27, 0x29, 0x2a, 0x2c, 0x2d}, {0x22, 0x23, 0x24, 0x25, 0x27, 0x29, 0x2a, 0x2c, 0x2d},
+    {0x22, 0x23, 0x24, 0x25, 0x27, 0x29, 0x2a, 0x2c, 0x2d}, {0x22, 0x23, 0x24, 0x25, 0x27, 0x29, 0x2a, 0x2c, 0x2d},
+    {0x22, 0x23, 0x24, 0x25, 0x27, 0x29, 0x2a, 0x2c, 0x2d}, {0x22, 0x23, 0x24, 0x25, 0x27, 0x29, 0x2a, 0x2c, 0x2d},
+};
 
-/* The string pointed to by the pointer at `va`. */
-static const char *xsp(uint32_t va)
-{
-    uint32_t avail = 0;
-    const uint8_t *p = exe_res_va(va, &avail);
-    if (!p || avail < 4)
-        return "";
-    return xs((uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24);
-}
-
-/* A format string from the EXE, used only if its conversions are exactly
- * `spec` (one letter per conversion, "%%" ignored); otherwise `fallback`. */
-static const char *xfmt(uint32_t va, const char *spec, const char *fallback)
-{
-    const char *f = xs(va);
-    const char *s = spec;
-    for (const char *p = f; *p; p++) {
-        if (*p != '%')
-            continue;
-        if (p[1] == '%') {
-            p++;
-            continue;
-        }
-        if (*s == 0 || p[1] != *s)
-            return fallback;
-        s++, p++;
-    }
-    return *f && *s == 0 ? f : fallback;
-}
-
-/* Copies a button list from the EXE and adds the second NUL. */
-static const char *xbuttons(uint32_t va, char *buf, size_t size)
-{
-    snprintf(buf, size - 1, "%s", xs(va));
-    buf[strlen(buf) + 1] = 0;
-    return buf;
-}
+/* The tenets, by TENET_* (0x66c590). */
+static const char *const k_tenet_names[9] = {"AAAA", "HAHA", "HOHO", "OPRA", "OCRA", "ALF", "RALF", "SUMA", "SUSA"};
 
 static void font_colors(uint32_t id, unsigned c1, unsigned c2) /* font_set_colors(id, 1, 2, ...) */
 {
@@ -289,11 +250,11 @@ static void sector_colour(int x, int y, unsigned layer, uint32_t max_pop)
             unsigned row = pv.sin < 8 ? pv.sin : 0;
             int8_t v = row ? (int8_t)s->sin[row - 1] : 0;
             if (v == 0) {
-                c = pv.sin_colours[row][4];
+                c = k_sin_colours[row][4];
             } else {
                 int level = (int)mul_div_clamp((uint32_t)abs(v), 0x7f, 3);
                 int idx = (v < 0 ? 1 : -1) * (level + 1) + 4;
-                c = pv.sin_colours[row][idx];
+                c = k_sin_colours[row][idx];
             }
         } else if (layer == PV_LAYER_TENETS) {
             if (pv.tenet == 1) {
@@ -560,21 +521,21 @@ static void draw_info(WmWindow *w, int x, int y)
                 s->pixels[(size_t)(ty + j) * s->stride + x0 + i] = l ? land : sea;
         }
 
-    static const uint32_t k_terrain[3] = {0x66f974, 0x66f984, 0x66f994}; /* Land, Ocean, Arctic */
+    static const char *const k_terrain[3] = {"Land" /* 0x66f974 */, "Ocean" /* 0x66f984 */, "Arctic" /* 0x66f994 */};
     if (sec->terrain == PLANET_LAND && sec->height != 0)
-        snprintf(buf, sizeof buf, "%s", xs(0x66f99c)); /* "Mountainous Terrain" */
+        snprintf(buf, sizeof buf, "%s", "Mountainous Terrain" /* 0x66f99c */);
     else
-        snprintf(buf, sizeof buf, xfmt(0x66f9b0, "s", "%s"), sec->terrain < 3 ? xs(k_terrain[sec->terrain]) : "");
+        snprintf(buf, sizeof buf, "%s Terrain" /* 0x66f9b0 */, sec->terrain < 3 ? k_terrain[sec->terrain] : "");
     text(w, x0 + 0xf, ty, buf);
     ty += fh + 6;
-    snprintf(buf, sizeof buf, xfmt(0x66f9bc, "s", "%s"), fmt_thousands(num, sec->pop)); /* "%s Inhabitants" */
+    snprintf(buf, sizeof buf, "%s Inhabitants" /* 0x66f9bc */, fmt_thousands(num, sec->pop));
     text(w, x0, ty, buf);
     ty += fh + 6;
     if (sec->pop == 0)
-        snprintf(buf, sizeof buf, "%s", xs(0x66f9d0)); /* "None" */
+        snprintf(buf, sizeof buf, "%s", "None" /* 0x66f9d0 */);
     else
         snprintf(buf, sizeof buf, "%s", tech_name(sec->tech));
-    text(w, x0, ty, xs(0x66f9d8)); /* "TECH LEVEL:" */
+    text(w, x0, ty, "TECH LEVEL:" /* 0x66f9d8 */);
     text(w, 0x50, ty, buf);
     int ty2 = fh + ty;
     ty = ty2 + 6;
@@ -582,7 +543,7 @@ static void draw_info(WmWindow *w, int x, int y)
     if (sec->pop != 0) {
         /* sin levels: a bar up (virtue) or down (sin) from the base line */
         ty = ty2 + 0x14;
-        int bx = x0 + 5 + text(w, x0, ty - (fh >> 1), xs(0x66f9e4)); /* "Sin Levels" */
+        int bx = x0 + 5 + text(w, x0, ty - (fh >> 1), "Sin Levels" /* 0x66f9e4 */);
         for (int i = 0; i < 7; i++) {
             int8_t v = (int8_t)sec->sin[i];
             int level = (int)mul_div_clamp((uint32_t)abs(v), 0x7f, 0xf);
@@ -594,7 +555,7 @@ static void draw_info(WmWindow *w, int x, int y)
                 top = ty - level;
                 ftop = ty - 0xe;
             }
-            uint8_t col = pv.sin_colours[0][i + 1];
+            uint8_t col = k_sin_colours[0][i + 1];
             if (v == 0) {
                 gfx_line(s, bx, bx + 9, top, top, col);
             } else {
@@ -605,12 +566,13 @@ static void draw_info(WmWindow *w, int x, int y)
             bx += 0xe;
         }
         bx += 5;
-        text(w, bx, ty - 0xf, xs(0x66f9f0));      /* "Virtue" */
-        text(w, bx, ty + 0xf - fh, xs(0x66f9f8)); /* "Sin" */
+        text(w, bx, ty - 0xf, "Virtue" /* 0x66f9f0 */);
+        text(w, bx, ty + 0xf - fh, "Sin" /* 0x66f9f8 */);
 
         /* tenets: share in percent; the fates add up to 100, each pair too */
-        static const uint32_t k_names[9] = {0x66fa04, 0x66fa14, 0x66fa24, 0x66fa34, 0x66fa44,
-                                            0x66fa54, 0x66fa64, 0x66fa74, 0x66fa84};
+        static const char *const k_names[9] = {"AAAA:" /* 0x66fa04 */, "HAHA:" /* 0x66fa14 */, "HOHO:" /* 0x66fa24 */,
+                                               "OPRA:" /* 0x66fa34 */, "OCRA:" /* 0x66fa44 */, "ALF: " /* 0x66fa54 */,
+                                               "RALF:" /* 0x66fa64 */, "SUMA:" /* 0x66fa74 */, "SUSA:" /* 0x66fa84 */};
         const uint8_t *t = sec->tenet;
         uint8_t pct[9];
         pct[0] = (uint8_t)(t[0] * 100u / 0xff);
@@ -649,10 +611,10 @@ static void draw_info(WmWindow *w, int x, int y)
                 col = i == 1 ? 0x24 : i == 5 ? 10 : 0xb;
                 font_colors(FONT, col, col);
             }
-            text(w, nx, ny, xs(k_names[i]));
+            text(w, nx, ny, k_names[i]);
             if (t[i] != 0)
                 draw_bar(s, nx + 0x28, ny, t[i], 0xff, col);
-            snprintf(buf, sizeof buf, xfmt(0x66fa8c, "d", "%d%%"), pct[i]);
+            snprintf(buf, sizeof buf, "%d%%" /* 0x66fa8c */, pct[i]);
             text(w, nx + 0x50, ny, buf);
             ny += 0xb;
             if (i == 0)
@@ -665,7 +627,7 @@ static void draw_info(WmWindow *w, int x, int y)
 /* ---- Legend ----------------------------------------------------------------------------- */
 
 /* 0x4a6864: an optional title, then `n` colour swatches with labels. */
-static void draw_legend_list(WmWindow *w, uint8_t colour, const uint32_t *labels, GfxRect *title_r,
+static void draw_legend_list(WmWindow *w, uint8_t colour, const char *const *labels, GfxRect *title_r,
                              const uint8_t *colours, const GfxRect *list, unsigned n, const char *title)
 {
     GfxSurface *s = w->surface;
@@ -683,7 +645,7 @@ static void draw_legend_list(WmWindow *w, uint8_t colour, const uint32_t *labels
     for (unsigned i = 0; i < n; i++) {
         gfx_fill_rect(s, list->left, lr.top, 10, 10, colours[i]);
         if (labels)
-            gfx_font_draw_text(s, lr.left, lr.top, &lr, &lr, xs(labels[i]), GFX_TEXT_NOJUSTIFY);
+            gfx_font_draw_text(s, lr.left, lr.top, &lr, &lr, labels[i], GFX_TEXT_NOJUSTIFY);
         lr.top += 10;
         lr.bottom += 10;
     }
@@ -692,14 +654,19 @@ static void draw_legend_list(WmWindow *w, uint8_t colour, const uint32_t *labels
 /* 0x4a6254: the colour key of `layer`. */
 static void draw_legend(WmWindow *w, unsigned layer)
 {
-    static const uint32_t k_levels[8] = {0x66fa9c, 0x66faa8, 0x66fab0, 0x66fab8, /* Lowest .. Highest */
-                                         0x66fac4, 0x66fad0, 0x66fad8, 0x66fae4};
-    static const uint32_t k_morals[9] = {0x66faf4, 0x66fb00, 0x66fb10, 0x66fb20, 0x66fb2c, /* Angelic .. Demonic */
-                                         0x66fb38, 0x66fb44, 0x66fb50, 0x66fb5c};
-    static const uint32_t k_strength[8] = {0x66fb6c, 0x66fb78, 0x66fb88, 0x66fb98, /* Weak .. Strong */
-                                           0x66fba4, 0x66fbb0, 0x66fbb8, 0x66fbc4};
-    static const uint32_t k_tenets[9] = {0x66fbf4, 0x66fc04, 0x66fc14, 0x66fc24, 0x66fc34,
-                                         0x66fc40, 0x66fc4c, 0x66fc5c, 0x66fc6c};
+    static const char *const k_levels[8] = {
+        "Lowest" /* 0x66fa9c */,  "" /* 0x66faa8 */, "Low" /* 0x66fab0 */, "" /* 0x66fab8 */,
+        "Average" /* 0x66fac4 */, "" /* 0x66fad0 */, "" /* 0x66fad8 */,    "Highest" /* 0x66fae4 */};
+    static const char *const k_morals[9] = {
+        "Angelic" /* 0x66faf4 */, "" /* 0x66fb00 */,        "Virtuous" /* 0x66fb10 */,
+        "" /* 0x66fb20 */,        "Neutral" /* 0x66fb2c */, "" /* 0x66fb38 */,
+        "Immoral" /* 0x66fb44 */, "" /* 0x66fb50 */,        "Demonic" /* 0x66fb5c */};
+    static const char *const k_strength[8] = {
+        "Weak" /* 0x66fb6c */,    "" /* 0x66fb78 */, "Moderate" /* 0x66fb88 */, "" /* 0x66fb98 */,
+        "Average" /* 0x66fba4 */, "" /* 0x66fbb0 */, "" /* 0x66fbb8 */,         "Strong" /* 0x66fbc4 */};
+    static const char *const k_tenets[9] = {"AAAA" /* 0x66fbf4 */, "HAHA" /* 0x66fc04 */, "HOHO" /* 0x66fc14 */,
+                                            "OPRA" /* 0x66fc24 */, "OCRA" /* 0x66fc34 */, "ALF" /* 0x66fc40 */,
+                                            "RALF" /* 0x66fc4c */, "SUMA" /* 0x66fc5c */, "SUSA" /* 0x66fc6c */};
     static const uint8_t k_pop[8] = {0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f};
     static const uint8_t k_tech[8] = {0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57};
     GfxSurface *s = w->surface;
@@ -715,31 +682,31 @@ static void draw_legend(WmWindow *w, unsigned layer)
     GfxRect title_r = {0x19f, 0x1e9, 0x1b, 0x1b + fh - 1};
     GfxRect list = {0x1a3, 0x1e9, 0x1b + fh + 0x13, 0x88};
     const uint8_t *colours = NULL;
-    const uint32_t *labels = NULL;
+    const char *const *labels = NULL;
     unsigned n = 0;
     uint8_t colour = 0x1a;
     char title[60] = "";
     switch (layer) {
     case PV_LAYER_POPULATION:
         colours = k_pop, n = 8, labels = k_levels;
-        snprintf(title, sizeof title, "%s", xs(0x66fbcc)); /* "POPULATION" */
+        snprintf(title, sizeof title, "%s", "POPULATION" /* 0x66fbcc */);
         break;
     case PV_LAYER_TECH:
         colours = k_tech, n = 8, labels = k_levels;
-        snprintf(title, sizeof title, "%s", xs(0x66fbd8)); /* "TECHNOLOGY" */
+        snprintf(title, sizeof title, "%s", "TECHNOLOGY" /* 0x66fbd8 */);
         break;
     case PV_LAYER_SIN:
         if (pv.sin != 0 && pv.sin < 8) {
-            colours = pv.sin_colours[pv.sin], n = 9, labels = k_morals;
-            colour = pv.sin == 1 ? 0x58 : pv.sin_colours[0][pv.sin];
+            colours = k_sin_colours[pv.sin], n = 9, labels = k_morals;
+            colour = pv.sin == 1 ? 0x58 : k_sin_colours[0][pv.sin];
             gfx_font_select(FONT);
             font_colors(FONT, colour, colour);
             int lh = gfx_font_height(FONT);
-            gfx_font_draw_text(s, title_r.left, title_r.top, &title_r, &title_r, xsp(0x66c5fc + pv.sin * 4u),
+            gfx_font_draw_text(s, title_r.left, title_r.top, &title_r, &title_r, views_virtue_names[pv.sin - 1],
                                GFX_TEXT_CENTER); /* the virtue */
             title_r.top += lh;
             title_r.bottom += lh;
-            gfx_font_draw_text(s, title_r.left, title_r.top, &title_r, &title_r, xsp(0x66c654 + pv.sin * 4u),
+            gfx_font_draw_text(s, title_r.left, title_r.top, &title_r, &title_r, views_sin_names[pv.sin - 1],
                                GFX_TEXT_CENTER); /* the sin */
             list.top += lh;
             list.bottom += lh;
@@ -752,10 +719,9 @@ static void draw_legend(WmWindow *w, unsigned layer)
         if (pv.tenet != 0) {
             colours = k_tech, n = 8, labels = k_strength;
             if (is_pressed(pv.tenet_btn[1]))
-                snprintf(title, sizeof title, "%s", xs(0x66fc74)); /* "NAAAism" */
+                snprintf(title, sizeof title, "%s", "NAAAism" /* 0x66fc74 */);
             else
-                snprintf(title, sizeof title, xfmt(0x66fc7c, "s", "%s"),
-                         pv.tenet <= 9 ? xs(k_tenets[pv.tenet - 1]) : "");
+                snprintf(title, sizeof title, "%sism" /* 0x66fc7c */, pv.tenet <= 9 ? k_tenets[pv.tenet - 1] : "");
         }
         break;
     }
@@ -1064,18 +1030,18 @@ static void scientist_info(bool flush) /* 0x4a1d73 */
         GfxRect t = k_sci;
         t.bottom = t.top + fh - 1;
         char buf[100], num[FMT_NUM_LEN];
-        snprintf(buf, sizeof buf, xfmt(0x66eee8, "dd", "%d, %d"), sel_x(), sel_y()); /* "Sector:  %d, %d" */
+        snprintf(buf, sizeof buf, "Sector:  %d, %d" /* 0x66eee8 */, sel_x(), sel_y());
         gfx_font_draw_text(w->surface, t.left, t.top, &t, &t, buf, 0);
         t.top += fh + 1;
         t.bottom += fh + 1;
-        snprintf(buf, sizeof buf, xfmt(0x66eef8, "s", "%s"), fmt_thousands(num, s->pop)); /* "%s Inhabitants" */
+        snprintf(buf, sizeof buf, "%s Inhabitants" /* 0x66eef8 */, fmt_thousands(num, s->pop));
         gfx_font_draw_text(w->surface, t.left, t.top, &t, &t, buf, 0);
         t.top += fh + 1;
         t.bottom += fh + 1;
         if (s->pop == 0)
-            snprintf(buf, sizeof buf, "%s", xs(0x66ef18)); /* "Tech Level:  None" */
+            snprintf(buf, sizeof buf, "%s", "Tech Level:  None" /* 0x66ef18 */);
         else
-            snprintf(buf, sizeof buf, xfmt(0x66ef08, "s", "%s"), tech_name(s->tech));
+            snprintf(buf, sizeof buf, "Tech Level:  %s" /* 0x66ef08 */, tech_name(s->tech));
         gfx_font_draw_text(w->surface, t.left, t.top, &t, &t, buf, 0);
         if (old != FONT && old != 0)
             gfx_font_select(old);
@@ -1131,7 +1097,7 @@ static void draw_cost(WmWindow *w)
     char buf[40], num[FMT_NUM_LEN];
     pv.cost = influence_cost();
     gfx_fill_rect(w->surface, r.left, r.top, r.right - r.left + 1, r.bottom - r.top + 1, 0x1a);
-    snprintf(buf, sizeof buf, xfmt(0x66eedc, "s", "%s"), fmt_thousands(num, pv.cost)); /* "COST:  %s" */
+    snprintf(buf, sizeof buf, "COST:  %s" /* 0x66eedc */, fmt_thousands(num, pv.cost));
     gfx_font_select(FONT);
     font_colors(FONT, 0x13, 0x13);
     gfx_font_draw_text(w->surface, r.left, r.top + 1, &r, &r, buf, 0);
@@ -1376,30 +1342,75 @@ static void soul_name(uint32_t seed, char *out)
         soulview_soul_name(seed, out);
 }
 
-static void msgbox(uint32_t title, const char *msg, uint32_t buttons, uint32_t timeout)
+static void msgbox(const char *title, const char *msg, const char *buttons, uint32_t timeout)
 {
-    char b[64];
-    ctl_message_box(-1, -1, xs(title), msg, xbuttons(buttons, b, sizeof b), timeout);
+    ctl_message_box(-1, -1, title, msg, buttons, timeout);
 }
 
 /* 0x49f804: Wield Influence on sector (x, y): queue the influence (it
  * spreads over the next years, game/planet.c), pay and announce it. */
 static void wield(WmWindow *w, int x, int y)
 {
-    static const uint32_t k_artist[27] = {
-        0x66e244, 0x66e258, 0x66e26c, 0x66e27c, 0x66e290, 0x66e2a8, 0x66e2c0, 0x66e2d8, 0x66e2f0,
-        0x66e308, 0x66e320, 0x66e334, 0x66e348, 0x66e360, 0x66e380, 0x66e3a4, 0x66e3c0, 0x66e3e0,
-        0x66e3fc, 0x66e40c, 0x66e420, 0x66e438, 0x66e450, 0x66e46c, 0x66e48c, 0x66e4b0, 0x66e4cc,
+    static const char *const k_artist[27] = {
+        "painter" /* 0x66e244 */,         "philosopher" /* 0x66e258 */,      "poet" /* 0x66e26c */,
+        "author" /* 0x66e27c */,          "sculptor" /* 0x66e290 */,         "composer" /* 0x66e2a8 */,
+        "virtuoso" /* 0x66e2c0 */,        "musician" /* 0x66e2d8 */,         "novelist" /* 0x66e2f0 */,
+        "dramatist" /* 0x66e308 */,       "essayist" /* 0x66e320 */,         "actor" /* 0x66e334 */,
+        "playwright" /* 0x66e348 */,      "cartoonist" /* 0x66e360 */,       "graffiti painter" /* 0x66e380 */,
+        "opera singer" /* 0x66e3a4 */,    "ballerina" /* 0x66e3c0 */,        "performing artist" /* 0x66e3e0 */,
+        "surfer" /* 0x66e3fc */,          "etcher" /* 0x66e40c */,           "engraver" /* 0x66e420 */,
+        "designer" /* 0x66e438 */,        "architect" /* 0x66e450 */,        "photographer" /* 0x66e46c */,
+        "computer artist" /* 0x66e48c */, "ballet performer" /* 0x66e4b0 */, "dancer" /* 0x66e4cc */,
     };
-    static const uint32_t k_famous[2] = {0x66e5b0, 0x66e5c4};
-    static const uint32_t k_science[39] = {
-        0x66e710, 0x66e728, 0x66e740, 0x66e758, 0x66e76c, 0x66e780, 0x66e798, 0x66e7b4, 0x66e7d0, 0x66e7ec,
-        0x66e80c, 0x66e830, 0x66e854, 0x66e870, 0x66e88c, 0x66e8b0, 0x66e8d4, 0x66e8f4, 0x66e914, 0x66e930,
-        0x66e950, 0x66e970, 0x66e98c, 0x66e9ac, 0x66e9cc, 0x66e9ec, 0x66ea0c, 0x66ea28, 0x66ea44, 0x66ea64,
-        0x66ea84, 0x66eaa4, 0x66eac4, 0x66eae0, 0x66eafc, 0x66eb18, 0x66eb30, 0x66eb50, 0x66eb7c,
+    static const char *const k_famous[2] = {"politician" /* 0x66e5b0 */, "actor" /* 0x66e5c4 */};
+    static const char *const k_science[39] = {
+        "anatomist" /* 0x66e710 */,
+        "astronomer" /* 0x66e728 */,
+        "botanist" /* 0x66e740 */,
+        "biologist" /* 0x66e758 */,
+        "chemist" /* 0x66e76c */,
+        "biochemist" /* 0x66e780 */,
+        "geologist" /* 0x66e798 */,
+        "mathematician" /* 0x66e7b4 */,
+        "physicist" /* 0x66e7d0 */,
+        "psychiatrist" /* 0x66e7ec */,
+        "psychologist" /* 0x66e80c */,
+        "computer programmer" /* 0x66e830 */,
+        "astrophysicist" /* 0x66e854 */,
+        "ecologist" /* 0x66e870 */,
+        "biophysicist" /* 0x66e88c */,
+        "marine biologist" /* 0x66e8b0 */,
+        "bacteriologist" /* 0x66e8d4 */,
+        "marine botanist" /* 0x66e8f4 */,
+        "oceanographer" /* 0x66e914 */,
+        "pharmacist" /* 0x66e930 */,
+        "chemical engineer" /* 0x66e950 */,
+        "agronomist" /* 0x66e970 */,
+        "chiropractor" /* 0x66e98c */,
+        "entomologist" /* 0x66e9ac */,
+        "ornithologist" /* 0x66e9cc */,
+        "endocrinologist" /* 0x66e9ec */,
+        "geophysicist" /* 0x66ea0c */,
+        "neurologist" /* 0x66ea28 */,
+        "neurophysicist" /* 0x66ea44 */,
+        "paleontologist" /* 0x66ea64 */,
+        "mineralogist" /* 0x66ea84 */,
+        "metallurgist" /* 0x66eaa4 */,
+        "anthropologist" /* 0x66eac4 */,
+        "ethnologist" /* 0x66eae0 */,
+        "archaeologist" /* 0x66eafc */,
+        "sociologist" /* 0x66eb18 */,
+        "linguist" /* 0x66eb30 */,
+        "electrical engineer" /* 0x66eb50 */,
+        "sanitational engineer" /* 0x66eb7c */,
     };
-    static const uint32_t k_power[8] = {0x66eba0, 0x66ebb8, 0x66ebd0, 0x66ebe8, 0x66ebfc, 0x66ec14, 0x66ec30, 0x66ec44};
-    static const uint32_t k_wit[6] = {0x66ec58, 0x66ec6c, 0x66ec80, 0x66eca8, 0x66eccc, 0x66ecdc};
+    static const char *const k_power[8] = {"spurious" /* 0x66eba0 */,    "whimsical" /* 0x66ebb8 */,
+                                           "impressive" /* 0x66ebd0 */,  "diminutive" /* 0x66ebe8 */,
+                                           "mighty" /* 0x66ebfc */,      "unpredictable" /* 0x66ec14 */,
+                                           "super woofy" /* 0x66ec30 */, "groovy" /* 0x66ec44 */};
+    static const char *const k_wit[6] = {"brilliant" /* 0x66ec58 */, "dull" /* 0x66ec6c */,
+                                         "ingenious" /* 0x66ec80 */, "smart (he makes things go)" /* 0x66eca8 */,
+                                         "insane" /* 0x66eccc */,    "wise" /* 0x66ecdc */};
     static char msg[600]; /* 0x6386a0 */
     char name[60];
     PlanetState *ps = &g_state.planet;
@@ -1409,17 +1420,21 @@ static void wield(WmWindow *w, int x, int y)
     if (s->pop == 0 || pv.cost == 0)
         return;
     if (pv.influence != PV_INFLUENCE_SCIENTIST && bignum_less(g_state.pennies, (int32_t)pv.cost)) {
-        msgbox(0x66e220, xs(0x66e200), 0x66e1f8, 120000); /* not enough Pennies */
+        msgbox("Planet:  Wield Influence" /* 0x66e220 */, "You don't have enough Pennies!" /* 0x66e200 */,
+               "&OK\0" /* 0x66e1f8 */, 120000); /* not enough Pennies */
         return;
     }
     if (pv.influence == PV_INFLUENCE_ARTIST) {
         if (ps->n_a > 0x3f) {
-            msgbox(0x66e514, xs(0x66e4dc), 0x66e4d4, 120000); /* too weary */
+            msgbox("I'm Pooped!" /* 0x66e514 */, "You are too weary from using your awesome ablilities" /* 0x66e4dc */,
+                   "Take 5\0" /* 0x66e4d4 */, 120000); /* too weary */
             return;
         }
         for (unsigned i = 0; i < ps->n_a; i++)
             if (ps->rec_a[i].x == (uint32_t)x && ps->rec_a[i].y == (uint32_t)y) {
-                msgbox(0x66e570, xs(0x66e52c), 0x66e520, 0); /* still active */
+                msgbox("Wait a minute..." /* 0x66e570 */,
+                       "Your influence is still active in this region, your Ineffableness." /* 0x66e52c */,
+                       "&Oh, yeah\0" /* 0x66e520 */, 0); /* still active */
                 return;
             }
         PlanetRecA *r = &ps->rec_a[ps->n_a];
@@ -1432,17 +1447,20 @@ static void wield(WmWindow *w, int x, int y)
         ps->n_a++;
         int who = rand_range(0, 0x1a);
         soul_name((uint32_t)rand_range(1, 0x7fffffff), name);
-        snprintf(msg, sizeof msg, xfmt(0x66e584, "ss", "%s %s"), xs(k_artist[who]), name);
+        snprintf(msg, sizeof msg, "You inspire the gifted %s %s." /* 0x66e584 */, k_artist[who], name);
     } else if (pv.influence == PV_INFLUENCE_FAMOUS) {
         WmWindow **t = pv.tenet_btn;
         char what[32] = "";
         if (ps->n_b > 0x3f) {
-            msgbox(0x66e60c, xs(0x66e5d4), 0x66e5cc, 120000);
+            msgbox("I'm Pooped!" /* 0x66e60c */, "You are too weary from using your awesome ablilities." /* 0x66e5d4 */,
+                   "Take 5\0" /* 0x66e5cc */, 120000);
             return;
         }
         for (unsigned i = 0; i < ps->n_b; i++)
             if (ps->rec_b[i].x == (uint32_t)x && ps->rec_b[i].y == (uint32_t)y) {
-                msgbox(0x66e668, xs(0x66e624), 0x66e618, 0);
+                msgbox("Wait a minute..." /* 0x66e668 */,
+                       "Your influence is still active in this region, your Ineffableness." /* 0x66e624 */,
+                       "&Oh, yeah\0" /* 0x66e618 */, 0);
                 return;
             }
         /* original: tenets whose buttons are up keep the record's old values */
@@ -1450,10 +1468,10 @@ static void wield(WmWindow *w, int x, int y)
         int16_t a = (int16_t)pv.amount;
         if (is_pressed(t[0])) {
             r->v[TENET_AAAA] = (uint16_t)a;
-            snprintf(what, sizeof what, "%s", xs(0x66e67c)); /* AAAA */
+            snprintf(what, sizeof what, "%s", "AAAA" /* 0x66e67c */);
         } else if (is_pressed(t[1])) {
             r->v[TENET_AAAA] = (uint16_t)-a;
-            snprintf(what, sizeof what, "%s", xs(0x66e684)); /* NAAA */
+            snprintf(what, sizeof what, "%s", "NAAA" /* 0x66e684 */);
         }
         r->v[TENET_HAHA] = is_pressed(t[3]) ? (uint16_t)a : 0;
         r->v[TENET_HOHO] = is_pressed(t[5]) ? (uint16_t)a : 0;
@@ -1461,51 +1479,59 @@ static void wield(WmWindow *w, int x, int y)
         r->v[TENET_OCRA] = is_pressed(t[2]) ? (uint16_t)a : 0;
         for (unsigned f = 1; f < 5; f++)
             if (r->v[f] != 0) {
-                strncat(what, xsp(0x66c590 + f * 4), sizeof what - strlen(what) - 1);
+                strncat(what, k_tenet_names[f], sizeof what - strlen(what) - 1);
                 break;
             }
         if (is_pressed(t[7])) { /* RALF */
             r->v[TENET_RALF] = (uint16_t)a;
             r->v[TENET_ALF] = (uint16_t)-a;
-            strncat(what, xs(0x66e68c), sizeof what - strlen(what) - 1);
+            strncat(what, "RALF" /* 0x66e68c */, sizeof what - strlen(what) - 1);
         } else if (is_pressed(t[9])) { /* ALF */
             r->v[TENET_ALF] = (uint16_t)a;
             r->v[TENET_RALF] = (uint16_t)-a;
-            strncat(what, xs(0x66e694), sizeof what - strlen(what) - 1);
+            strncat(what, "ALF" /* 0x66e694 */, sizeof what - strlen(what) - 1);
         }
         if (is_pressed(t[6])) { /* SUSA */
             r->v[TENET_SUSA] = (uint16_t)a;
             r->v[TENET_SUMA] = (uint16_t)-a;
-            strncat(what, xs(0x66e698), sizeof what - strlen(what) - 1);
+            strncat(what, "SUSA" /* 0x66e698 */, sizeof what - strlen(what) - 1);
         } else if (is_pressed(t[8])) { /* SUMA */
             r->v[TENET_SUMA] = (uint16_t)a;
             r->v[TENET_SUSA] = (uint16_t)-a;
-            strncat(what, xs(0x66e6a0), sizeof what - strlen(what) - 1);
+            strncat(what, "SUMA" /* 0x66e6a0 */, sizeof what - strlen(what) - 1);
         }
-        strncat(what, xs(0x66e6a8), sizeof what - strlen(what) - 1); /* "ism" */
+        strncat(what, "ism" /* 0x66e6a8 */, sizeof what - strlen(what) - 1);
         r->x = (uint32_t)x;
         r->y = (uint32_t)y;
         ps->n_b++;
         int who = rand_range(0, 1);
         soul_name((uint32_t)rand_range(1, 0x7fffffff), name);
-        snprintf(msg, sizeof msg, xfmt(0x66e6ac, "sss", "%s %s: %s"), xs(k_famous[who]), name, what);
+        snprintf(msg, sizeof msg,
+                 "You inspire the %s %s to acclaim the wonders of %s.  The effects spread far and wide." /* 0x66e6ac */,
+                 k_famous[who], name, what);
     } else if (pv.influence == PV_INFLUENCE_SCIENTIST) {
         if (s->tech > 0xd) {
-            msgbox(0x66ed38, xs(0x66ecf0), 0x66ece4, 120000); /* already at the pinnacle */
+            msgbox("Nowhere to run..." /* 0x66ed38 */,
+                   "Sire, this region is already at the pinnacle of scientific discovery!" /* 0x66ecf0 */,
+                   "&Groovy!\0" /* 0x66ece4 */, 120000); /* already at the pinnacle */
             return;
         }
         if (ps->n_c > 0x3f) {
-            msgbox(0x66ed8c, xs(0x66ed54), 0x66ed4c, 120000);
+            msgbox("No Mas!" /* 0x66ed8c */, "You are too weary from using your awesome ablilities." /* 0x66ed54 */,
+                   "Take 5\0" /* 0x66ed4c */, 120000);
             return;
         }
         if (bignum_less(g_state.pennies, (int32_t)pv.cost)) {
-            msgbox(0x66edbc, xs(0x66ed9c), 0x66ed94, 120000);
+            msgbox("Planet:  Wield Influence" /* 0x66edbc */, "You don't have enough Pennies!" /* 0x66ed9c */,
+                   "&OK\0" /* 0x66ed94 */, 120000);
             return;
         }
         uint8_t v = (uint8_t)mul_div_clamp(pv.amount, 0x51, 0xa0);
         for (unsigned i = 0; i < ps->n_c; i++)
             if (ps->rec_c[i].x == (uint32_t)x && ps->rec_c[i].y == (uint32_t)y) {
-                msgbox(0x66ee24, xs(0x66ede4), 0x66edd8, 0);
+                msgbox("Wait a minute..." /* 0x66ee24 */,
+                       "Your influence is still active in this region, your Ineptness." /* 0x66ede4 */,
+                       "&Oh, yeah\0" /* 0x66edd8 */, 0);
                 return;
             }
         PlanetRecC *r = &ps->rec_c[ps->n_c];
@@ -1521,15 +1547,18 @@ static void wield(WmWindow *w, int x, int y)
         if (next > 0xd)
             next = 0xe;
         soul_name((uint32_t)rand_range(1, 0x7fffffff), name);
-        snprintf(msg, sizeof msg, xfmt(0x66ee38, "sssss", "%s %s %s %s: %s"), xs(k_power[power]), xs(k_wit[wit]),
-                 xs(k_science[who]), name, tech_name(next));
+        snprintf(msg, sizeof msg,
+                 "Using your %s powers of persuasion, you manage to inspire the %s %s %s to invent %s.\n\nNews of the "
+                 "discovery spreads quickly." /* 0x66ee38 */,
+                 k_power[power], k_wit[wit], k_science[who], name, tech_name(next));
     }
     bignum_sub(&g_state.pennies, pv.cost);
     if (planetview_hooks.status_redraw)
         planetview_hooks.status_redraw();
     if (pv.cost != 0) {
         snd_play(0x10056, 2);
-        msgbox(0x66eec0, msg, 0x66eeb8, 120000); /* "Demiurge Influences Planet" */
+        msgbox("Demiurge Influences Planet" /* 0x66eec0 */, msg, "Funky!\0" /* 0x66eeb8 */,
+               120000); /* "Demiurge Influences Planet" */
     }
 }
 
@@ -1540,25 +1569,26 @@ static void help_for(WmWindow *c)
 {
     static const struct {
         uint16_t id;
-        uint32_t va;
+        const char *text;
     } k[] = {
-        {1000, 0x66ef84},  {0x3e9, 0x66f000}, {0x3ea, 0x66f094}, {0x3ed, 0x66ef64}, {0x3ee, 0x66f120},
-        {0x3fc, 0x66f1b0}, {0x3fd, 0x66f1d4}, {0x3fe, 0x66f1fc}, {0x3ff, 0x66f224}, {0x400, 0x66f24c},
-        {0x409, 0x66f27c}, {0x40a, 0x66f2b8}, {0x410, 0x66f2ec}, {0x411, 0x66f348}, {0x412, 0x66f3a4},
-        {0x413, 0x66f404}, {0x414, 0x66f460}, {0x415, 0x66f4b8}, {0x416, 0x66f510}, {0x424, 0x66f56c},
-        {0x425, 0x66f5bc}, {0x426, 0x66f60c}, {0x427, 0x66f668}, {0x428, 0x66f6d0}, {0x429, 0x66f72c},
-        {0x42a, 0x66f78c}, {0x42b, 0x66f854}, {0x42c, 0x66f7f0}, {0x42d, 0x66f8a8},
+        {1000, "This button toggles the Planetview to display POPULATION data.  You use it to get an overview of the POPULATION density." /* 0x66ef84 */},  {0x3e9, "This button toggles the Planetview to display TECHNOLOGY data.  You use it to get an overview of the TECHNOLOGY LEVEL and to influence a SCIENTIST." /* 0x66f000 */}, {0x3ea, "This button toggles the Planetview to display SIN data.  You use it to get an overview of the VIRTUE/SIN LEVELS and to influence an ARTIST." /* 0x66f094 */}, {0x3ed, "This button CLOSES the window." /* 0x66ef64 */}, {0x3ee, "This button toggles the Planetview to display TENET data.  You use it to get an overview of the TENET levels and to influence a FAMOUS PERSON." /* 0x66f120 */},
+        {0x3fc, "This button ROTATES the planet UP." /* 0x66f1b0 */}, {0x3fd, "This button ROTATES the planet DOWN." /* 0x66f1d4 */}, {0x3fe, "This button ROTATES the planet LEFT." /* 0x66f1fc */}, {0x3ff, "This button ROTATES the planet RIGHT." /* 0x66f224 */}, {0x400, "This button STOPS the rotation of the planet." /* 0x66f24c */},
+        {0x409, "This control sets the AMOUNT of divine influence wielded." /* 0x66f27c */}, {0x40a, "This button WIELDS influence on the current sector." /* 0x66f2b8 */}, {0x410, "This control determines whether you wield influence towards CONTENTMENT, ENVY, or neither." /* 0x66f2ec */}, {0x411, "This control determines whether you wield influence towards CHARITY, AVARICE, or neither." /* 0x66f348 */}, {0x412, "This control determines whether you wield influence towards TEMPERANCE, GLUTTONY, or neither." /* 0x66f3a4 */},
+        {0x413, "This control determines whether you wield influence towards DILIGENCE, SLOTH, or neither." /* 0x66f404 */}, {0x414, "This control determines whether you wield influence towards CHASTITY, LUST, or neither." /* 0x66f460 */}, {0x415, "This control determines whether you wield influence towards PEACE, WRATH, or neither." /* 0x66f4b8 */}, {0x416, "This control determines whether you wield influence towards HUMILITY, PRIDE, or neither." /* 0x66f510 */}, {0x424, "This button increases the belief in AAAAism.  AAAAists believe in an AFTERLIFE." /* 0x66f56c */},
+        {0x425, "This button increases the belief in NAAAism.  NAAAists believe in NO AFTERLIFE." /* 0x66f5bc */}, {0x426, "This button increases the belief in OCRAism.  OCRAists believe all souls go ONLY TO HEAVEN" /* 0x66f60c */}, {0x427, "This button increases the belief in HAHAism.  HAHAists believe all souls go to both HEAVEN AND HELL ." /* 0x66f668 */}, {0x428, "This button increases the belief in OPRAism.  OPRAists believe all souls go ONLY TO HELL." /* 0x66f6d0 */}, {0x429, "This button increases the belief in HOHOism.  HOHOists believe all souls go to HEAVEN OR HELL." /* 0x66f72c */},
+        {0x42a, "This button increases the belief in SUSAism.  SUSAists believe in a SINGLE afterlife experience." /* 0x66f78c */}, {0x42b, "This button increases the belief in RALFism.  RALFists believe in REINCARNATION." /* 0x66f854 */}, {0x42c, "This button increases the belief in SUMAism.  SUMAists believe in MULTIPLE afterlife experiences." /* 0x66f7f0 */}, {0x42d, "This button increases the belief in ALFism.  ALFists believe in NO REINCARNATION." /* 0x66f8a8 */},
     };
     intptr_t id = wm_get_data(c, 0);
     int x, y;
     control_centre(c, &x, &y);
-    uint32_t va = 0x66f944; /* "I have no idea what this button does." */
+    const char *text = "I have no idea what this button does." /* 0x66f944 */;
     if (id == 1)
-        va = wm_is_minimized(c->parent) ? 0x66f8fc : 0x66f920;
+        text = wm_is_minimized(c->parent) ? "This button MAXIMIZES the window" /* 0x66f8fc */
+                                          : "This button MINIMIZES the window" /* 0x66f920 */;
     for (size_t i = 0; i < sizeof k / sizeof k[0]; i++)
         if (k[i].id == id)
-            va = k[i].va;
-    help(x, y, xs(va));
+            text = k[i].text;
+    help(x, y, text);
 }
 
 /* 0x49e663: the disaster window's. (The original offsets the position by
@@ -1569,11 +1599,13 @@ static void disaster_help(WmWindow *c)
     int x, y;
     control_centre(c, &x, &y);
     if (id == 1)
-        help(x, y, xs(wm_is_minimized(c->parent) ? 0x66e188 : 0x66e1ac));
+        help(x, y,
+             wm_is_minimized(c->parent) ? "This button MAXIMIZES the window" /* 0x66e188 */
+                                        : "This button MINIMIZES the window" /* 0x66e1ac */);
     else if (id == 1000)
-        help(x, y, xs(0x66e168));
+        help(x, y, "This button CLOSES the window." /* 0x66e168 */);
     else
-        help(x, y, xs(0x66e1d0));
+        help(x, y, "I have no idea what this button does." /* 0x66e1d0 */);
 }
 
 /* ---- The window -------------------------------------------------------------------------- */
@@ -1897,14 +1929,6 @@ static intptr_t planetview_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t 
     return wm_default_proc(w, msg, a, b);
 }
 
-static void load_colour_tables(void)
-{
-    uint32_t avail = 0;
-    const uint8_t *p = exe_res_va(0x64f1f7, &avail);
-    if (p && avail >= sizeof pv.sin_colours)
-        memcpy(pv.sin_colours, p, sizeof pv.sin_colours);
-}
-
 /* 0x4a2efd */
 WmWindow *planetview_create(WmWindow *parent)
 {
@@ -1933,7 +1957,6 @@ WmWindow *planetview_create(WmWindow *parent)
     pv.visible = false;
     if (!sector_surface())
         return NULL;
-    load_colour_tables();
     GfxSurface *bmp = gfx_load_bmp_resource(0x25e, NULL);
     if (!bmp)
         return NULL;
@@ -1948,19 +1971,20 @@ WmWindow *planetview_create(WmWindow *parent)
     pv.win = w;
     gfx_blit(w->surface, 0, 0, bmp->width, bmp->height, bmp, 0, 0);
     gfx_surface_destroy(bmp);
-    wm_set_title(w, xs(0x66ef2c));            /* "Planetview" */
+    wm_set_title(w, "Planetview" /* 0x66ef2c */);
     wm_draw_title(w, NULL, FONT, 0x1a, 0x66); /* wnd_draw_title_std 0x4081e6 */
     influence_init(w);
     w->close_button = button(w, 0, 0, PV_ID_CLOSE, CTL_STYLE_BITMAP, 0x259);
 
     /* the layer buttons, centred over the legend column */
     static const struct {
-        uint32_t id, style, label;
+        uint32_t id, style;
+        const char *label;
     } k_layers[4] = {
-        {PV_ID_POPULATION, CTL_STYLE_BITMAP | CTL_STYLE_TOGGLE, 0x66ef38},
-        {PV_ID_TECH, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, 0x66ef44},
-        {PV_ID_SIN, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, 0x66ef50},
-        {PV_ID_TENETS, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, 0x66ef5c},
+        {PV_ID_POPULATION, CTL_STYLE_BITMAP | CTL_STYLE_TOGGLE, "Population" /* 0x66ef38 */},
+        {PV_ID_TECH, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, "Technology" /* 0x66ef44 */},
+        {PV_ID_SIN, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, "Sin/Virtue" /* 0x66ef50 */},
+        {PV_ID_TENETS, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, "Tenets" /* 0x66ef5c */},
     };
     WmWindow **layer_btn[4] = {&pv.btn_pop, &pv.btn_tech, &pv.btn_sin, &pv.btn_tenets};
     int y = 0xaf, bottom = y;
@@ -1974,7 +1998,7 @@ WmWindow *planetview_create(WmWindow *parent)
         y += lb->height + 2;
         *layer_btn[i] = ctl_button_create(w, &br, k_layers[i].id, k_layers[i].style, lb);
         if (*layer_btn[i])
-            ctl_button_set_label(*layer_btn[i], xs(k_layers[i].label), FONT, 0x13, true);
+            ctl_button_set_label(*layer_btn[i], k_layers[i].label, FONT, 0x13, true);
         else
             gfx_surface_destroy(lb);
     }
@@ -2206,8 +2230,17 @@ static intptr_t disaster_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t b)
 /* 0x49de17 */
 void planetview_disaster(unsigned kind, uint32_t killed, uint32_t injured)
 {
-    static const uint32_t k_headline[PLANET_DISASTERS] = {
-        0x66df3c, 0x66df60, 0x66df84, 0x66dfa8, 0x66dfd4, 0x66e00c, 0x66e03c, 0x66e060, 0x66e094, 0x66e0cc,
+    static const char *const k_headline[PLANET_DISASTERS] = {
+        "FLOOD STRIKES!" /* 0x66df3c */,
+        "ASTEROID IMPACTS!" /* 0x66df60 */,
+        "PLAGUE STRIKES!" /* 0x66df84 */,
+        "TRIBAL CONFLICT!" /* 0x66dfa8 */,
+        "EMPIRE SEEKS EXPANSION!" /* 0x66dfd4 */,
+        "PONTIFF CALLS FOR A CRUSADE!" /* 0x66e00c */,
+        "WAR BREAKS OUT!" /* 0x66e03c */,
+        "NUCLEAR HOLOCAUST!" /* 0x66e060 */,
+        "SENATE APPROVES WAR RESOLUTION!" /* 0x66e094 */,
+        "GRAVITY GOES BONKERS!" /* 0x66e0cc */,
     };
     if (!pv.disaster) {
         GfxSurface *bmp = gfx_load_bmp_resource(0x14c, NULL);
@@ -2224,7 +2257,7 @@ void planetview_disaster(unsigned kind, uint32_t killed, uint32_t injured)
         gfx_surface_destroy(bmp);
         wm_center(w);
         w->close_button = button(w, 0, 0, 1000, CTL_STYLE_BITMAP, 0x259);
-        wm_set_title(w, xs(0x66e0e4)); /* "Disaster Strikes the Planet!" */
+        wm_set_title(w, "Disaster Strikes the Planet!" /* 0x66e0e4 */);
         wm_draw_title(w, NULL, FONT, 0x1a, 0x66);
         memset(&pv.flc, 0, sizeof pv.flc);
         return;
@@ -2242,12 +2275,13 @@ void planetview_disaster(unsigned kind, uint32_t killed, uint32_t injured)
     GfxRect r = {0x10, 0x149, 0xe4, 0xe4 + gfx_font_height(FONT_BIG) - 1};
     gfx_font_select(FONT_BIG);
     if (kind == 100) {
-        gfx_font_draw_text(s, r.left, r.top, &r, &r, xs(0x66e104), GFX_TEXT_CENTER); /* mother of all floods */
-        snprintf(buf, sizeof buf, "%s", xs(0x66e138)); /* "All but a handful of EMBOs Killed" */
+        gfx_font_draw_text(s, r.left, r.top, &r, &r, "It's the mother of all floods!" /* 0x66e104 */,
+                           GFX_TEXT_CENTER); /* mother of all floods */
+        snprintf(buf, sizeof buf, "%s", "All but a handful of EMBOs Killed" /* 0x66e138 */);
     } else {
-        gfx_font_draw_text(s, r.left, r.top, &r, &r, kind < PLANET_DISASTERS ? xs(k_headline[kind]) : "",
-                           GFX_TEXT_CENTER);
-        snprintf(buf, sizeof buf, xfmt(0x66e124, "s", "%s"), fmt_thousands(num, killed)); /* "%s  EMBOs Killed" */
+        gfx_font_draw_text(s, r.left, r.top, &r, &r, kind < PLANET_DISASTERS ? k_headline[kind] : "", GFX_TEXT_CENTER);
+        snprintf(buf, sizeof buf, "%s  EMBOs Killed" /* 0x66e124 */,
+                 fmt_thousands(num, killed)); /* "%s  EMBOs Killed" */
     }
     r.top = 0x112 - (gfx_font_height(FONT) * 2 + 2);
     r.left += 2;
@@ -2257,7 +2291,7 @@ void planetview_disaster(unsigned kind, uint32_t killed, uint32_t injured)
     r.top += bh + 2;
     r.bottom = bh + r.top - 1;
     if (kind != 100) {
-        snprintf(buf, sizeof buf, xfmt(0x66e15c, "s", "%s"), fmt_thousands(num, injured)); /* "%s  Injured" */
+        snprintf(buf, sizeof buf, "%s  Injured" /* 0x66e15c */, fmt_thousands(num, injured));
         gfx_font_draw_text(s, r.left, r.top, &r, &r, buf, 0);
     }
     redraw(w, 0x10, 0x149, 0xdf, 0x112);
@@ -2293,29 +2327,36 @@ static bool hook_tech_announcements(void) { return pv.menu_tech; }
 static void hook_tech_discovered(unsigned tech, unsigned variant)
 {
     static char msg[1024]; /* 0x6386a0 */
-    char btn[24];
     if (tech == 0 || tech >= PLANET_TECHS)
         return;
     const char *blurb = g_planet_tables.tech_blurb[tech];
-    uint32_t button_va;
+    const char *buttons;
     if (tech == 14) {
-        button_va = 0x66dcd4; /* "SWING!" */
+        buttons = "SWING!\0" /* 0x66dcd4 */;
         snprintf(msg, sizeof msg, "%s", blurb);
     } else {
-        button_va = 0x66dcdc; /* "Beats me!" */
-        snprintf(msg, sizeof msg, xfmt(0x66dce8, "ss", "%s!%s"), g_planet_tables.tech_name[tech], blurb);
+        buttons = "Beats me!\0" /* 0x66dcdc */;
+        snprintf(msg, sizeof msg,
+                 "EMBOs invent %s!%s\n\nPeople rejoice as news of this discovery spreads.  This scientific "
+                 "breakthrough has an immediate and profound effect on the everyday lives of many EMBOs.  Its effects "
+                 "will be felt for hundreds of years.  \n\nWhat will those zany EMBOs discover next?" /* 0x66dce8 */,
+                 g_planet_tables.tech_name[tech], blurb);
     }
     uint32_t id = variant == 0 ? 0x100a4 + tech - 1 : tech == 14 ? 0x100b1 : 0x100b2 + tech - 1;
     snd_preload(id);
     snd_play(id, 1);
-    ctl_message_box(-1, -1, xs(0x66ddf4), msg, xbuttons(button_va, btn, sizeof btn), 120000);
+    ctl_message_box(-1, -1, "Scientific Breakthrough!" /* 0x66ddf4 */, msg, buttons, 120000);
 }
 
 static bool hook_disaster_reports(void) { return pv.disaster && pv.menu_disasters; }
 
 static void hook_flood_warning(void) /* 0x49c226 */
 {
-    msgbox(0x66df1c, xs(0x66de10), 0x66df10, 120000); /* "Here it comes!" */
+    msgbox("Here it comes!" /* 0x66df1c */,
+           "'And yea, verily, the EMBOs of the planet were naughty in the sight of the Powers That Be.  And the Powers "
+           "That Be unleashed a mighty flood upon the EMBOs, which smote them real good, except for a few smartypants "
+           "EMBOs who figured out how to build a boat." /* 0x66de10 */,
+           "Splash!\0" /* 0x66df10 */, 120000); /* "Here it comes!" */
 }
 
 static void hook_view_refresh(bool full)

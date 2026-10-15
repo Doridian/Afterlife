@@ -41,10 +41,8 @@
  *             seconds (0x4ac5a3) or n years (0x4ac61f); post a key
  *             (0x4acbee, unused).
  *
- * The lines Jasper and Aria speak are ALIFE.EXE texts looked up by their
- * original addresses (ui/exe_text.h, data compiled in from src/data) and
- * voiced from the bundles, like the
- * advisors' speeches. Game code only; no SDL.
+ * The lines Jasper and Aria speak are in the scripts, voiced from the
+ * bundles like the advisors' speeches. Game code only; no SDL.
  */
 #ifndef AFTERLIFE_GAME_TUTORIAL_H
 #define AFTERLIFE_GAME_TUTORIAL_H
@@ -77,7 +75,7 @@ enum {
     TO_END = 0,
     TO_IF,          /* if (!advisor_silenced && talk stamp unchanged) { */
     TO_ENDIF,       /* } */
-    TO_SAY,         /* snd_talk_start(a, &text_rect[a], exe text b, voice c) */
+    TO_SAY,         /* snd_talk_start(a, &text_rect[a], text, voice c) */
     TO_WAIT_TALK,   /* akos_talk_wait(a) */
     TO_PUMP,        /* sys_pump */
     TO_FRAME,       /* game_frame_update */
@@ -110,6 +108,7 @@ enum { TW_CTRLPANEL, TW_GRAPHVIEW, TW_MAPVIEW, TW_MICROVIEW, TW_ADVISOR, TW_MAIN
 typedef struct TutOp {
     uint8_t op;
     int32_t a, b, c, d, e;
+    const char *text; /* TO_SAY */
 } TutOp;
 
 /* Lesson n's ops (ending with TO_END), NULL if n is out of range. */

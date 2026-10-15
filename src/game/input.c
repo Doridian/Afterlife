@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 
+#include "game/display.h"
 #include "game/startup.h"
 #include "gfx/mouse.h"
 #include "gfx/palette.h"
@@ -175,6 +176,12 @@ bool main_wnd_proc(const PlatEvent *ev)
         return true;
     case PLAT_EV_RESTORE:
         g_app_minimized = 0;
+        return true;
+    case PLAT_EV_RESIZE:
+        /* Port: the port window changed size (the original's main window
+         * can't be resized, WM_WINDOWPOSCHANGING adds SWP_NOSIZE). The
+         * relayout runs from sys_pump, throttled while dragging. */
+        display_request_relayout();
         return true;
     case PLAT_EV_CLOSE:
     case PLAT_EV_QUIT:

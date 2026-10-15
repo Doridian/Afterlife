@@ -76,6 +76,11 @@ void menu_destroy_item(WmWindow *item); /* 0x4c70df */
 /* 0x4c70f6: opens (lays out the first time, raises, shows) or closes a
  * menu; ignored for items. The game opens its bar this way. */
 void menu_show(WmWindow *menu, bool open);
+/* Port-only (the port window's relayout): the bar becomes `width` wide,
+ * its right-hand buttons (close, minimize) move with the right edge, open
+ * pop-ups close, and a bar that was laid out and shown is laid out
+ * again. */
+void menu_bar_resize(WmWindow *bar, int width);
 /* 0x4c916a: menu NULL closes everything (the Alt / Enter path); a menu
  * bar activates its first item (the Alt key) */
 void menu_activate(WmWindow *menu);

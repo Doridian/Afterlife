@@ -87,6 +87,12 @@ static struct {
 
 TitleStage title_stage(void) { return g.stage; }
 
+/* Port: the intro and the animated title draw through FlcTargets that
+ * point into the main window's surface (target_init), so the port window's
+ * relayout waits until they are done. */
+static bool g_holds_surface;
+bool title_holds_surface(void) { return g_holds_surface; }
+
 /* ---- helpers --------------------------------------------------------------- */
 
 static WmWindow *main_window(void) { return g_main_window; }
@@ -672,6 +678,30 @@ static WmWindow *menu_button(uint32_t id, int x, int y, const char *label)
     return b;
 }
 
+/* where 0x428d28 puts the buttons: along the top and bottom edges */
+static void main_positions(int right, int bottom, int pos[MAIN_BUTTONS][2])
+{
+    const int p[MAIN_BUTTONS][2] = {
+        {0x16, 0x13},
+        {(right >> 1) - 0x49, 0x13},
+        {right - 0xab, 0x13},
+        {(right >> 2) - 0x51, bottom - 0x3f},
+        {(right >> 2) + (right >> 1) - 0x50, bottom - 0x3f},
+    };
+    memcpy(pos, p, sizeof p);
+}
+
+static void diff_positions(int right, int bottom, int pos[DIFF_BUTTONS][2])
+{
+    const int p[DIFF_BUTTONS][2] = {
+        {0x16, 0x13},
+        {(right >> 1) - 0x49, 0x13},
+        {right - 0xab, 0x13},
+        {(right >> 1) - 0x49, bottom - 0x3f},
+    };
+    memcpy(pos, p, sizeof p);
+}
+
 /* 0x428d28: creates the main menu's buttons, and the difficulty menu's
  * when it's the current one, unless they exist (hidden). */
 static void menu_create(void)
@@ -684,13 +714,8 @@ static void menu_create(void)
     for (int i = 0; i < MAIN_BUTTONS; i++)
         exist |= g.main_btn[i] != NULL;
     if (!exist) {
-        const int pos[MAIN_BUTTONS][2] = {
-            {0x16, 0x13},
-            {(right >> 1) - 0x49, 0x13},
-            {right - 0xab, 0x13},
-            {(right >> 2) - 0x51, bottom - 0x3f},
-            {(right >> 2) + (right >> 1) - 0x50, bottom - 0x3f},
-        };
+        int pos[MAIN_BUTTONS][2];
+        main_positions(right, bottom, pos);
         for (int i = 0; i < MAIN_BUTTONS; i++)
             g.main_btn[i] = menu_button((uint32_t)(TITLE_BTN_NEW + i), pos[i][0], pos[i][1], k_main_labels[i]);
         g.main_focus = 0;
@@ -703,12 +728,8 @@ static void menu_create(void)
     for (int i = 0; i < DIFF_BUTTONS; i++)
         if (g.diff_btn[i])
             return;
-    const int pos[DIFF_BUTTONS][2] = {
-        {0x16, 0x13},
-        {(right >> 1) - 0x49, 0x13},
-        {right - 0xab, 0x13},
-        {(right >> 1) - 0x49, bottom - 0x3f},
-    };
+    int pos[DIFF_BUTTONS][2];
+    diff_positions(right, bottom, pos);
     for (int i = 0; i < DIFF_BUTTONS; i++)
         g.diff_btn[i] = menu_button((uint32_t)(TITLE_BTN_EASY + i), pos[i][0], pos[i][1], k_diff_labels[i]);
     g.diff_focus = 0;
@@ -886,6 +907,41 @@ unsigned di_video_benchmark(void)
     return 0;
 }
 
+/* Port-only (the port window, game/display.c): the main window has a new
+ * size; puts the menu background back in the middle and the buttons along
+ * the new edges, as 0x428b22 / 0x428d28 would have for this size. */
+void title_relayout(void)
+{
+    if (!g_main_window || !g_main_window->surface || g_holds_surface || g.stage == TITLE_STAGE_NONE)
+        return;
+    fill_main();
+    GfxSurface *bg = gfx_load_bmp_resource(RES_MENU_BMP, NULL);
+    if (bg) {
+        blit_centred(main_surface(), bg);
+        gfx_surface_destroy(bg);
+    }
+    WmWindow *w = main_window();
+    int right = w->client.right, bottom = w->client.bottom;
+    int mp[MAIN_BUTTONS][2], dp[DIFF_BUTTONS][2];
+    main_positions(right, bottom, mp);
+    diff_positions(right, bottom, dp);
+    bool main_shown = false, diff_shown = false;
+    for (int i = 0; i < MAIN_BUTTONS; i++)
+        if (g.main_btn[i]) {
+            rect_move_to(&g.main_btn[i]->rect, mp[i][0], mp[i][1]);
+            main_shown |= (g.main_btn[i]->flags & WM_F_VISIBLE) != 0;
+        }
+    for (int i = 0; i < DIFF_BUTTONS; i++)
+        if (g.diff_btn[i]) {
+            rect_move_to(&g.diff_btn[i]->rect, dp[i][0], dp[i][1]);
+            diff_shown |= (g.diff_btn[i]->flags & WM_F_VISIBLE) != 0;
+        }
+    if (main_shown)
+        menu_show_main(true);
+    if (diff_shown)
+        menu_show_difficulty(true);
+}
+
 /* 0x426460 */
 int title_run(void)
 {
@@ -902,10 +958,12 @@ int title_run(void)
         gfx_cursor_show(false);
         menu_show_main(false);
         menu_show_difficulty(false);
+        g_holds_surface = true;
         intro_play();
         fade_out(1000);
         title_animate();
         fade_out(1000);
+        g_holds_surface = false;
         title_menu();
         if (g.again) {
             fill_main();

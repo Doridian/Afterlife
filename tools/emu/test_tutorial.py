@@ -132,7 +132,7 @@ def orig_trace(emu, lesson, silenced):
             ops.append((SIMPLE[name],))
         elif name == 'snd_talk_start':
             assert a[4] == 0x13
-            ops.append(('SAY', a[0], a[2], a[3]))
+            ops.append(('SAY', a[0], emu.cstr(a[2]), a[3]))
         elif name == 'akos_talk_wait':
             ops.append(('WAIT_TALK', a[0], a[9]))
         elif name == 'tut_glide_control':
@@ -172,7 +172,7 @@ def orig_trace(emu, lesson, silenced):
 
 class TutOp(ctypes.Structure):
     _fields_ = [('op', ctypes.c_uint8), ('a', ctypes.c_int32), ('b', ctypes.c_int32), ('c', ctypes.c_int32),
-                ('d', ctypes.c_int32), ('e', ctypes.c_int32)]
+                ('d', ctypes.c_int32), ('e', ctypes.c_int32), ('text', ctypes.c_char_p)]
 
 
 STEP = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_int, ctypes.POINTER(TutOp))
@@ -188,7 +188,7 @@ def port_trace(lib, lesson, silenced):
 
     def step(n, i, op):
         o = op.contents
-        seen.append((o.op, o.a, o.b, o.c, o.d, o.e))
+        seen.append((o.op, o.a, o.text.decode('latin1') if o.text else o.b, o.c, o.d, o.e))
     cb = STEP(step)
     hooks = TutorialHooks.in_dll(lib, 'tutorial_hooks')
     hooks.step = cb

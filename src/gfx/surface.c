@@ -99,6 +99,21 @@ bool gfx_init(int width, int height, bool force)
     return true;
 }
 
+bool gfx_screen_resize(int width, int height)
+{
+    if (width <= 0 || height <= 0 || !plat_video_resize(width, height))
+        return false;
+    refresh_screen();
+    memset(g_screen.pixels, 0, (size_t)g_screen.stride * (size_t)g_screen.height);
+    GfxRect clip = {0, width - 1, 0, height - 1};
+    gfx_mouse_set_clip_rect(NULL, &clip);
+    int mx, my;
+    gfx_mouse_get_screen_pos(&mx, &my);
+    gfx_mouse_on_move(mx, my); /* clamps the position to the new clip */
+    gfx_invalidate(NULL);
+    return true;
+}
+
 /* 0x4ca6ac: restores the display mode (0x4cd448(0, 0)), destroys the window
  * and puts the saved system palette back (0x4cbf16). */
 void gfx_shutdown(void)

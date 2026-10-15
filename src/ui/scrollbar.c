@@ -47,6 +47,8 @@ void ctl_scroll_set_hbitmaps(GfxSurface *left, GfxSurface *right, GfxSurface *th
     g_hbmp[SB_TRACK] = track;
 }
 
+int ctl_scroll_thickness(bool vertical) { return vertical ? bmp_w(g_vbmp[SB_TRACK]) : bmp_h(g_hbmp[SB_TRACK]); }
+
 /* 0x4bc3f8 */
 void ctl_scroll_parts(WmWindow *bar, WmWindow **back, WmWindow **fwd, WmWindow **thumb)
 {

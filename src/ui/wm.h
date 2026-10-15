@@ -248,6 +248,18 @@ void wm_get_local_rect(WmWindow *w, GfxRect *out); /* 0x4c2c9c, at 0, 0 */
 /* 0x4c6096: the display changed size: resizes the root and broadcasts
  * WM_MSG_SCREEN_RESIZED. */
 intptr_t wm_screen_resized(int width, int height);
+/* Port-only (the port window's relayout, game/display.c): gives the window
+ * a new width x height surface holding the old one's pixels moved by dx,
+ * dy (the rest filled with `fill`), and makes its rect that size (no
+ * message, no repaint; the client rect is the caller's). */
+bool wm_resize_surface(WmWindow *w, int width, int height, int dx, int dy, uint8_t fill);
+/* Port-only: moves the window (and its rect before minimizing) so it lies
+ * inside `area` (its parent's coordinates); one larger than the area is
+ * put at the area's left / top. No message, no repaint. True if moved. */
+bool wm_fit_into(WmWindow *w, const GfxRect *area);
+/* 0x4c6220: shows the menu bar's close and minimize buttons only when the
+ * screen fills the desktop, and redraws the bar's frame. */
+void wm_menubar_update_buttons(WmWindow *menubar);
 void wm_local_to_screen(const WmWindow *w, GfxRect *r);   /* 0x4c2ff7 */
 void wm_screen_to_local(const WmWindow *w, GfxRect *r);   /* 0x4c2f0e */
 void wm_parent_to_screen(const WmWindow *w, GfxRect *r);  /* 0x4c5902 */

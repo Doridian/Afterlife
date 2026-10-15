@@ -5,8 +5,10 @@
  *   - ALIFEPORT.INI round trip, defaults, comments, other sections, junk;
  *   - enhance_init: --port-ini, --enhancements / --no-enhancements,
  *     --ui-scale, AFTERLIFE_ENHANCEMENTS, and the scale it asks for;
+ *   - the port window's state in the file (size, position, maximized,
+ *     fullscreen) and --window-size / --fullscreen / --windowed;
  *   - the presentation layout and the mouse mapping at UI scales 1-3, the
- *     automatic scale and its clamping.
+ *     automatic scale and its clamping, the port window's logical size.
  *
  *   enhance_test [scratch dir]
  */
@@ -50,7 +52,10 @@ static void test_settings(const char *dir)
     /* round trip */
     for (int e = 0; e < 2; e++)
         for (int k = 0; k <= PRESENT_SCALE_MAX; k++) {
-            PortSettings a = {e != 0, k}, b;
+            PortSettings a, b;
+            port_settings_defaults(&a);
+            a.enhancements = e != 0;
+            a.ui_scale = k;
             port_settings_defaults(&b);
             CHECK(port_settings_save(path, &a));
             CHECK(port_settings_load(path, &b));
@@ -58,7 +63,10 @@ static void test_settings(const char *dir)
         }
 
     /* missing file: false, values kept */
-    PortSettings m = {true, 3};
+    PortSettings m;
+    port_settings_defaults(&m);
+    m.enhancements = true;
+    m.ui_scale = 3;
     CHECK(!port_settings_load("/nonexistent/dir/ALIFEPORT.INI", &m));
     CHECK(m.enhancements && m.ui_scale == 3);
 
@@ -81,7 +89,10 @@ static void test_settings(const char *dir)
     CHECK(!s.enhancements && s.ui_scale == 0);
 
     /* enhance_init: file, then environment, then the command line */
-    PortSettings f = {true, 2};
+    PortSettings f;
+    port_settings_defaults(&f);
+    f.enhancements = true;
+    f.ui_scale = 2;
     CHECK(port_settings_save(path, &f));
     char arg_ini[1100];
     snprintf(arg_ini, sizeof arg_ini, "--port-ini=%s", path);
@@ -132,6 +143,118 @@ static void test_settings(const char *dir)
         CHECK(enhance_ui_scale_request() == 1);
     }
     g_enhancements = false;
+}
+
+static void test_window_state(const char *dir)
+{
+    char path[1024];
+    snprintf(path, sizeof path, "%s/enhance_test_window.ini", dir);
+    PortSettings s;
+    port_settings_defaults(&s);
+    CHECK(s.window.w == 0 && s.window.h == 0 && s.window.x == PLAT_WINDOW_POS_DEFAULT &&
+          s.window.y == PLAT_WINDOW_POS_DEFAULT && !s.window.fullscreen && !s.window.maximized);
+
+    /* round trip, with negative positions (a monitor left of the primary) */
+    static const PlatWindowState cases[] = {
+        {1600, 1000, 120, 80, false, false},
+        {1365, 853, -1500, -20, true, false},
+        {800, 600, PLAT_WINDOW_POS_DEFAULT, PLAT_WINDOW_POS_DEFAULT, false, true},
+        {0, 0, PLAT_WINDOW_POS_DEFAULT, PLAT_WINDOW_POS_DEFAULT, true, true},
+    };
+    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        PortSettings a, b;
+        port_settings_defaults(&a);
+        a.enhancements = true;
+        a.ui_scale = 2;
+        a.window = cases[i];
+        CHECK(port_settings_save(path, &a));
+        port_settings_defaults(&b);
+        CHECK(port_settings_load(path, &b));
+        CHECK(b.enhancements && b.ui_scale == 2);
+        CHECK(b.window.w == a.window.w && b.window.h == a.window.h);
+        CHECK(b.window.x == a.window.x && b.window.y == a.window.y);
+        CHECK(b.window.fullscreen == a.window.fullscreen && b.window.maximized == a.window.maximized);
+    }
+
+    /* hand-written and junk values */
+    write_file(path, "[Port]\nWindow size = 1024 x 700\nWindow position = 10,20\nFullscreen = yes\n"
+                     "Maximized = off\n");
+    port_settings_defaults(&s);
+    CHECK(port_settings_load(path, &s));
+    CHECK(s.window.w == 1024 && s.window.x == 10 && s.window.y == 20 && s.window.fullscreen);
+    write_file(path, "[Port]\nWindow size = 1024x700\n");
+    port_settings_defaults(&s);
+    CHECK(port_settings_load(path, &s));
+    CHECK(s.window.w == 1024 && s.window.h == 700);
+    write_file(path, "[Port]\nWindow size = -5x700\nWindow position = junk\nFullscreen = maybe\n");
+    port_settings_defaults(&s);
+    CHECK(port_settings_load(path, &s));
+    CHECK(s.window.w == 0 && s.window.h == 0 && s.window.x == PLAT_WINDOW_POS_DEFAULT && !s.window.fullscreen);
+
+    /* the command line */
+    PortSettings f;
+    port_settings_defaults(&f);
+    f.window = (PlatWindowState){1200, 900, 5, 6, true, true};
+    CHECK(port_settings_save(path, &f));
+    char arg_ini[1100];
+    snprintf(arg_ini, sizeof arg_ini, "--port-ini=%s", path);
+    {
+        char *argv[] = {"afterlife", arg_ini, NULL};
+        enhance_init(2, argv);
+        CHECK(g_port_settings.window.w == 1200 && g_port_settings.window.fullscreen && g_port_settings.window.maximized);
+    }
+    {
+        char *argv[] = {"afterlife", arg_ini, "--window-size=900x650", "--windowed", NULL};
+        enhance_init(4, argv);
+        CHECK(g_port_settings.window.w == 900 && g_port_settings.window.h == 650);
+        CHECK(!g_port_settings.window.fullscreen && !g_port_settings.window.maximized);
+        CHECK(g_port_settings.window.x == 5 && g_port_settings.window.y == 6);
+    }
+    {
+        char *argv[] = {"afterlife", arg_ini, "--window-size=bogus", "--fullscreen", NULL};
+        enhance_init(4, argv);
+        CHECK(g_port_settings.window.w == 1200 && g_port_settings.window.fullscreen);
+    }
+    /* without the port window open there is no window state to save */
+    CHECK(!enhance_save_window_state());
+    remove(path);
+    g_enhancements = false;
+}
+
+static void test_logical_size(void)
+{
+    int w, h, k;
+    /* scale 1: the window's pixels */
+    present_logical_size(2048, 1280, 1, &w, &h, &k);
+    CHECK(w == 2048 && h == 1280 && k == 1);
+    /* scale 2 */
+    present_logical_size(2048, 1280, 2, &w, &h, &k);
+    CHECK(w == 1024 && h == 640 && k == 2);
+    /* odd sizes round down (the rest is a margin of under k pixels) */
+    present_logical_size(2049, 1281, 2, &w, &h, &k);
+    CHECK(w == 1024 && h == 640 && k == 2);
+    /* too small for scale 3: lowered to 2 */
+    present_logical_size(1600, 1000, 3, &w, &h, &k);
+    CHECK(k == 2 && w == 800 && h == 500);
+    /* too small for 2: 1 */
+    present_logical_size(1000, 700, 2, &w, &h, &k);
+    CHECK(k == 1 && w == 1000 && h == 700);
+    /* smaller than 640x480 at scale 1: the framebuffer stays 640x480
+     * (letterboxed) */
+    present_logical_size(500, 300, 1, &w, &h, &k);
+    CHECK(k == 1 && w == 640 && h == 480);
+    present_logical_size(800, 300, 4, &w, &h, &k);
+    CHECK(k == 1 && w == 800 && h == 480);
+    /* scale 4 on a 4K window */
+    present_logical_size(3840, 2160, 4, &w, &h, &k);
+    CHECK(k == 4 && w == 960 && h == 540);
+    present_logical_size(3840, 2160, 9, NULL, NULL, &k);
+    CHECK(k == PRESENT_SCALE_MAX);
+    /* the layout of the logical framebuffer fills the window exactly */
+    PresentRect r = present_layout(2048, 1280, 1024, 640);
+    CHECK(r.x == 0 && r.y == 0 && r.w == 2048 && r.h == 1280);
+    r = present_layout(500, 300, 640, 480);
+    CHECK(r.w <= 500 && r.h <= 300 && r.w * 480 == r.h * 640);
 }
 
 static void test_present(void)
@@ -212,7 +335,9 @@ int main(int argc, char **argv)
 {
     const char *dir = argc > 1 ? argv[1] : ".";
     test_settings(dir);
+    test_window_state(dir);
     test_present();
+    test_logical_size();
     if (g_failures) {
         fprintf(stderr, "enhance_test: %d failure(s)\n", g_failures);
         return 1;

@@ -40,4 +40,12 @@ int present_auto_scale(float density);
  * divided by it is still at least PRESENT_MIN_W x PRESENT_MIN_H. */
 int present_clamp_scale(int scale, int desktop_w, int desktop_h);
 
+/* Port window (docs/rendering.md): the game's logical desktop for a window
+ * of out_w x out_h pixels at UI scale `scale` (1..4): the effective scale
+ * (`scale` lowered until out / scale is at least PRESENT_MIN_W x
+ * PRESENT_MIN_H) and the framebuffer, out / effective scale, never smaller
+ * than PRESENT_MIN_W x PRESENT_MIN_H (a smaller window letterboxes it).
+ * Any pointer may be NULL. */
+void present_logical_size(int out_w, int out_h, int scale, int *fb_w, int *fb_h, int *eff_scale);
+
 #endif

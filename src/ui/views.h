@@ -41,6 +41,13 @@ typedef struct ViewsHooks {
 
 extern ViewsHooks views_hooks;
 
+/* The seven virtues (the Heaven reward kinds, 0x66c600) and the seven sins
+ * (the Hell punishment kinds, 0x66c658), as the views label them. */
+extern const char *const views_virtue_names[7];
+extern const char *const views_sin_names[7];
+/* The sixteen belief systems (0x664918), "HAHAALFSUMA" .. "OCRARALFSUMA". */
+extern const char *const views_belief_names[16];
+
 /* The main window (parent of the views), the main map view (NULL: the
  * Mapview draws unrotated and without the view outline) and the pause flag
  * (NULL: none). */

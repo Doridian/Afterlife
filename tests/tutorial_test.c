@@ -43,7 +43,6 @@
 #include "gfx/surface.h"
 #include "ui/advisors.h"
 #include "ui/controls.h"
-#include "ui/exe_text.h"
 #include "ui/graphview.h"
 #include "ui/mapview.h"
 #include "ui/menu.h"
@@ -434,7 +433,7 @@ static void check_tables(void)
             if (o[i].op == TO_SAY) {
                 says++;
                 CHECK(o[i].a == 1 || o[i].a == 2);
-                if (!exe_str((uint32_t)o[i].b)[0])
+                if (!o[i].text || !o[i].text[0])
                     empty++;
             }
         }

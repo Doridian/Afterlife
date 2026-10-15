@@ -18,7 +18,6 @@
 #include "gfx/font.h"
 #include "gfx/tile_draw.h"
 #include "ui/controls.h"
-#include "ui/exe_text.h"
 #include "ui/microview_int.h"
 #include "ui/views.h"
 
@@ -119,13 +118,11 @@ static void sound(uint32_t id)
 }
 
 /* a message box (microview_hooks.message, else ctl_message_box) */
-static int ask(const char *text, uint32_t buttons_va, int n)
+static int ask(const char *text, const char *buttons)
 {
-    char b[64];
-    exe_buttons(buttons_va, n, b, sizeof b);
     if (microview_hooks.message)
-        return microview_hooks.message(text, b);
-    return ctl_message_box(-1, -1, NULL, text, b, 0);
+        return microview_hooks.message(text, buttons);
+    return ctl_message_box(-1, -1, NULL, text, buttons, 0);
 }
 
 static void text_at(int x, int y, const GfxRect *clip, const char *s, unsigned flags)
@@ -160,10 +157,10 @@ static void press(int id, bool on)
         ctl_button_set_pressed(btn(id), on, true);
 }
 
-static void label(int id, uint32_t va)
+static void label(int id, const char *text)
 {
     if (btn(id))
-        ctl_button_set_label(btn(id), exe_str(va), FONT, 0x131a13, true);
+        ctl_button_set_label(btn(id), text, FONT, 0x131a13, true);
 }
 
 /* the cell's sim record (the cell's plane must be selected) */
@@ -222,9 +219,10 @@ static const char *tile_text(unsigned set, unsigned index0, int which)
 /* 0x467890 */
 static void draw_title(void)
 {
-    static const uint32_t zoom[3] = {0x661228, 0x661240, 0x661258};
+    static const char *const zoom[3] = {"Zoomed In" /* 0x661228 */, "Normal View" /* 0x661240 */,
+                                        "Zoomed Out" /* 0x661258 */};
     char buf[80];
-    snprintf(buf, sizeof buf, exe_fmt(0x661264, "s", "Microview - %s"), exe_str(zoom[g_zoom % 3]));
+    snprintf(buf, sizeof buf, "Microview - %s" /* 0x661264 */, zoom[g_zoom % 3]);
     wm_set_title(g_win, buf);
     views_draw_title(g_win);
 }
@@ -264,8 +262,18 @@ static void status_line(unsigned set, unsigned index, int x, int y)
 {
     if (!g_win)
         return;
-    static const uint32_t punish[8] = {0x661ae0, 0x661b20, 0x661b64, 0x661ba8, 0x661be4, 0x661c20, 0x661c5c, 0x661c98};
-    static const uint32_t reward[8] = {0x661b00, 0x661b44, 0x661b88, 0x661bc8, 0x661c04, 0x661c40, 0x661c7c, 0x661cb4};
+    static const char *const punish[8] = {
+        "A Punishment for ENVIOUS SOULS" /* 0x661ae0 */,    "A Punishment for AVARICIOUS SOULS" /* 0x661b20 */,
+        "A Punishment for GLUTTONOUS SOULS" /* 0x661b64 */, "A Punishment for SLOTHFUL SOULS" /* 0x661ba8 */,
+        "A Punishment for LUSTFUL SOULS" /* 0x661be4 */,    "A Punishment for WRATHFUL SOULS" /* 0x661c20 */,
+        "A Punishment for PROUD SOULS" /* 0x661c5c */,      "A Punishment for EVIL SOULS" /* 0x661c98 */,
+    };
+    static const char *const reward[8] = {
+        "A Reward for CONTENTED SOULS" /* 0x661b00 */, "A Reward for CHARITABLE SOULS" /* 0x661b44 */,
+        "A Reward for TEMPERATE SOULS" /* 0x661b88 */, "A Reward for DILIGENT SOULS" /* 0x661bc8 */,
+        "A Reward for CHASTE SOULS" /* 0x661c04 */,    "A Reward for PEACEFUL SOULS" /* 0x661c40 */,
+        "A Reward for HUMBLE SOULS" /* 0x661c7c */,    "A Reward for GOOD SOULS" /* 0x661cb4 */,
+    };
     int top = g_rows * 8 + 0xee;
     GfxRect r = {0x11, 0xed, top, g_rows * 8 + 0x10c};
     char buf[96], num[FMT_NUM_LEN];
@@ -279,98 +287,103 @@ static void status_line(unsigned set, unsigned index, int x, int y)
     gfx_font_select(FONT);
     switch (set) {
     case 1:
-        text_at(0x19, ty, &r, exe_str(0x662290), 0);
+        text_at(0x19, ty, &r, "Undeveloped Astral Territory" /* 0x662290 */, 0);
         break;
     case 2:
-        text_at(0x19, ty, &r, exe_str(index < 0x34 ? 0x6620e8 : 0x662100), 0);
+        text_at(0x19, ty, &r, index < 0x34 ? "A River" /* 0x6620e8 */ : "Surf's Up!" /* 0x662100 */, 0);
         break;
     default:
-        text_at(0x19, ty, &r, exe_str(0x6622d8), 0); /* "Other" */
+        text_at(0x19, ty, &r, "Other" /* 0x6622d8 */, 0);
         break;
     case 4:
-        text_at(0x19, ty, &r, exe_str(0x662240), 0);
+        text_at(0x19, ty, &r, "A Special Building" /* 0x662240 */, 0);
         break;
     case 5: {
-        text_at(0x19, ty, &r, exe_str(hell ? 0x661df4 : 0x661e04), 0);
+        text_at(0x19, ty, &r, hell ? "An OMNIBOLGE" /* 0x661df4 */ : "A LOVE DOME" /* 0x661e04 */, 0);
         uint32_t sum = s1 + s5 + s9, c = CAP(set5, index) / 100;
-        snprintf(buf, sizeof buf, exe_fmt(0x661e10, "sd", "%s SOULs (%d%% Full)"), fmt_thousands(num, sum),
+        snprintf(buf, sizeof buf, "%s SOULs (%d%% Full)" /* 0x661e10 */, fmt_thousands(num, sum),
                  (int)(c ? sum / c : 0));
         text_at(0x32, y2, &r, buf, 0);
         break;
     }
     case 6:
-        text_at(0x11, ty, &r, exe_str(0x661ee4), 0);
+        text_at(0x11, ty, &r, "Guide" /* 0x661ee4 */, 0);
         break;
     case 7:
-        text_at(0x19, ty, &r, exe_str(hell ? 0x66210c : 0x66213c), 0);
-        snprintf(buf, sizeof buf, exe_fmt(hell ? 0x662124 : 0x66214c, "sd", "%s (%d%% Full)"), fmt_thousands(num, s1),
-                 (int)pct_of(s1, CAP(set7, index)));
+        text_at(0x19, ty, &r, hell ? "An Infernal Distopia" /* 0x66210c */ : "A Divine Utopia" /* 0x66213c */, 0);
+        snprintf(buf, sizeof buf,
+                 (hell ? "%s Demons (%d%% Full)" /* 0x662124 */ : "%s Angels (%d%% Full)" /* 0x66214c */),
+                 fmt_thousands(num, s1), (int)pct_of(s1, CAP(set7, index)));
         text_at(0x32, y2, &r, buf, 0);
         break;
     case 8:
-        text_at(0x19, ty, &r, exe_str(hell ? 0x66217c : 0x6621a8), 0);
-        snprintf(buf, sizeof buf, exe_fmt(hell ? 0x662190 : 0x6621c4, "d", "%d trained last year"), (int)s5);
+        text_at(0x19, ty, &r,
+                (hell ? "A Demonic Boot Camp" /* 0x66217c */ : "An Angelic Training Center" /* 0x6621a8 */), 0);
+        snprintf(buf, sizeof buf,
+                 (hell ? "%d trained last year" /* 0x662190 */ : "%d trained last year" /* 0x6621c4 */), (int)s5);
         text_at(0x32, y2, &r, buf, 0);
-        snprintf(buf, sizeof buf, exe_fmt(0x6621dc, "d", "%d%% of Capacity"), (int)pct_of(s5, CAP(set8, index)));
+        snprintf(buf, sizeof buf, "%d%% of Capacity" /* 0x6621dc */, (int)pct_of(s5, CAP(set8, index)));
         text_at(0x32, y3, &r, buf, 0);
         break;
     case 9:
-        text_at(0x19, ty, &r, exe_str(hell ? 0x661f8c : 0x661f9c), 0);
-        snprintf(buf, sizeof buf, exe_fmt(0x661fac, "sd", "%s SOULs (%d%% Full)"), fmt_thousands(num, s5),
+        text_at(0x19, ty, &r, hell ? "A Hellish Port" /* 0x661f8c */ : "A Heavenly Port" /* 0x661f9c */, 0);
+        snprintf(buf, sizeof buf, "%s SOULs (%d%% Full)" /* 0x661fac */, fmt_thousands(num, s5),
                  (int)pct_of(s5, CAP(set9, index)));
         text_at(0x32, y2, &r, buf, 0);
         break;
     case 10:
-        text_at(0x19, ty, &r, exe_str(0x6622bc), 0);
+        text_at(0x19, ty, &r, "An Unliftable Rock." /* 0x6622bc */, 0);
         break;
     case 12:
-        text_at(0x19, ty, &r, exe_str(hell ? 0x661eec : 0x661efc), 0);
-        snprintf(buf, sizeof buf, exe_fmt(0x661f10, "s", "%s SOULs"), fmt_thousands(num, s9));
+        text_at(0x19, ty, &r, hell ? "A Road in Hell" /* 0x661eec */ : "A Road in Heaven" /* 0x661efc */, 0);
+        snprintf(buf, sizeof buf, "%s SOULs" /* 0x661f10 */, fmt_thousands(num, s9));
         text_at(0x32, y2, &r, buf, 0);
         break;
     case 13:
-        text_at(0x19, ty, &r, exe_str(hell ? 0x661e68 : 0x661e78), 0);
-        snprintf(buf, sizeof buf, exe_fmt(0x661e8c, "sd", "%s SOULs (%d%% Full)"), fmt_thousands(num, s5),
+        text_at(0x19, ty, &r, hell ? "A Gate in HELL" /* 0x661e68 */ : "A Gate in HEAVEN" /* 0x661e78 */, 0);
+        snprintf(buf, sizeof buf, "%s SOULs (%d%% Full)" /* 0x661e8c */, fmt_thousands(num, s5),
                  (int)pct_of(s5, CAP(set13, index >> 1)));
         text_at(0x32, y2, &r, buf, 0);
         break;
     case 14:
     case 15: {
         unsigned k = index / 13;
-        text_at(0x19, ty, &r, exe_str(k < 7 ? (hell ? punish[k] : reward[k]) : (hell ? punish[7] : reward[7])), 0);
+        text_at(0x19, ty, &r, k < 7 ? (hell ? punish[k] : reward[k]) : (hell ? punish[7] : reward[7]), 0);
         uint32_t pop = realm_building_pop(x, y);
         uint32_t cap = index < REALM_TILE_TYPES && g_world.tile_info ? g_world.tile_info[index].cost : 0;
-        snprintf(buf, sizeof buf, exe_fmt(0x661ccc, "sd", "Pop: %s (%d%% full)"), fmt_thousands(num, pop),
-                 (int)pct_of(pop, cap));
+        snprintf(buf, sizeof buf, "Pop: %s (%d%% full)" /* 0x661ccc */, fmt_thousands(num, pop), (int)pct_of(pop, cap));
         text_at(0x32, y2, &r, buf, 0);
         break;
     }
     case 16:
-        text_at(0x19, ty, &r, exe_str(0x662264), 0);
+        text_at(0x19, ty, &r, "A Karma Track Anchor" /* 0x662264 */, 0);
         break;
     case 17:
-        text_at(0x19, ty, &r, exe_str(0x66207c), 0);
-        snprintf(buf, sizeof buf, exe_fmt(0x662088, "s", "Serving %s SOULs"), fmt_thousands(num, s5));
+        text_at(0x19, ty, &r, "A KStation" /* 0x66207c */, 0);
+        snprintf(buf, sizeof buf, "Serving %s SOULs" /* 0x662088 */, fmt_thousands(num, s5));
         text_at(0x32, y2, &r, buf, 0);
-        snprintf(buf, sizeof buf, exe_fmt(0x66209c, "d", "%d%% Full"), (int)pct_of(s5, CAP(set17, s->b[10])));
+        snprintf(buf, sizeof buf, "%d%% Full" /* 0x66209c */, (int)pct_of(s5, CAP(set17, s->b[10])));
         text_at(0x32, y3, &r, buf, 0);
         break;
     case 18:
-        text_at(0x19, ty, &r, exe_str(hell ? 0x662020 : 0x662044), 0);
+        text_at(0x19, ty, &r,
+                (hell ? "A Karma Portal back to the Planet" /* 0x662020 */
+                      : "A Karma Portal back to the Planet" /* 0x662044 */),
+                0);
         break;
     case 19:
-        text_at(0x19, ty, &r, exe_str(0x6622d0), 0);
+        text_at(0x19, ty, &r, "A Bank." /* 0x6622d0 */, 0);
         break;
     case 29:
-        text_at(0x19, ty, &r, exe_str(0x661dc4), 0);
-        snprintf(buf, sizeof buf, exe_fmt(0x661ddc, "d", "Local charge of %d Qs"), (int)s1);
+        text_at(0x19, ty, &r, "An AD INFINITUM SIPHON" /* 0x661dc4 */, 0);
+        snprintf(buf, sizeof buf, "Local charge of %d Qs" /* 0x661ddc */, (int)s1);
         text_at(0x32, y2, &r, buf, 0);
         break;
     case 30:
-        text_at(0x19, ty, &r, exe_str(0x661f5c), 0);
-        snprintf(buf, sizeof buf, exe_fmt(0x661f68, "s", "%s SOULs last year"), fmt_thousands(num, s5));
+        text_at(0x19, ty, &r, "A Limbo Bar" /* 0x661f5c */, 0);
+        snprintf(buf, sizeof buf, "%s SOULs last year" /* 0x661f68 */, fmt_thousands(num, s5));
         text_at(0x32, y2, &r, buf, 0);
-        snprintf(buf, sizeof buf, exe_fmt(0x661f7c, "s", "%s SOULs Served"), fmt_thousands(num, s9));
+        snprintf(buf, sizeof buf, "%s SOULs Served" /* 0x661f7c */, fmt_thousands(num, s9));
         text_at(0x32, y3, &r, buf, 0);
         break;
     }
@@ -410,7 +423,7 @@ static void population(unsigned index, int x, int y)
     fill(0x15, 0xc2, 0xe, 10, BG);
     fill(0x15, 0xd2, 0xe, 10, BG);
     uint32_t cap = index < REALM_TILE_TYPES && g_world.tile_info ? g_world.tile_info[index].cost : 0;
-    snprintf(buf, sizeof buf, exe_fmt(0x6622e0, "s", "Capacity: %s SOULs"), fmt_thousands(num, cap));
+    snprintf(buf, sizeof buf, "Capacity: %s SOULs" /* 0x6622e0 */, fmt_thousands(num, cap));
     gfx_font_draw_text(g_win->surface, 0x2e, 0xb3, NULL, NULL, buf, 0);
     int end = 0x15, last = 0x15;
     unsigned k = index / 13;
@@ -441,7 +454,7 @@ static void population(unsigned index, int x, int y)
                 i++;
             }
     }
-    snprintf(buf, sizeof buf, exe_fmt(0x6622f4, "s", "Perm Pop: %s SOULs"), fmt_thousands(num, temp));
+    snprintf(buf, sizeof buf, "Perm Pop: %s SOULs" /* 0x6622f4 */, fmt_thousands(num, temp));
     gfx_font_draw_text(g_win->surface, 0x2e, 0xc3, NULL, NULL, buf, 0);
     if (index < 0x5b) {
         bar(0x9c, 0xcd, 0x10, cap, perm, 0, k_light[k], end);
@@ -462,7 +475,7 @@ static void population(unsigned index, int x, int y)
                 i++;
             }
     }
-    snprintf(buf, sizeof buf, exe_fmt(0x662308, "s", "Temp Pop: %s SOULs"), fmt_thousands(num, perm));
+    snprintf(buf, sizeof buf, "Temp Pop: %s SOULs" /* 0x662308 */, fmt_thousands(num, perm));
     gfx_font_draw_text(g_win->surface, 0x2e, 0xd3, NULL, NULL, buf, 0);
 }
 
@@ -479,9 +492,9 @@ static void focus_labels(void)
     font_colors(0x1a, 0x1a);
     gfx_font_select(FONT);
     unsigned p = (unsigned)s->b[0xf] * 100 / 0xff;
-    snprintf(buf, sizeof buf, exe_fmt(0x6623a4, "d", "%d%%"), (int)p);
+    snprintf(buf, sizeof buf, "%d%%" /* 0x6623a4 */, (int)p);
     gfx_font_draw_text(g_win->surface, 0x1a, 0x87, NULL, NULL, buf, 0);
-    snprintf(buf, sizeof buf, exe_fmt(0x6623ac, "d", "%d%%"), (int)(100 - p));
+    snprintf(buf, sizeof buf, "%d%%" /* 0x6623ac */, (int)(100 - p));
     gfx_font_draw_text(g_win->surface, 199, 0x87, NULL, NULL, buf, 0);
     uint8_t m = (uint8_t)realm_score_mix((uint8_t)g_x, (uint8_t)g_y);
     fill(0x38, 0x7b, 0x88, 0x15, (uint8_t)(0x2e - 2 * m));
@@ -563,12 +576,12 @@ static void lock_set(bool on)
     gfx_font_select(FONT);
     if (!on) {
         s->b[0xe] &= 0x7f;
-        text_at(0x32, 0x4c, &r, exe_str(0x6618c0), GFX_TEXT_NOJUSTIFY);
+        text_at(0x32, 0x4c, &r, "UNLOCKED" /* 0x6618c0 */, GFX_TEXT_NOJUSTIFY);
         press(MICROVIEW_LOCK, false);
     } else {
         s->b[0xe] |= 0x80;
         unsigned lvl = g_index < 0x5b ? g_index % 13u : (uint8_t)(g_index + 0xa5);
-        snprintf(buf, sizeof buf, exe_fmt(0x6618ac, "d", "LOCKED (%d)"), (int)lvl);
+        snprintf(buf, sizeof buf, "LOCKED (%d\010/year)" /* 0x6618ac */, (int)lvl);
         text_at(0x32, 0x4c, &r, buf, GFX_TEXT_NOJUSTIFY);
         press(MICROVIEW_LOCK, true);
     }
@@ -628,11 +641,12 @@ static void upgrade_panel(void)
         }
         g_up_cost = (uint32_t)((int32_t)(spec(tab, n, target)->cost * 2 - spec(tab, n, cur)->cost) >> 1);
         g_up_size = spec(tab, n, target)->size;
-        snprintf(buf, sizeof buf, exe_fmt(0x661884, "s", "Upgrading this structure will cost %s"),
+        snprintf(buf, sizeof buf, "Upgrading this structure will cost %s\010" /* 0x661884 */,
                  fmt_thousands(num, g_up_cost));
         text_at(0x77, 0x56, &r, buf, GFX_TEXT_NOJUSTIFY);
     } else {
-        text_at(0x6d, 0x56, &r, exe_str(0x661860), GFX_TEXT_NOJUSTIFY | GFX_TEXT_CENTER);
+        text_at(0x6d, 0x56, &r, "You can't upgrade this structure." /* 0x661860 */,
+                GFX_TEXT_NOJUSTIFY | GFX_TEXT_CENTER);
     }
     r.left -= 0x4b;
     redraw_rect(&r);
@@ -659,24 +673,25 @@ static void loan_panel(void)
         if (realm->unk_80ef < 0x14) {
             int8_t c = (int8_t)(realm->unk_80ef + 1);
             if (hell) {
-                snprintf(buf, sizeof buf, exe_fmt(0x6616f0, "s", "Loan Available: %s"), fmt_thousands(num, avail));
+                snprintf(buf, sizeof buf, "Loan Available: %s\010" /* 0x6616f0 */, fmt_thousands(num, avail));
                 text_at(0x62, 0xa0, &r, buf, GFX_TEXT_NOJUSTIFY);
                 uint32_t risk = soul_rate ? (uint32_t)(c + 10) * (avail / 10) * 0x100u / soul_rate : 0;
-                snprintf(buf, sizeof buf, exe_fmt(0x661704, "s", "Risk: %s SOULs"), fmt_thousands(num, risk));
+                snprintf(buf, sizeof buf, "Risk: %s SOULs" /* 0x661704 */, fmt_thousands(num, risk));
                 text_at(0x62, 0xb4, &r, buf, GFX_TEXT_NOJUSTIFY);
-                text_at(0x62, 0xbe, &r, exe_str(0x661714), GFX_TEXT_NOJUSTIFY);
+                text_at(0x62, 0xbe, &r, "Due in 100 years." /* 0x661714 */, GFX_TEXT_NOJUSTIFY);
             } else {
-                snprintf(buf, sizeof buf, exe_fmt(0x661728, "s", "Loan Available: %s"), fmt_thousands(num, avail));
+                snprintf(buf, sizeof buf, "Loan Available: %s\010" /* 0x661728 */, fmt_thousands(num, avail));
                 text_at(0x62, 0xa0, &r, buf, GFX_TEXT_NOJUSTIFY);
-                snprintf(buf, sizeof buf, exe_fmt(0x66173c, "dd", "Yearly Interest: %1d.%1d%%"), c / 10, c % 10);
+                snprintf(buf, sizeof buf, "Yearly Interest: %1d.%1d%%" /* 0x66173c */, c / 10, c % 10);
                 text_at(0x62, 0xb4, &r, buf, GFX_TEXT_NOJUSTIFY);
-                text_at(0x62, 0xbe, &r, exe_str(0x661758), GFX_TEXT_NOJUSTIFY);
+                text_at(0x62, 0xbe, &r, "Payable over 100 years" /* 0x661758 */, GFX_TEXT_NOJUSTIFY);
             }
-            label(MICROVIEW_LOAN, 0x661770); /* BORROW */
+            label(MICROVIEW_LOAN, "BORROW" /* 0x661770 */);
             press(MICROVIEW_LOAN, false);
         } else {
-            text_at(0x62, 0xa2, &r, exe_str(0x661778), GFX_TEXT_NOJUSTIFY);
-            text_at(0x62, 0xb6, &r, exe_str(0x6617a8), GFX_TEXT_NOJUSTIFY);
+            text_at(0x62, 0xa2, &r, "Unable to lend you any Pennies at the moment." /* 0x661778 */, GFX_TEXT_NOJUSTIFY);
+            text_at(0x62, 0xb6, &r, "Pay back some outstanding loans, and try again later." /* 0x6617a8 */,
+                    GFX_TEXT_NOJUSTIFY);
             button_hide(MICROVIEW_LOAN);
             fill(0x19, 0x9d, 0x48, 0x30, 100);
         }
@@ -687,31 +702,31 @@ static void loan_panel(void)
             if (years < 1) {
                 button_hide(MICROVIEW_LOAN);
                 fill(0x19, 0x9d, 0x48, 0x30, 100);
-                text_at(0x62, 0xa0, &r, exe_str(0x66168c), GFX_TEXT_NOJUSTIFY);
-                snprintf(buf, sizeof buf, exe_fmt(0x66169c, "s", "Remaining SOULs: %s"), fmt_thousands(num, owed));
+                text_at(0x62, 0xa0, &r, "LOAN FORFEITED!" /* 0x66168c */, GFX_TEXT_NOJUSTIFY);
+                snprintf(buf, sizeof buf, "Remaining SOULs: %s" /* 0x66169c */, fmt_thousands(num, owed));
                 text_at(0x62, 0xb4, &r, buf, GFX_TEXT_NOJUSTIFY);
             } else {
-                snprintf(buf, sizeof buf, exe_fmt(0x661650, "s", "Pennies Owed: %s"), fmt_thousands(num, owed));
+                snprintf(buf, sizeof buf, "Pennies Owed: %s\010" /* 0x661650 */, fmt_thousands(num, owed));
                 text_at(0x62, 0xa0, &r, buf, GFX_TEXT_NOJUSTIFY);
-                snprintf(buf, sizeof buf, exe_fmt(0x661664, "d", "Years Left: %d"), years);
+                snprintf(buf, sizeof buf, "Years Left: %d" /* 0x661664 */, years);
                 text_at(0x62, 0xb4, &r, buf, GFX_TEXT_NOJUSTIFY);
                 uint32_t risk = soul_rate ? (uint32_t)(rate + 10) * (owed / 10) * 0x100u / soul_rate : 0;
-                snprintf(buf, sizeof buf, exe_fmt(0x661674, "s", "Risk: %s SOULs"), fmt_thousands(num, risk));
+                snprintf(buf, sizeof buf, "Risk: %s SOULs" /* 0x661674 */, fmt_thousands(num, risk));
                 text_at(0x62, 0xbe, &r, buf, GFX_TEXT_NOJUSTIFY);
-                label(MICROVIEW_LOAN, 0x661684); /* REPAY */
+                label(MICROVIEW_LOAN, "REPAY" /* 0x661684 */);
                 press(MICROVIEW_LOAN, false);
             }
         } else {
-            snprintf(buf, sizeof buf, exe_fmt(0x6616b0, "s", "Pennies Owed %s."), fmt_thousands(num, owed));
+            snprintf(buf, sizeof buf, "Pennies Owed %s\010." /* 0x6616b0 */, fmt_thousands(num, owed));
             text_at(0x62, 0xa0, &r, buf, GFX_TEXT_NOJUSTIFY);
-            snprintf(buf, sizeof buf, exe_fmt(0x6616c4, "d", "Years Left: %d"), years);
+            snprintf(buf, sizeof buf, "Years Left: %d" /* 0x6616c4 */, years);
             text_at(0x62, 0xb4, &r, buf, GFX_TEXT_NOJUSTIFY);
             if (years != 0) {
-                snprintf(buf, sizeof buf, exe_fmt(0x6616d4, "s", "Next Payment: %s."),
+                snprintf(buf, sizeof buf, "Next Payment: %s\010." /* 0x6616d4 */,
                          fmt_thousands(num, owed / (uint32_t)(int32_t)years));
                 text_at(0x62, 0xbe, &r, buf, GFX_TEXT_NOJUSTIFY);
             }
-            label(MICROVIEW_LOAN, 0x6616e8); /* REPAY */
+            label(MICROVIEW_LOAN, "REPAY" /* 0x6616e8 */);
             press(MICROVIEW_LOAN, false);
         }
     }
@@ -728,7 +743,8 @@ static void loan_action(void)
     uint32_t owed = sim_cell_u32(s, 1);
     PlaneStats *realm = realm_cur();
     if (owed == 0) {
-        if (ask(exe_str(0x661830), 0x66181c, 2) == 1) {
+        if (ask("Are your sure you want to take out this loan?" /* 0x661830 */,
+                "&You Bet!\0~&No Way\0" /* 0x66181c */) == 1) {
             s->b[5] = 100;
             realm->unk_80ef++;
             s->b[6] = realm->unk_80ef;
@@ -739,7 +755,7 @@ static void loan_action(void)
             loan_panel();
         }
     } else if (!bignum_ge_int(g_state.pennies, (int32_t)owed)) {
-        ask(exe_str(0x6617e8), 0x6617e0, 1);
+        ask("You don't have enough Pennies to pay off this Loan!" /* 0x6617e8 */, "&Heck!\0" /* 0x6617e0 */);
     } else {
         bignum_sub(&g_state.pennies, owed);
         sim_cell_set_u32(s, 1, 0);
@@ -762,14 +778,16 @@ static void training_text(void)
     font_colors(0x13, 0x13);
     gfx_font_select(FONT);
     uint8_t lo = (uint8_t)((g_index & 0xfe) * -10 + 0x32);
-    text_at(0x1c, 0xb9, &r, exe_str(0x6623b4), GFX_TEXT_NOJUSTIFY | GFX_TEXT_CENTER);
-    snprintf(buf, sizeof buf, exe_fmt(g_plane == GS_PLANE_HEAVEN ? 0x6623d8 : 0x6623fc, "dd", "%d to %d%%"), lo,
-             lo + 0x32);
+    text_at(0x1c, 0xb9, &r, "This Training Center will accept" /* 0x6623b4 */, GFX_TEXT_NOJUSTIFY | GFX_TEXT_CENTER);
+    snprintf(buf, sizeof buf,
+             (g_plane == GS_PLANE_HEAVEN ? "%d to %d%% of all Angel applicants." /* 0x6623d8 */
+                                         : "%d to %d%% of all Demon applicants." /* 0x6623fc */),
+             lo, lo + 0x32);
     text_at(0x1c, 0xc3, &r, buf, GFX_TEXT_NOJUSTIFY | GFX_TEXT_CENTER);
     if (!(s->b[0xd] & 0x80))
-        snprintf(buf, sizeof buf, exe_fmt(0x662434, "d", "Now accepting %d%% of applicants."), s->b[0xd] & 0x7f);
+        snprintf(buf, sizeof buf, "Now accepting %d%% of applicants." /* 0x662434 */, s->b[0xd] & 0x7f);
     else
-        snprintf(buf, sizeof buf, "%s", exe_str(0x662420));
+        snprintf(buf, sizeof buf, "%s", "Currently Inactive." /* 0x662420 */);
     text_at(0x1c, 0xcd, &r, buf, GFX_TEXT_NOJUSTIFY | GFX_TEXT_CENTER);
     wm_redraw(g_win, &r);
 }
@@ -784,10 +802,11 @@ static void omnibolge_text(void)
     fill(0x1a, 0xb8, 0xce, 0x22, 100);
     font_colors(0x13, 0x13);
     gfx_font_select(FONT);
-    text_at(0x1c, 0xb9, &r, exe_str(g_plane == GS_PLANE_HELL ? 0x662458 : 0x662468),
+    text_at(0x1c, 0xb9, &r,
+            (g_plane == GS_PLANE_HELL ? "This Omnibolge" /* 0x662458 */ : "This Love Dome" /* 0x662468 */),
             GFX_TEXT_NOJUSTIFY | GFX_TEXT_CENTER);
-    text_at(0x1c, 0xc3, &r, exe_str(0x662478), GFX_TEXT_NOJUSTIFY | GFX_TEXT_CENTER);
-    snprintf(buf, sizeof buf, exe_fmt(0x662490, "d", "%d%% of passing SOULs."), cell_sim()->b[0xd]);
+    text_at(0x1c, 0xc3, &r, "is currently accepting" /* 0x662478 */, GFX_TEXT_NOJUSTIFY | GFX_TEXT_CENTER);
+    snprintf(buf, sizeof buf, "%d%% of passing SOULs." /* 0x662490 */, cell_sim()->b[0xd]);
     text_at(0x1c, 0xcd, &r, buf, GFX_TEXT_NOJUSTIFY | GFX_TEXT_CENTER);
     wm_redraw(g_win, &r);
 }
@@ -831,10 +850,10 @@ static void accept_panel(void)
             fill(0xd2 - w2, 0xaf, w2, 4, c);
         }
         if (!(s->b[0xd] & 0x80)) {
-            label(MICROVIEW_ACTIVE, 0x6624ac); /* ON */
+            label(MICROVIEW_ACTIVE, "ON" /* 0x6624ac */);
             press(MICROVIEW_ACTIVE, true);
         } else {
-            label(MICROVIEW_ACTIVE, 0x6624a8); /* OFF */
+            label(MICROVIEW_ACTIVE, "OFF" /* 0x6624a8 */);
             press(MICROVIEW_ACTIVE, false);
         }
     }
@@ -850,11 +869,11 @@ static void training_active(bool on)
     SimCell *s = cell_sim();
     if (!on) {
         s->b[0xd] |= 0x80;
-        label(MICROVIEW_ACTIVE, 0x6624b4); /* OFF */
+        label(MICROVIEW_ACTIVE, "OFF" /* 0x6624b4 */);
         press(MICROVIEW_ACTIVE, false);
     } else {
         s->b[0xd] &= 0x7f;
-        label(MICROVIEW_ACTIVE, 0x6624b0); /* ON */
+        label(MICROVIEW_ACTIVE, "ON" /* 0x6624b0 */);
         press(MICROVIEW_ACTIVE, true);
     }
     training_text();
@@ -938,13 +957,13 @@ static void upgrade_action(void)
     uint8_t target = g_up_index, set = g_set;
     uint8_t x = (uint8_t)g_x, y = (uint8_t)g_y;
     if (bignum_less(g_state.pennies, (int32_t)g_up_cost)) {
-        ask(exe_str(0x6624c4), 0x6624b8, 1);
+        ask("You don't have enough Pennies!" /* 0x6624c4 */, "&Fudge!\0" /* 0x6624b8 */);
         return;
     }
     int prev = g_world.plane;
     views_select_plane(g_plane);
     if (set == 19 && sim_cell_u32(sim_cell(x % GS_MAP_W, y % GS_MAP_H), 1) != 0) {
-        ask(exe_str(0x6624f0), 0x6624e4, 1);
+        ask("You can't upgrade this Bank while there's an active loan." /* 0x6624f0 */, "&Fudge!\0" /* 0x6624e4 */);
         views_select_plane(prev);
         return;
     }
@@ -966,14 +985,13 @@ static void upgrade_action(void)
                  area_free((uint8_t)(n + x), (uint8_t)(y - n + 1), 0, (int8_t)(m - 1)))
             nx = x, ny = (uint8_t)(y + 1);
         if (nx == 200) {
-            ask(exe_str(0x662534), 0x66252c, 1);
+            ask("There's not enough extra room to upgrade this structure!" /* 0x662534 */, "&Darn!\0" /* 0x66252c */);
             views_select_plane(prev);
             return;
         }
     }
-    snprintf(buf, sizeof buf, exe_fmt(0x662570, "s", "This'll cost %s Pennies.  Are you sure?"),
-             fmt_thousands(num, g_up_cost));
-    if (ask(buf, 0x662598, 2) == 2) {
+    snprintf(buf, sizeof buf, "This'll cost %s Pennies.  Are you sure?" /* 0x662570 */, fmt_thousands(num, g_up_cost));
+    if (ask(buf, "&Yup\0~&Nooo!\0" /* 0x662598 */) == 2) {
         views_select_plane(prev);
         return;
     }
@@ -986,8 +1004,16 @@ static void upgrade_action(void)
     views_select_plane(prev);
 }
 
+/* The structures with an artist's rendering: pop-up 900 + 2i shows entry i. */
+static const struct {
+    int8_t set, index;
+} k_artist_popups[0x1a] = {/* 0x64f000 */
+                           {4, 0},   {4, 1},   {4, 2},   {4, 3},   {4, 4},   {4, 5},   {4, 6},   {4, 7},   {4, 8},
+                           {4, 9},   {14, 11}, {14, 27}, {14, 38}, {14, 40}, {14, 53}, {14, 84}, {14, 94}, {15, 41},
+                           {15, 44}, {15, 47}, {15, 56}, {15, 99}, {9, 5},   {2, 0},   {5, 1},   {5, 0}};
+
 /* 0x469c0c: the artist's rendering button, for structures with a news
- * pop-up (table 0x64f000: 26 {set, index} pairs, pop-up 900 + 2i) */
+ * pop-up (k_artist_popups) */
 static void artist_button(unsigned set, unsigned index)
 {
     unsigned id = 0;
@@ -996,7 +1022,7 @@ static void artist_button(unsigned set, unsigned index)
     if (set == 5)
         index &= 1;
     for (unsigned i = 0; i < 0x1a; i++)
-        if ((int)(int8_t)exe_u8(0x64f000 + i * 2) == (int)set && (int)(int8_t)exe_u8(0x64f001 + i * 2) == (int)index)
+        if (k_artist_popups[i].set == (int)set && k_artist_popups[i].index == (int)index)
             id = i * 2 + 900;
     if (g_artist != 0 && id == 0) {
         button_hide(MICROVIEW_ARTIST);
@@ -1316,59 +1342,73 @@ uint32_t microview_upgrade_cost(void) { return g_up_cost; }
 /* 0x469f1b: right click on a button */
 static void microview_help(WmWindow *c)
 {
-    uint32_t va = 0;
+    const char *text = NULL;
     switch ((int)ctl_get_id(c)) {
     case 1:
-        va = wm_is_minimized(c->parent) ? 0x661a98 : 0x661abc;
+        text = wm_is_minimized(c->parent) ? "This button MAXIMIZES the window" /* 0x661a98 */
+                                          : "This button MINIMIZES the window" /* 0x661abc */;
         break;
     case MICROVIEW_PICTURE:
-        va = 0x6618f0;
+        text = "This button brings up a PICTURE of the current tile." /* 0x6618f0 */;
         break;
     case MICROVIEW_CLOSE:
-        va = 0x6618cc;
+        text = "This button CLOSES the Microview." /* 0x6618cc */;
         break;
     case MICROVIEW_DESCRIPTION:
-        va = 0x661928;
+        text = "This button brings up a DESCRIPTION of the current tile." /* 0x661928 */;
         break;
     case MICROVIEW_KNOW:
-        va = 0x661964;
+        text = "This button brings up important THINGS YOU SHOULD KNOW about the current tile." /* 0x661964 */;
         break;
     case MICROVIEW_CHANGE:
-        va = 0x6619b4;
+        text = "This button brings up some THINGS YOU CAN CHANGE about the current tile." /* 0x6619b4 */;
         break;
     case MICROVIEW_ARTIST:
-        va = 0x661a00;
+        text = "You're in luck...this button will bring up an ARTIST'S RENDERING of the current tile." /* 0x661a00 */;
         break;
     case MICROVIEW_LOCK:
-        va = 0x661a58;
+        text = "This button LOCKS/UNLOCKS this structure in its current form." /* 0x661a58 */;
         break;
     }
-    if (va)
-        views_control_help(c, exe_str(va));
+    if (text)
+        views_control_help(c, text);
 }
 
 /* right click / hover on the window: the sliders' help */
 static void area_help(int x, int y)
 {
-    uint32_t va = 0;
+    const char *text = NULL;
     if (g_page != MICROVIEW_CHANGE || !views_hooks.help_balloon)
         return;
     int sx = g_win->rect.left + x, sy = g_win->rect.top + y;
     if (g_set == 14 || g_set == 15) {
         if (gfx_rect_contains(&r_popbar, x, y))
-            views_hooks.help_balloon(sx, sy, 0x78, exe_str(0x661294));
+            views_hooks.help_balloon(
+                sx, sy, 0x78,
+                "This is the POPULATION DISPLAY bar.  The dark color represents PERMANENT population, while the light "
+                "color represents TEMPORARY population." /* 0x661294 */);
         if (gfx_rect_contains(&r_fund, x, y))
-            views_hooks.help_balloon(sx, sy, 0x78, exe_str(0x661320));
+            views_hooks.help_balloon(
+                sx, sy, 0x78, "This slider controls how much you want to FUND this particular tile." /* 0x661320 */);
         if (gfx_rect_contains(&r_focus, x, y))
-            views_hooks.help_balloon(sx, sy, 0x78, exe_str(0x661368));
+            views_hooks.help_balloon(
+                sx, sy, 0x78,
+                "This slider controls the FOCUS of the tile's funding. Sliding to the left will steer the focus "
+                "towards Research, which benefits PERMANENT residents.  Sliding to the right will shift the focus to "
+                "Production, which benefits TEMPORARY residents." /* 0x661368 */);
         return;
     }
     if (g_set == 8 && gfx_rect_contains(&r_accept, x, y))
-        va = 0x66145c;
+        text = "This slider controls the percentage of applicants that this TRAINING CENTER will accept.  Sliding to "
+               "the right increases the percentage, while sliding left decreases it." /* 0x66145c */;
     else if (g_set == 5 && gfx_rect_contains(&r_accept, x, y))
-        va = g_world.plane == GS_PLANE_HELL ? 0x661508 : 0x6615ac;
-    if (va)
-        views_hooks.help_balloon(sx, sy, 0x78, exe_str(va));
+        text = g_world.plane == GS_PLANE_HELL
+                   ? "This slider controls the percentage of applicants that this OMNIBOLGE will accept.  Sliding to "
+                     "the right increases the percentage, while sliding left decreases it." /* 0x661508 */
+                   : "This slider controls the percentage of applicants that this LOVE DOME will accept.  Sliding to "
+                     "the right increases the percentage, while sliding left decreases it." /* 0x6615ac */;
+    if (text)
+        views_hooks.help_balloon(sx, sy, 0x78, text);
 }
 
 /* left button down (msg 9) or the arrow keys (0x177a, no capture) */
@@ -1597,24 +1637,24 @@ bool microview_create(void)
         gfx_surface_destroy(bg);
         return false;
     }
-    wm_set_title(g_win, exe_str(0x661274));
+    wm_set_title(g_win, "Microview" /* 0x661274 */);
     gfx_blit(g_win->surface, 0, 0, w, h, bg, 0, 0);
     g_banner = cut(bg, 0x16, 0x10, 0xfd, 0x24);
     static const struct {
         int id;
         uint32_t bmp, style;
         int x, y;
-        uint32_t label;
+        const char *label;
     } k_btns[] = {
-        {MICROVIEW_PICTURE, 0x114, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, 0xf9, 0x3a, 0},
-        {MICROVIEW_DESCRIPTION, 0x115, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, 0xf9, 0x52, 0},
-        {MICROVIEW_KNOW, 0x116, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, 0xf9, 0x6a, 0},
-        {MICROVIEW_CHANGE, 400, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, 0xf9, 0x82, 0},
-        {MICROVIEW_ARTIST, 0x118, CTL_STYLE_BITMAP, 0xf9, 0x9a, 0},
-        {MICROVIEW_LOCK, 0x119, CTL_STYLE_BITMAP | CTL_STYLE_TOGGLE, 0x17, 0x45, 0},
-        {MICROVIEW_UPGRADE, 0x226, CTL_STYLE_BITMAP, 0x1c, 0x54, 0x661280},
-        {MICROVIEW_LOAN, 0x226, CTL_STYLE_BITMAP, 0x1c, 0xae, 0x661288},
-        {MICROVIEW_ACTIVE, 0x226, CTL_STYLE_BITMAP | CTL_STYLE_TOGGLE, 0x1c, 0x80, 0x661290},
+        {MICROVIEW_PICTURE, 0x114, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, 0xf9, 0x3a, NULL},
+        {MICROVIEW_DESCRIPTION, 0x115, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, 0xf9, 0x52, NULL},
+        {MICROVIEW_KNOW, 0x116, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, 0xf9, 0x6a, NULL},
+        {MICROVIEW_CHANGE, 400, CTL_STYLE_BITMAP | CTL_STYLE_STICKY, 0xf9, 0x82, NULL},
+        {MICROVIEW_ARTIST, 0x118, CTL_STYLE_BITMAP, 0xf9, 0x9a, NULL},
+        {MICROVIEW_LOCK, 0x119, CTL_STYLE_BITMAP | CTL_STYLE_TOGGLE, 0x17, 0x45, NULL},
+        {MICROVIEW_UPGRADE, 0x226, CTL_STYLE_BITMAP, 0x1c, 0x54, "UPGRADE" /* 0x661280 */},
+        {MICROVIEW_LOAN, 0x226, CTL_STYLE_BITMAP, 0x1c, 0xae, "LOAN" /* 0x661288 */},
+        {MICROVIEW_ACTIVE, 0x226, CTL_STYLE_BITMAP | CTL_STYLE_TOGGLE, 0x1c, 0x80, "ON" /* 0x661290 */},
     };
     GfxSurface *s = load(0x259);
     if (s) {
@@ -1633,7 +1673,7 @@ bool microview_create(void)
             gfx_surface_destroy(s);
         g_btn[k_btns[i].id - MICROVIEW_PICTURE] = b;
         if (b && k_btns[i].label)
-            ctl_button_set_label(b, exe_str(k_btns[i].label), FONT, 0x131a13, true);
+            ctl_button_set_label(b, k_btns[i].label, FONT, 0x131a13, true);
     }
     g_knob_heaven = load(0x11e);
     g_knob_hell = load(0x11c);

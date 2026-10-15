@@ -37,6 +37,7 @@ typedef enum {
     PLAT_EV_RESTORE,    /* WM_SYSCOMMAND SC_RESTORE */
     PLAT_EV_EXPOSE,     /* WM_PAINT for the whole window */
     PLAT_EV_CLOSE,      /* WM_CLOSE: the window's close button */
+    PLAT_EV_RESIZE,     /* port: the port window's pixel size changed (plat_video_target_size) */
 } PlatEventType;
 
 typedef struct {
@@ -86,7 +87,9 @@ void plat_video_set_palette(const PlatColor *colors, int first, int count);
 void plat_video_present(void);
 /* Replaces CreateWindowEx at the resolution / ChangeDisplaySettingsA:
  * (re)creates the framebuffer at width x height (contents undefined) and
- * sizes the window, fullscreen or not. The palette is kept. */
+ * sizes the window, fullscreen or not. The palette is kept. With the port
+ * window (plat_window_open) the window keeps its geometry; fullscreen
+ * still switches to fullscreen. */
 bool plat_video_set_mode(int width, int height, bool fullscreen);
 /* Desktop size in pixels, or 0 x 0 if unknown. Divided by the UI scale. */
 void plat_video_desktop_size(int *width, int *height);
@@ -96,7 +99,58 @@ void plat_video_desktop_size(int *width, int *height);
  * desktop's pixel density. Clamped so the scaled desktop stays at least
  * 640x480. Must be set before the display init (plat_init first). */
 void plat_set_ui_scale(int scale);
+/* The UI scale in effect: the requested one, lowered while the port
+ * window is too small for it (present_logical_size). */
 int plat_ui_scale(void);
+/* The requested UI scale (0 resolved from the density, clamped). */
+int plat_ui_scale_requested(void);
+
+/* --- port window (docs/rendering.md "Port window") --------------------------
+ * By default the game runs in a normal resizable window, and its logical
+ * desktop (the framebuffer) follows the window: window pixels / UI scale,
+ * at least 640x480. The platform only reports the change
+ * (PLAT_EV_RESIZE); the game reallocates the framebuffer and lays its
+ * windows out again (game/display.c). Alt+Enter and F11 toggle borderless
+ * desktop fullscreen; those keys never reach the game. */
+typedef struct {
+    int w, h;        /* windowed size in desktop units (SDL window coordinates); 0 = default */
+    int x, y;        /* windowed position; PLAT_WINDOW_POS_DEFAULT = centred */
+    bool fullscreen; /* borderless desktop fullscreen */
+    bool maximized;
+} PlatWindowState;
+#define PLAT_WINDOW_POS_DEFAULT (-0x7fffffff)
+
+/* Opens the port window (instead of plat_video_set_mode sizing it):
+ * `saved` geometry if it fits the desktop, else the logical size pref_w x
+ * pref_h (0: none) times the UI scale if it fits, else 80 % of the usable
+ * desktop. Then call plat_video_target_size and plat_video_set_mode with
+ * that size. */
+void plat_window_open(const PlatWindowState *saved, int pref_w, int pref_h);
+/* Whether plat_window_open ran (the framebuffer follows the window). */
+bool plat_window_managed(void);
+/* The current state: the last windowed geometry (not the fullscreen or
+ * maximized one) and the flags. Still valid after plat_shutdown. */
+void plat_window_get_state(PlatWindowState *out);
+void plat_window_set_fullscreen(bool on);
+bool plat_window_fullscreen(void);
+/* Programmatic resize in desktop units (tests, --window-size); leaves
+ * fullscreen and maximized first. */
+void plat_window_resize(int w, int h);
+/* The window's size in pixels (0 x 0 without a window). */
+void plat_window_pixel_size(int *w, int *h);
+/* The framebuffer size the port window wants now (window pixels / UI
+ * scale, at least 640x480). True if it differs from the current one or
+ * the effective UI scale would change. */
+bool plat_video_target_size(int *w, int *h);
+/* Reallocates the framebuffer at w x h (contents undefined, palette kept)
+ * without touching the window, and updates the effective UI scale. */
+bool plat_video_resize(int w, int h);
+/* Framebuffer position -> window coordinates of its centre (what an SDL
+ * mouse event at that pixel carries). Tests use it to inject clicks. */
+void plat_video_fb_to_window(int x, int y, float *wx, float *wy);
+/* Writes what the window shows now (the presented frame) to a BMP file.
+ * For the port's real-window checks. */
+bool plat_video_screenshot(const char *path);
 
 /* Mouse cursor (USER32 LoadCursor/SetCursor/ShowCursor/SetCursorPos).
  * plat_cursor_create takes w * h RGBA pixels (4 bytes each, A = 0 is

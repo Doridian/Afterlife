@@ -15,6 +15,10 @@
  *   [Port]
  *   Enhancements = 1
  *   UI scale = 0        ; 0 = automatic, else 1..4
+ *   Window size = 1600x1000      ; the port window (desktop units)
+ *   Window position = 120,80     ; missing: centred
+ *   Maximized = 0
+ *   Fullscreen = 0
  *
  * Precedence: command line (--enhancements, --no-enhancements,
  * --ui-scale=N, --port-ini=FILE), then the AFTERLIFE_ENHANCEMENTS
@@ -25,6 +29,8 @@
 
 #include <stdbool.h>
 
+#include "platform/platform.h"
+
 #define PORT_INI_NAME "ALIFEPORT.INI"
 
 /* The switch the gated code tests. Off unless the settings turn it on. */
@@ -33,6 +39,9 @@ extern bool g_enhancements;
 typedef struct {
     bool enhancements;
     int ui_scale; /* 0 = automatic (from the pixel density), 1..4 */
+    /* the port window (not an enhancement): last windowed size and place,
+     * maximized, fullscreen. w = h = 0: the default size. */
+    PlatWindowState window;
 } PortSettings;
 
 /* The settings as loaded (and as the Port Options dialog changes them). */
@@ -52,20 +61,26 @@ const char *port_settings_path(void);
 
 /* Startup (main): applies --port-ini, loads the file into g_port_settings,
  * applies the environment and command-line overrides (the overrides are not
- * saved) and sets g_enhancements. Arguments it doesn't know are ignored. */
+ * saved; --window-size=WxH, --fullscreen and --windowed change the
+ * window, whose state is saved at exit) and sets g_enhancements. Arguments
+ * it doesn't know are ignored. */
 void enhance_init(int argc, char **argv);
 /* The tests: AFTERLIFE_ENHANCEMENTS=1 / 0 sets g_enhancements. */
 void enhance_init_env(void);
 
 /* The UI scale to ask the platform for: 1 with enhancements off, else the
- * setting (0 = automatic). Takes effect at the next start. */
+ * setting (0 = automatic). display_apply_settings applies it live. */
 int enhance_ui_scale_request(void);
 
 /* Saves g_port_settings to port_settings_path(). */
 bool enhance_save(void);
+/* Saves the port window's current state (plat_window_get_state) into the
+ * settings file, keeping the file's other keys (so command-line overrides
+ * aren't saved). main registers it with atexit. */
+bool enhance_save_window_state(void);
 
-/* The Port Options dialog (Global menu, port-only). Toggles take effect at
- * once; a UI scale change at the next start. */
+/* The Port Options window (Global menu, port-only; ui/portopts.c). Every
+ * change applies at once; OK saves, Cancel puts the old settings back. */
 void enhance_options_dialog(void);
 
 #endif

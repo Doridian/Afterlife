@@ -62,9 +62,7 @@
  * behaviour is here too.
  *
  * Side effects outside the game state go through g_badthings_hooks (each
- * may be NULL). The message boxes' texts come from the game's strings by
- * their original addresses (exe_str, ui/exe_text.h), looked up only when
- * the message hook is set.
+ * may be NULL).
  */
 #ifndef GAME_BADTHINGS_H
 #define GAME_BADTHINGS_H

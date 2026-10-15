@@ -17,6 +17,7 @@
 #include "game/badthings.h"
 #include "game/build.h"
 #include "game/config.h"
+#include "game/display.h"
 #include "game/enhance.h"
 #include "game/mapobj.h"
 #include "game/music.h"
@@ -43,7 +44,6 @@
 #include "ui/about.h"
 #include "ui/advisors.h"
 #include "ui/controls.h"
-#include "ui/exe_text.h"
 #include "ui/ctrlpanel.h"
 #include "ui/graphview.h"
 #include "ui/macro.h"
@@ -823,10 +823,14 @@ static bool load_file(const char *path)
     after_world_change();
     if ((g_state.bad_things != 0) != (bad_things != 0)) {
         /* save_load_game 0x494089: an FYI when the load flips the setting */
-        char buttons[32];
-        uint32_t t = g_state.bad_things ? 0x66c2e4 : 0x66c330, x = g_state.bad_things ? 0x66c2ac : 0x66c2f4;
-        exe_buttons(g_state.bad_things ? 0x66c2a4 : 0x66c2ec, 1, buttons, sizeof buttons);
-        ctl_message_box(-1, -1, exe_str(t), exe_str(x), buttons, 0);
+        if (g_state.bad_things)
+            ctl_message_box(-1, -1, "FYI..." /* 0x66c2e4 */,
+                            "You've loaded up a game with the Bad Things toggled on." /* 0x66c2ac */,
+                            "&OK\0" /* 0x66c2a4 */, 0);
+        else
+            ctl_message_box(-1, -1, "FYI..." /* 0x66c330 */,
+                            "You've loaded up a game with the Bad Things toggled off." /* 0x66c2f4 */,
+                            "&OK\0" /* 0x66c2ec */, 0);
     }
     return true;
 }
@@ -1349,6 +1353,78 @@ static void hook_mapobj_redraw(const MapObjRedraw *r)
     }
 }
 
+/* ---- the port window's relayout (game/display.c) ------------------------ */
+
+/* Not while the title's animations hold pointers into the main window's
+ * surface (FLC targets), nor while the loading screen is up. */
+static bool display_can_relayout(void) { return !g_load_win && !title_holds_surface(); }
+
+/* Keeps a child's rect at the same distance from the right / bottom edge
+ * (anchor_x / anchor_y), the parent having grown by dw, dh. */
+static void anchor(GfxRect *r, int dw, int dh, bool anchor_x, bool stretch_x, bool anchor_y, bool stretch_y)
+{
+    if (anchor_x)
+        r->left += dw;
+    if (anchor_x || stretch_x)
+        r->right += dw;
+    if (anchor_y)
+        r->top += dh;
+    if (anchor_y || stretch_y)
+        r->bottom += dh;
+}
+
+static void relayout_scrollbar(WmWindow *sb, int dw, int dh, bool vertical)
+{
+    if (!sb)
+        return;
+    GfxRect r = sb->rect;
+    if (vertical)
+        anchor(&r, dw, dh, true, false, false, true);
+    else
+        anchor(&r, dw, dh, false, true, true, false);
+    wm_resize_surface(sb, r.right - r.left + 1, r.bottom - r.top + 1, 0, 0, 0);
+    wm_set_rect(sb, &r); /* the track puts its arrows at the ends and redraws */
+}
+
+/* The main window fills the screen; its menu bar and scrollbars follow
+ * the edges. In the game the map keeps its centre and the views and the
+ * control panel are moved back inside the client area; at the title the
+ * picture is centred again and the buttons go along the new edges. */
+static void display_relayout_game(int old_w, int old_h, int w, int h)
+{
+    (void)old_w, (void)old_h;
+    WmWindow *m = g_main_window;
+    if (!m)
+        return;
+    bool game = g_game_running != 0;
+    int mw = m->rect.right - m->rect.left + 1, mh = m->rect.bottom - m->rect.top + 1;
+    int dw = w - mw, dh = h - mh;
+    int old_cw = m->client.right - m->client.left + 1, old_ch = m->client.bottom - m->client.top + 1;
+    m->rect.left = m->rect.top = 0;
+    wm_resize_surface(m, w, h, 0, 0, 0);
+    m->client.right += dw;
+    m->client.bottom += dh;
+    if (m->menubar) {
+        wm_menubar_update_buttons(m->menubar);
+        menu_bar_resize(m->menubar, w);
+    }
+    relayout_scrollbar(m->hscroll, dw, dh, false);
+    relayout_scrollbar(m->vscroll, dw, dh, true);
+    for (WmWindow *c = m->children; c; c = c->next)
+        if (c != m->menubar && c != m->hscroll && c != m->vscroll)
+            wm_fit_into(c, &m->client);
+    if (game)
+        shell_view_resized(old_cw, old_ch);
+    else
+        title_relayout(); /* the title's buttons go back along the edges */
+}
+
+static void install_display_hooks(void)
+{
+    display_hooks.can_relayout = display_can_relayout;
+    display_hooks.relayout = display_relayout_game;
+}
+
 static void install_hooks(void)
 {
     /* the simulation (WP1) */
@@ -1500,6 +1576,7 @@ int game_main_init(int argc, char **argv)
     if (!g_main_window)
         return -1;
     wm_set_title(g_main_window, "Afterlife");
+    install_display_hooks(); /* port: the port window follows the window's size */
     if (g_main_window->menubar)
         wm_show(g_main_window->menubar, false);
     wm_show_scrollbars(g_main_window, 3, false);
@@ -1629,6 +1706,7 @@ void game_main_step(void)
 
 void game_main_shutdown(void)
 {
+    display_hooks = (DisplayHooks){0};
     snd_slot_stop_stream(SND_VOICE_SLOT);
     music_stop();
     akos_talk_shutdown(); /* 0x4b94b0 */

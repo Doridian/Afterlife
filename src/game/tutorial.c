@@ -32,7 +32,6 @@
 #include "ui/advisors_int.h"
 #include "ui/controls.h"
 #include "ui/ctrlpanel.h"
-#include "ui/exe_text.h"
 #include "ui/graphview.h"
 #include "ui/macro.h"
 #include "ui/mapview.h"
@@ -76,15 +75,17 @@ const TutGlide *tutorial_glide(void) { return &tut.glide; }
 static uint32_t now_ms(void) { return tutorial_hooks.clock ? tutorial_hooks.clock() : tm_get_time(); }
 
 /* the name table at the top of 0x41f611 */
-static const uint32_t k_names[TUTORIAL_LESSONS] = {0x65a100, 0x65a11c, 0x65a134, 0x65a150, 0x65a170,
-                                                   0x65a188, 0x65a1a4, 0x65a1c0, 0x65a1d8};
-#define TEXT_TEMP_TITLE 0x65a1e8 /* "Temp Game From Hell" */
-#define TEXT_ADVISOR_TITLE 0x65a1fc
-#define TEXT_DONE_FMT 0x65eb54
-#define TEXT_DONE_TITLE 0x65eb84
-#define TEXT_DONE_BUTTONS 0x65eb7c
+static const char *const k_names[TUTORIAL_LESSONS] = {
+    "Getting Started" /* 0x65a100 */,   "Lost SOULs" /* 0x65a11c */,      "Basic Karma" /* 0x65a134 */,
+    "Your Workforce" /* 0x65a150 */,    "Graphs and Maps" /* 0x65a170 */, "Limbos" /* 0x65a188 */,
+    "Rocks and Siphons" /* 0x65a1a4 */, "Ports" /* 0x65a1c0 */,           "Basic Economics" /* 0x65a1d8 */};
+#define TEXT_TEMP_TITLE "Temp Game From Hell"                              /* 0x65a1e8 */
+#define TEXT_ADVISOR_TITLE "Afterlife Tutorial... hit <esc> to terminate." /* 0x65a1fc */
+#define TEXT_DONE_FMT "Afterlife Tutorial #%d, '%s', is over."             /* 0x65eb54 */
+#define TEXT_DONE_TITLE "All Done!"                                        /* 0x65eb84 */
+#define TEXT_DONE_BUTTONS "&OK\0"                                          /* 0x65eb7c */
 
-const char *tutorial_lesson_name(int n) { return n >= 1 && n <= TUTORIAL_LESSONS ? exe_str(k_names[n - 1]) : ""; }
+const char *tutorial_lesson_name(int n) { return n >= 1 && n <= TUTORIAL_LESSONS ? k_names[n - 1] : ""; }
 
 const char *tutorial_op_name(int op)
 {
@@ -507,7 +508,7 @@ static void exec_op(const TutOp *o)
     switch (o->op) {
     case TO_SAY:
         if (o->a == 1 || o->a == 2)
-            akos_talk_say(o->a, &g_adv_talk.text_rect[o->a], exe_str((uint32_t)o->b), (uint32_t)o->c);
+            akos_talk_say(o->a, &g_adv_talk.text_rect[o->a], o->text, (uint32_t)o->c);
         break;
     case TO_WAIT_TALK:
         akos_talk_wait(o->a);
@@ -651,7 +652,7 @@ static void script(int n)
     tut.microview_owned = false;
     char temp[1100];
     shell_slot_path(1, TUTORIAL_TEMP_SLOT, temp, sizeof temp);
-    if (!shell_save_game_to(temp, exe_str(TEXT_TEMP_TITLE))) {
+    if (!shell_save_game_to(temp, TEXT_TEMP_TITLE)) {
         attract_stop(false);
         return;
     }
@@ -667,7 +668,7 @@ static void script(int n)
     shell_menu_set_checked(MENU_CTRLPANEL, true);
     if (shell_ctrl_button(0x1f))
         ctl_button_set_pressed(shell_ctrl_button(0x1f), true, true);
-    wm_set_title(adv, exe_str(TEXT_ADVISOR_TITLE));
+    wm_set_title(adv, TEXT_ADVISOR_TITLE);
     views_draw_title(adv);
     wm_show(adv, true);
     wm_show(g_ctrlpanel_window, true);
@@ -699,10 +700,8 @@ done:
     adv->proc = advisor_proc;
     restore_windows();
     char text[200];
-    snprintf(text, sizeof text, exe_fmt(TEXT_DONE_FMT, "ds", "#%d: %s"), n, tutorial_lesson_name(n));
-    char buttons[32];
-    ctl_message_box(-1, -1, exe_str(TEXT_DONE_TITLE), text, exe_buttons(TEXT_DONE_BUTTONS, 1, buttons, sizeof buttons),
-                    0);
+    snprintf(text, sizeof text, TEXT_DONE_FMT, n, tutorial_lesson_name(n));
+    ctl_message_box(-1, -1, TEXT_DONE_TITLE, text, TEXT_DONE_BUTTONS, 0);
 }
 
 void tutorial_run(int n)

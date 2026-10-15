@@ -162,6 +162,9 @@ void ctl_scroll_set_pos(WmWindow *bar, int pos);
  * min..min + 1. */
 void ctl_scroll_set_range(WmWindow *bar, int min, int max);
 int ctl_scroll_get_pos(WmWindow *bar); /* port-only: data 0x10 */
+/* Port-only: a vertical scrollbar's width / a horizontal one's height
+ * (the track bitmap's). */
+int ctl_scroll_thickness(bool vertical);
 /* 0x4bc3f8: the parts (any may be NULL) */
 void ctl_scroll_parts(WmWindow *bar, WmWindow **back, WmWindow **fwd, WmWindow **thumb);
 /* 0x4bc482: clamps a thumb rectangle between the arrows */

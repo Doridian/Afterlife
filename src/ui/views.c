@@ -6,6 +6,17 @@
 
 ViewsHooks views_hooks;
 
+/* 0x664918 */
+const char *const views_belief_names[16] = {"HAHAALFSUMA",  "HOHOALFSUMA",  "OPRAALFSUMA",  "OCRAALFSUMA",
+                                            "HAHARALFSUMA", "HOHORALFSUMA", "OPRARALFSUMA", "OCRARALFSUMA",
+                                            "HAHAALFSUSA",  "HOHOALFSUSA",  "OPRAALFSUSA",  "OCRAALFSUSA",
+                                            "HAHARALFSUSA", "HOHORALFSUSA", "OPRARALFSUSA", "OCRARALFSUSA"};
+/* 0x66c600 */
+const char *const views_virtue_names[7] = {"CONTENTMENT", "CHARITY", "TEMPERANCE", "DILIGENCE",
+                                           "CHASTITY",    "PEACE",   "HUMILITY"};
+/* 0x66c658 */
+const char *const views_sin_names[7] = {"ENVY", "AVARICE", "GLUTTONY", "SLOTH", "LUST", "WRATH", "PRIDE"};
+
 static WmWindow *g_main;       /* 0x5f7460 main_window */
 static struct MapView *g_view; /* 0x5bb120 map_view */
 static int *g_paused;          /* 0x5fa61c game_paused */

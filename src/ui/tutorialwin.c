@@ -11,7 +11,6 @@
 #include "game/resource.h"
 #include "gfx/surface.h"
 #include "ui/controls.h"
-#include "ui/exe_text.h"
 #include "ui/news.h"
 #include "ui/views.h"
 
@@ -21,16 +20,16 @@
 #define ID_VIEW 2000
 #define ID_MINIMIZE 1 /* the window manager's minimize button */
 
-/* texts in ALIFE.EXE */
-#define TEXT_TITLE 0x66fce4
-#define TEXT_PREV 0x66fcf8
-#define TEXT_NEXT 0x66fd00
-#define TEXT_HELP_CLOSE 0x66fd08
-#define TEXT_HELP_PREV 0x66fd2c
-#define TEXT_HELP_NEXT 0x66fd5c
-#define TEXT_HELP_MAXIMIZE 0x66fd88
-#define TEXT_HELP_MINIMIZE 0x66fdac
-#define TEXT_HELP_UNKNOWN 0x66fdd0
+/* texts */
+#define TEXT_TITLE "Afterlife Tutorial"                                /* 0x66fce4 */
+#define TEXT_PREV "<< Prev"                                            /* 0x66fcf8 */
+#define TEXT_NEXT "Next >>"                                            /* 0x66fd00 */
+#define TEXT_HELP_CLOSE "This button CLOSES the Tutorial."             /* 0x66fd08 */
+#define TEXT_HELP_PREV "This button advances to the PREVIOUS chapter." /* 0x66fd2c */
+#define TEXT_HELP_NEXT "This button advances to the NEXT chapter."     /* 0x66fd5c */
+#define TEXT_HELP_MAXIMIZE "This button MAXIMIZES the window."         /* 0x66fd88 */
+#define TEXT_HELP_MINIMIZE "This button MINIMIZES the window."         /* 0x66fdac */
+#define TEXT_HELP_UNKNOWN "I have no idea what this button does."      /* 0x66fdd0 */
 
 static struct {
     WmWindow *win;    /* 0x5fa5f0 */
@@ -152,7 +151,7 @@ bool tutorialwin_create(WmWindow *main)
         tutorialwin_destroy();
         return false;
     }
-    wm_set_title(tw.win, exe_str(TEXT_TITLE));
+    wm_set_title(tw.win, TEXT_TITLE);
     views_draw_title(tw.win);
     GfxSurface *bmp = gfx_load_bmp_resource(0x259, NULL);
     if (!bmp) {
@@ -173,7 +172,7 @@ bool tutorialwin_create(WmWindow *main)
     int h = bmp->height;
     WmWindow *b = bitmap_button(&r, ID_PREV, bmp);
     if (b)
-        ctl_button_set_label(b, exe_str(TEXT_PREV), 500, 0x1a, true);
+        ctl_button_set_label(b, TEXT_PREV, 500, 0x1a, true);
     bmp = gfx_load_bmp_resource(0x578, NULL);
     if (!bmp) {
         tutorialwin_destroy();
@@ -183,7 +182,7 @@ bool tutorialwin_create(WmWindow *main)
     r.bottom = bmp->height + r.top - 1;
     b = bitmap_button(&r, ID_NEXT, bmp);
     if (b)
-        ctl_button_set_label(b, exe_str(TEXT_NEXT), 500, 0x1a, true);
+        ctl_button_set_label(b, TEXT_NEXT, 500, 0x1a, true);
     return true;
 }
 
@@ -202,7 +201,7 @@ static void help(WmWindow *c)
     int id = (int)wm_get_data(c, 0);
     int x = ((c->rect.right - c->rect.left) >> 1) + tw.win->rect.left + c->rect.left;
     int y = ((c->rect.bottom - c->rect.top) >> 1) + tw.win->rect.top + c->rect.top;
-    uint32_t text = TEXT_HELP_UNKNOWN;
+    const char *text = TEXT_HELP_UNKNOWN;
     if (id == ID_CLOSE)
         text = TEXT_HELP_CLOSE;
     else if (id == ID_MINIMIZE)
@@ -211,7 +210,7 @@ static void help(WmWindow *c)
         text = TEXT_HELP_PREV;
     else if (id == ID_NEXT)
         text = TEXT_HELP_NEXT;
-    help_balloon_show(x, y, 0x78, exe_str(text), true, true);
+    help_balloon_show(x, y, 0x78, text, true, true);
 }
 
 /* 0x4abc3d */

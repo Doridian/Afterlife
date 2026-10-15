@@ -319,6 +319,20 @@ void shell_view_scroll(int dx, int dy)
             y - g_main_window->rect.top);
 }
 
+/* Port-only (the port window's relayout): the client area was old_cw x
+ * old_ch; keep the map point at its centre there, clamp, and repaint the
+ * map into the main window's surface (the caller repaints the screen). */
+void shell_view_resized(int old_cw, int old_ch)
+{
+    if (!g_main_window || !g_main_window->surface)
+        return;
+    g_scroll_x += (client_w() - old_cw) / 2;
+    g_scroll_y += (client_h() - old_ch) / 2;
+    view_clamp(&g_scroll_x, &g_scroll_y);
+    shell_view_update_scrollbars();
+    shell_view_paint(g_main_window->client.left, g_main_window->client.top, client_w(), client_h());
+}
+
 /* 0x406be8 */
 void shell_center_on_cell(int plane, int x, int y)
 {

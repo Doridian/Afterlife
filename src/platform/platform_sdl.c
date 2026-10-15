@@ -16,8 +16,14 @@ static SDL_Surface *g_indexed;
 static SDL_Palette *g_palette;
 static SDL_AudioStream *g_audio;
 static char g_data_dir[1024] = ".";
-static int g_ui_scale = 1;   /* port enhancement: see plat_set_ui_scale */
-static PresentRect g_dst;    /* where the framebuffer goes, output pixels */
+static int g_ui_scale = 1;     /* port enhancement, in effect: see plat_set_ui_scale */
+static int g_ui_scale_req = 1; /* requested (automatic resolved), 1..4 */
+static PresentRect g_dst;      /* where the framebuffer goes, output pixels */
+static bool g_managed;         /* port window: the framebuffer follows the window */
+static PlatWindowState g_wstate = {0, 0, PLAT_WINDOW_POS_DEFAULT, PLAT_WINDOW_POS_DEFAULT, false, false};
+static SDL_Scancode g_swallow_sc; /* the fullscreen shortcut's key: its key up is dropped too */
+static bool g_swallow_alt;        /* Alt+Enter: drop Alt's key up (it would open the menu bar) */
+static bool g_alt_held, g_ctrl_held; /* from the key events, for the shortcut */
 
 /* How the framebuffer is put into the window (present_layout). The window
  * is sized in pixels (SDL_WINDOW_HIGH_PIXEL_DENSITY, plat_video_set_mode),
@@ -54,14 +60,20 @@ static void desktop_pixels(int *width, int *height)
 
 void plat_set_ui_scale(int scale)
 {
-    int dw = 0, dh = 0;
-    desktop_pixels(&dw, &dh);
     if (scale <= 0)
         scale = present_auto_scale(desktop_density());
-    g_ui_scale = present_clamp_scale(scale, dw, dh);
+    /* clamped to 1..4 here; to the desktop (plat_video_desktop_size) and,
+     * with the port window, to the window (plat_video_resize) where used */
+    g_ui_scale_req = present_clamp_scale(scale, 0, 0);
+    if (!g_managed) {
+        int dw = 0, dh = 0;
+        desktop_pixels(&dw, &dh);
+        g_ui_scale = present_clamp_scale(g_ui_scale_req, dw, dh);
+    }
 }
 
 int plat_ui_scale(void) { return g_ui_scale; }
+int plat_ui_scale_requested(void) { return g_ui_scale_req; }
 
 bool plat_init(const char *title, int width, int height)
 {
@@ -119,29 +131,48 @@ void plat_video_set_palette(const PlatColor *colors, int first, int count)
     SDL_SetPaletteColors(g_palette, tmp, first, count);
 }
 
+/* (Re)creates the framebuffer, its palette and the texture at w x h. */
+static bool alloc_framebuffer(int width, int height)
+{
+    if (g_indexed && g_indexed->w == width && g_indexed->h == height)
+        return true;
+    SDL_Surface *ind = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_INDEX8);
+    SDL_Palette *pal = ind ? SDL_CreateSurfacePalette(ind) : NULL;
+    SDL_Texture *tex =
+        SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+    if (!ind || !pal || !tex) {
+        SDL_Log("framebuffer %dx%d: %s", width, height, SDL_GetError());
+        SDL_DestroySurface(ind);
+        SDL_DestroyTexture(tex);
+        return false;
+    }
+    SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
+    if (g_palette)
+        SDL_SetPaletteColors(pal, g_palette->colors, 0, g_palette->ncolors);
+    SDL_DestroySurface(g_indexed);
+    SDL_DestroyTexture(g_texture);
+    g_indexed = ind;
+    g_palette = pal;
+    g_texture = tex;
+    return true;
+}
+
 bool plat_video_set_mode(int width, int height, bool fullscreen)
 {
     if (!g_window || width <= 0 || height <= 0)
         return false;
-    if (!g_indexed || g_indexed->w != width || g_indexed->h != height) {
-        SDL_Surface *ind = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_INDEX8);
-        SDL_Palette *pal = ind ? SDL_CreateSurfacePalette(ind) : NULL;
-        SDL_Texture *tex =
-            SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
-        if (!ind || !pal || !tex) {
-            SDL_Log("plat_video_set_mode: %s", SDL_GetError());
-            SDL_DestroySurface(ind);
-            SDL_DestroyTexture(tex);
-            return false;
-        }
-        SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
-        if (g_palette)
-            SDL_SetPaletteColors(pal, g_palette->colors, 0, g_palette->ncolors);
-        SDL_DestroySurface(g_indexed);
-        SDL_DestroyTexture(g_texture);
-        g_indexed = ind;
-        g_palette = pal;
-        g_texture = tex;
+    if (!alloc_framebuffer(width, height))
+        return false;
+    if (g_managed) {
+        /* The port window keeps the geometry plat_window_open gave it; the
+         * caller asked for the size it wants (plat_video_target_size). */
+        int pw = 0, ph = 0;
+        SDL_GetWindowSizeInPixels(g_window, &pw, &ph);
+        present_logical_size(pw, ph, g_ui_scale_req, NULL, NULL, &g_ui_scale);
+        if (fullscreen && !g_wstate.fullscreen)
+            plat_window_set_fullscreen(true);
+        update_presentation();
+        return true;
     }
     /* The original makes a popup window covering the desktop when the
      * resolution fills it (0x4cd73a), else a framed window of that client
@@ -168,14 +199,159 @@ bool plat_video_set_mode(int width, int height, bool fullscreen)
     return true;
 }
 
+/* --- the port window ------------------------------------------------------- */
+
+/* The primary display's usable area (without panels), in desktop units. */
+static SDL_Rect usable_bounds(void)
+{
+    SDL_Rect r = {0, 0, 0, 0};
+    SDL_DisplayID d = SDL_GetPrimaryDisplay();
+    if (!SDL_GetDisplayUsableBounds(d, &r) || r.w <= 0 || r.h <= 0)
+        SDL_GetDisplayBounds(d, &r);
+    if (r.w <= 0 || r.h <= 0)
+        r = (SDL_Rect){0, 0, 1024, 768};
+    return r;
+}
+
+/* Whether (x, y) lies on some display (a saved position after a monitor
+ * was unplugged may not). */
+static bool point_on_a_display(int x, int y)
+{
+    int n = 0;
+    SDL_DisplayID *ids = SDL_GetDisplays(&n);
+    bool on = false;
+    for (int i = 0; ids && i < n && !on; i++) {
+        SDL_Rect r;
+        if (SDL_GetDisplayBounds(ids[i], &r))
+            on = x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
+    }
+    SDL_free(ids);
+    return on;
+}
+
+void plat_window_open(const PlatWindowState *saved, int pref_w, int pref_h)
+{
+    if (!g_window)
+        return;
+    g_managed = true;
+    SDL_Rect ub = usable_bounds();
+    float d = desktop_density();
+    int k = g_ui_scale_req;
+    /* the game's minimum, 640x480 pixels */
+    int min_w = (int)SDL_ceilf((float)PRESENT_MIN_W / d), min_h = (int)SDL_ceilf((float)PRESENT_MIN_H / d);
+    int ww = 0, wh = 0;
+    if (saved && saved->w > 0 && saved->h > 0) {
+        ww = saved->w < ub.w ? saved->w : ub.w;
+        wh = saved->h < ub.h ? saved->h : ub.h;
+    } else if (pref_w > 0 && pref_h > 0) {
+        /* INI Resolution smaller than the desktop: that size, if it fits
+         * with room for the frame */
+        int pw = (int)SDL_ceilf((float)pref_w * (float)k / d), ph = (int)SDL_ceilf((float)pref_h * (float)k / d);
+        if (pw <= ub.w * 95 / 100 && ph <= ub.h * 90 / 100)
+            ww = pw, wh = ph;
+    }
+    if (ww <= 0 || wh <= 0) {
+        ww = ub.w * 4 / 5;
+        wh = ub.h * 4 / 5;
+    }
+    if (ww < min_w)
+        ww = min_w;
+    if (wh < min_h)
+        wh = min_h;
+    SDL_SetWindowMinimumSize(g_window, min_w, min_h);
+    SDL_SetWindowResizable(g_window, true);
+    SDL_SetWindowFullscreen(g_window, false);
+    SDL_SetWindowSize(g_window, ww, wh);
+    bool have_pos = saved && saved->x != PLAT_WINDOW_POS_DEFAULT && saved->y != PLAT_WINDOW_POS_DEFAULT &&
+                    point_on_a_display(saved->x + 20, saved->y + 20);
+    if (have_pos)
+        SDL_SetWindowPosition(g_window, saved->x, saved->y);
+    else
+        SDL_SetWindowPosition(g_window, (int)SDL_WINDOWPOS_CENTERED_DISPLAY(SDL_GetPrimaryDisplay()),
+                              (int)SDL_WINDOWPOS_CENTERED_DISPLAY(SDL_GetPrimaryDisplay()));
+    g_wstate.w = ww;
+    g_wstate.h = wh;
+    g_wstate.x = have_pos ? saved->x : PLAT_WINDOW_POS_DEFAULT;
+    g_wstate.y = have_pos ? saved->y : PLAT_WINDOW_POS_DEFAULT;
+    g_wstate.fullscreen = g_wstate.maximized = false;
+    SDL_ShowWindow(g_window);
+    if (saved && saved->maximized) {
+        SDL_MaximizeWindow(g_window);
+        g_wstate.maximized = true;
+    }
+    if (saved && saved->fullscreen)
+        plat_window_set_fullscreen(true);
+    SDL_SyncWindow(g_window);
+}
+
+bool plat_window_managed(void) { return g_managed; }
+
+void plat_window_get_state(PlatWindowState *out) { *out = g_wstate; }
+
+void plat_window_set_fullscreen(bool on)
+{
+    if (!g_window)
+        return;
+    if (on)
+        SDL_SetWindowFullscreenMode(g_window, NULL); /* borderless, the desktop's mode */
+    SDL_SetWindowFullscreen(g_window, on);
+    g_wstate.fullscreen = on;
+    SDL_SyncWindow(g_window);
+}
+
+bool plat_window_fullscreen(void) { return g_wstate.fullscreen; }
+
+void plat_window_resize(int w, int h)
+{
+    if (!g_window || w <= 0 || h <= 0)
+        return;
+    if (g_wstate.fullscreen)
+        plat_window_set_fullscreen(false);
+    if (g_wstate.maximized) {
+        SDL_RestoreWindow(g_window);
+        g_wstate.maximized = false;
+    }
+    SDL_SetWindowSize(g_window, w, h);
+    SDL_SyncWindow(g_window);
+    g_wstate.w = w;
+    g_wstate.h = h;
+}
+
+void plat_window_pixel_size(int *w, int *h)
+{
+    *w = *h = 0;
+    if (g_window)
+        SDL_GetWindowSizeInPixels(g_window, w, h);
+}
+
+bool plat_video_target_size(int *w, int *h)
+{
+    int pw = 0, ph = 0, k = 1;
+    plat_window_pixel_size(&pw, &ph);
+    present_logical_size(pw, ph, g_ui_scale_req, w, h, &k);
+    return !g_indexed || g_indexed->w != *w || g_indexed->h != *h || k != g_ui_scale;
+}
+
+bool plat_video_resize(int w, int h)
+{
+    if (!g_window || w <= 0 || h <= 0 || !alloc_framebuffer(w, h))
+        return false;
+    int pw = 0, ph = 0;
+    plat_window_pixel_size(&pw, &ph);
+    present_logical_size(pw, ph, g_ui_scale_req, NULL, NULL, &g_ui_scale);
+    update_presentation();
+    return true;
+}
+
 void plat_video_desktop_size(int *width, int *height)
 {
     /* With UI scale k (an enhancement) the game sees a desktop k times
      * smaller, so Resolution=MAX makes a framebuffer that is scaled back up
      * k times. */
     desktop_pixels(width, height);
-    *width /= g_ui_scale;
-    *height /= g_ui_scale;
+    int k = present_clamp_scale(g_ui_scale_req, *width, *height);
+    *width /= k;
+    *height /= k;
 }
 
 struct PlatCursor {
@@ -220,17 +396,30 @@ void plat_cursor_show(bool show)
         SDL_HideCursor();
 }
 
+void plat_video_fb_to_window(int x, int y, float *wx, float *wy)
+{
+    float px = (float)x, py = (float)y;
+    *wx = px;
+    *wy = py;
+    if (!g_indexed)
+        return;
+    present_from_fb(g_dst, g_indexed->w, g_indexed->h, x, y, &px, &py);
+    if (!g_renderer || !SDL_RenderCoordinatesToWindow(g_renderer, px, py, wx, wy)) {
+        *wx = px;
+        *wy = py;
+    }
+}
+
 void plat_mouse_warp(int x, int y)
 {
     if (!g_window || !g_indexed)
         return;
-    float px, py, wx = 0, wy = 0;
-    present_from_fb(g_dst, g_indexed->w, g_indexed->h, x, y, &px, &py);
-    if (g_renderer && SDL_RenderCoordinatesToWindow(g_renderer, px, py, &wx, &wy))
-        SDL_WarpMouseInWindow(g_window, wx, wy);
+    float wx, wy;
+    plat_video_fb_to_window(x, y, &wx, &wy);
+    SDL_WarpMouseInWindow(g_window, wx, wy);
 }
 
-void plat_video_present(void)
+static void render_frame(void)
 {
     SDL_Surface *dst;
     if (SDL_LockTextureToSurface(g_texture, NULL, &dst)) {
@@ -240,7 +429,24 @@ void plat_video_present(void)
     SDL_RenderClear(g_renderer);
     SDL_FRect out = {(float)g_dst.x, (float)g_dst.y, (float)g_dst.w, (float)g_dst.h};
     SDL_RenderTexture(g_renderer, g_texture, NULL, &out);
+}
+
+void plat_video_present(void)
+{
+    render_frame();
     SDL_RenderPresent(g_renderer);
+}
+
+bool plat_video_screenshot(const char *path)
+{
+    if (!g_renderer || !g_indexed)
+        return false;
+    render_frame();
+    SDL_Surface *s = SDL_RenderReadPixels(g_renderer, NULL);
+    bool ok = s && SDL_SaveBMP(s, path);
+    SDL_DestroySurface(s);
+    SDL_RenderPresent(g_renderer);
+    return ok;
 }
 
 /* --- input events ---------------------------------------------------------
@@ -429,6 +635,7 @@ static void translate(SDL_Event *e)
         break;
     case SDL_EVENT_WINDOW_FOCUS_GAINED:
     case SDL_EVENT_WINDOW_FOCUS_LOST:
+        g_alt_held = g_ctrl_held = false;
         ev.type = PLAT_EV_ACTIVATE;
         ev.active = e->type == SDL_EVENT_WINDOW_FOCUS_GAINED;
         evq_push(&ev);
@@ -437,6 +644,7 @@ static void translate(SDL_Event *e)
         push_simple(PLAT_EV_MINIMIZE);
         break;
     case SDL_EVENT_WINDOW_RESTORED:
+        g_wstate.maximized = (SDL_GetWindowFlags(g_window) & SDL_WINDOW_MAXIMIZED) != 0;
         push_simple(PLAT_EV_RESTORE);
         break;
     case SDL_EVENT_WINDOW_EXPOSED:
@@ -444,10 +652,65 @@ static void translate(SDL_Event *e)
         break;
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
         update_presentation();
+        if (g_managed)
+            push_simple(PLAT_EV_RESIZE);
         push_simple(PLAT_EV_EXPOSE);
+        break;
+    case SDL_EVENT_WINDOW_RESIZED:
+        /* the windowed geometry the port remembers (ALIFEPORT.INI) */
+        if (g_managed && !(SDL_GetWindowFlags(g_window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MAXIMIZED))) {
+            g_wstate.w = e->window.data1;
+            g_wstate.h = e->window.data2;
+        }
+        break;
+    case SDL_EVENT_WINDOW_MOVED:
+        if (g_managed && !(SDL_GetWindowFlags(g_window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MAXIMIZED))) {
+            g_wstate.x = e->window.data1;
+            g_wstate.y = e->window.data2;
+        }
+        break;
+    case SDL_EVENT_WINDOW_MAXIMIZED:
+        g_wstate.maximized = true;
+        break;
+    case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
+        g_wstate.fullscreen = true;
+        break;
+    case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
+        g_wstate.fullscreen = false;
         break;
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP:
+        /* Port: Alt+Enter and F11 toggle fullscreen (the original uses
+         * F1-F10 only). Neither the key nor its release reaches the game,
+         * nor Alt's release after Alt+Enter (it would open the menu bar). */
+        if (e->key.scancode == SDL_SCANCODE_LALT || e->key.scancode == SDL_SCANCODE_RALT)
+            g_alt_held = e->type == SDL_EVENT_KEY_DOWN;
+        else if (e->key.scancode == SDL_SCANCODE_LCTRL || e->key.scancode == SDL_SCANCODE_RCTRL)
+            g_ctrl_held = e->type == SDL_EVENT_KEY_DOWN;
+        if (g_managed && e->type == SDL_EVENT_KEY_DOWN) {
+            bool enter = e->key.scancode == SDL_SCANCODE_RETURN || e->key.scancode == SDL_SCANCODE_KP_ENTER;
+            /* Alt from the key events seen (and SDL's keyboard state):
+             * synthetic events can carry any modifier bits */
+            SDL_Keymod held = SDL_GetModState();
+            bool alt = (g_alt_held || (held & SDL_KMOD_ALT)) && !(g_ctrl_held || (held & SDL_KMOD_CTRL));
+            if (e->key.scancode == SDL_SCANCODE_F11 || (enter && alt)) {
+                if (!e->key.repeat)
+                    plat_window_set_fullscreen(!g_wstate.fullscreen);
+                g_swallow_sc = e->key.scancode;
+                if (enter)
+                    g_swallow_alt = true;
+                break;
+            }
+        } else if (g_managed && e->type == SDL_EVENT_KEY_UP) {
+            if (g_swallow_sc && e->key.scancode == g_swallow_sc) {
+                g_swallow_sc = SDL_SCANCODE_UNKNOWN;
+                break;
+            }
+            if (g_swallow_alt && (e->key.scancode == SDL_SCANCODE_LALT || e->key.scancode == SDL_SCANCODE_RALT)) {
+                g_swallow_alt = false;
+                break;
+            }
+        }
         ev.vk = sdl_to_vk(e->key.key, e->key.scancode);
         if (!ev.vk)
             break;

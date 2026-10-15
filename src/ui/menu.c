@@ -421,6 +421,27 @@ void menu_show(WmWindow *m, bool open)
         popup_close(m);
 }
 
+static void close_all(WmWindow *bar);
+
+void menu_bar_resize(WmWindow *bar, int width)
+{
+    if (!bar || !is_bar(bar) || width <= 0)
+        return;
+    if (g_hot || wm_open_menu())
+        close_all(bar);
+    int dx = width - (bar->rect.right - bar->rect.left + 1);
+    bar->rect.right = bar->rect.left + width - 1;
+    for (WmWindow *c = bar->children; c; c = c->next)
+        if (!is_item(c)) {
+            c->rect.left += dx;
+            c->rect.right += dx;
+        }
+    bool laid = (bar->flags & MENU_LAIDOUT) != 0;
+    bar->flags &= ~MENU_LAIDOUT;
+    if (laid && (bar->flags & WM_F_VISIBLE))
+        popup_open(bar);
+}
+
 /* 0x4c7fe1: closes the pop-ups under `m` (and `m` itself if close_self),
  * except `keep` */
 static void close_popups(WmWindow *m, bool close_self, WmWindow *keep)

@@ -92,19 +92,84 @@ maps "force" to fullscreen.
 `plat_video_desktop_size` is the desktop mode times its pixel density (a
 DPI-unaware Win95 program sees the whole screen in pixels; SDL's mode
 size is in points, 1707x1067 for a 2560x1600 panel at 150 %), and the
-window is `SDL_WINDOW_HIGH_PIXEL_DENSITY` with its size divided by the
-density, so the framebuffer maps 1:1 to screen pixels. When the
-resolution fills the desktop (`MAX`) the window is borderless fullscreen,
-the equivalent of the original's popup window (0x4cd73a): a framed
-desktop-sized window doesn't fit next to the title bar and panels, so the
-window manager used to shrink it and letterboxing drew the game smaller
-with black margins (and blurry, from the compositor's upscaling). The
-presentation is integer-scaled and centred while the window is at least
-the framebuffer's size, letterboxed only when it is smaller
-(`platform/present.c`, which also maps mouse positions back). With the
-enhancements on, a UI scale k makes the game see a desktop k times
-smaller, so the framebuffer is presented k times larger (see
-[enhancements.md](enhancements.md)).
+window is `SDL_WINDOW_HIGH_PIXEL_DENSITY`, so the framebuffer maps 1:1 (or
+k:1 with UI scale k) to screen pixels. The game itself runs in the **port
+window** (below): a normal resizable window whose size decides the
+screen, whatever the INI's `Resolution` says. The presentation is
+integer-scaled and centred while the window is at least the framebuffer's
+size, letterboxed only when it is smaller (`platform/present.c`, which
+also maps mouse positions back). With the enhancements on, a UI scale k
+makes the game see a desktop k times smaller, so the framebuffer is
+presented k times larger (see [enhancements.md](enhancements.md)).
+`plat_video_set_mode` without the port window (the tests that call
+`gfx_init` directly) keeps the older behaviour: a window of the
+resolution, borderless fullscreen when it fills the desktop.
+
+### Port window
+
+Port behaviour, on every run regardless of the enhancements switch
+(`plat_window_*` in `platform_sdl.c`, `game/display.c`):
+
+- **Opening** (`di_initialize`, `plat_window_open`): the size and place
+  saved in ALIFEPORT.INI if there are any (clamped to the usable desktop;
+  a position off every display is dropped); else the INI `Resolution`
+  times the UI scale if it is smaller than the desktop and fits with room
+  for the frame; else 80 % of the usable desktop, centred. `Maximized` and
+  `Fullscreen` from the file are restored, and `Force display settings =
+  ON` starts it fullscreen. The minimum window size is 640x480 pixels.
+- **The screen follows the window**: the framebuffer is (window pixels /
+  UI scale), with the scale lowered while the window is smaller than
+  640x480 times it (`present_logical_size`), and never smaller than
+  640x480 (a smaller window letterboxes it). `plat_video_target_size`
+  says what the window wants, `plat_video_resize` reallocates the
+  framebuffer.
+- **Live relayout** (`display_relayout`): SDL's pixel-size event becomes
+  `PLAT_EV_RESIZE`; `main_wnd_proc` marks a relayout pending and
+  `sys_pump` runs it at most every 100 ms (`display_idle`), so dragging
+  the window edge relays out about ten times a second and the
+  presentation scales the old frame in between. A relayout resizes the
+  screen (`gfx_screen_resize`: cleared, mouse clip = screen), the window
+  manager's root (`wm_screen_resized`, 0x4c6096), then the shell's part
+  (`display_hooks.relayout`, `game/shell.c`): the main window gets a
+  surface of the new size (`wm_resize_surface`), its menu bar is laid out
+  again at the new width with its close / minimize buttons at the right
+  (`menu_bar_resize`, `wm_menubar_update_buttons`: shown when the screen
+  fills the desktop, as the original does for its popup window), its
+  scrollbars stay on the right / bottom edges with new track surfaces, its
+  client rectangle follows; in the game the map keeps the point at its
+  centre (`shell_view_resized`) and the control panel and views are moved
+  back inside the client area (`wm_fit_into`); at the title the menu
+  background is centred again and the buttons are placed along the new
+  edges with 0x428d28's formulas (`title_relayout`). Finally every other
+  top-level window (message boxes, news, dialogs) is moved inside the
+  screen and the whole screen repainted. The relayout waits while the
+  title's intro and animation run (their FLC targets point into the main
+  window's surface, `title_holds_surface`) and while the loading screen
+  is up.
+- **Fullscreen**: Alt+Enter or F11 toggles borderless desktop fullscreen
+  at native pixels (`plat_window_set_fullscreen`), with the same
+  relayout. The original's keyboard handling (game_view_proc 0x404023)
+  uses F1-F10 only, so F11 was free. The platform swallows the key, its
+  release and, after Alt+Enter, Alt's release (which would open the menu
+  bar), so none of it reaches the game; Alt's press does, as before.
+  Alt and Ctrl are tracked from the key events (and SDL's keyboard
+  state), not the event's modifier bits, which synthetic events may leave
+  as garbage.
+- **Remembered** in ALIFEPORT.INI at exit (`atexit`, however the game
+  ends): `Window size` and `Window position` (the last windowed geometry,
+  desktop units), `Maximized`, `Fullscreen`. Command line:
+  `--window-size=WxH`, `--fullscreen`, `--windowed`.
+- `--window-test=DIR` (`src/main.c`) checks a real window: it resizes it
+  through SDL, changes the UI scale, toggles fullscreen with injected key
+  events and saves a screenshot of the window after each step
+  (`plat_video_screenshot`), answering message boxes with Enter. Run it on
+  a headless compositor (`weston --backend=headless` with its own
+  `WAYLAND_DISPLAY`, `DISPLAY` unset) so nothing appears on a desktop.
+
+The original can't do any of this: its main window is created once at the
+resolution (0x4cd73a), WM_WINDOWPOSCHANGING adds SWP_NOSIZE, and on
+WM_DISPLAYCHANGE it re-creates the window and broadcasts message 0x200,
+which none of ALIFE.EXE's window procedures handles.
 
 The title's 640x480 art is never scaled and the display mode never changes
 (`di_change_display_mode` is only reached with flags 4): the menu
@@ -286,6 +351,10 @@ in the mouse module calls it.
 
 ```c
 bool plat_video_set_mode(int w, int h, bool fullscreen); /* framebuffer + window */
+void plat_window_open(const PlatWindowState *saved, int pref_w, int pref_h); /* the port window */
+bool plat_video_target_size(int *w, int *h);  /* the framebuffer the window wants */
+bool plat_video_resize(int w, int h);         /* reallocate it, window untouched */
+void plat_window_set_fullscreen(bool on);
 void plat_video_desktop_size(int *w, int *h);
 void plat_video_set_palette(const PlatColor *, int first, int count);
 void plat_video_present(void);
@@ -310,3 +379,10 @@ font 501, and writes the framebuffer through the palette. It also runs
 pixel-level self-checks on clipping, lines, frames, keyed and tiled blits,
 scrolling, palette clamping, matching and rotation, and loads cursor 0x7d
 from ALIFE.EXE.
+
+`tests/display_test` runs the game headless in the port window and resizes
+it through SDL at the title and in the game, at UI scales 1-4 and below
+the minimum, checking the screen size, the main window, its menu bar and
+scrollbars, that every window stays inside and that the map keeps its
+centre; it also checks the fullscreen keys and the Port Options window
+(PNGs in `test-out/display`).

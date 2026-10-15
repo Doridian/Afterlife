@@ -70,3 +70,19 @@ int present_clamp_scale(int scale, int desktop_w, int desktop_h)
         scale--;
     return scale;
 }
+
+void present_logical_size(int out_w, int out_h, int scale, int *fb_w, int *fb_h, int *eff_scale)
+{
+    int k = present_clamp_scale(scale, out_w, out_h);
+    int w = out_w > 0 ? out_w / k : PRESENT_MIN_W, h = out_h > 0 ? out_h / k : PRESENT_MIN_H;
+    if (w < PRESENT_MIN_W)
+        w = PRESENT_MIN_W;
+    if (h < PRESENT_MIN_H)
+        h = PRESENT_MIN_H;
+    if (fb_w)
+        *fb_w = w;
+    if (fb_h)
+        *fb_h = h;
+    if (eff_scale)
+        *eff_scale = k;
+}

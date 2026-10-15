@@ -12,7 +12,7 @@
 
 #include "platform/platform.h"
 #include "platform/present.h"
-#include "ui/controls.h"
+#include "ui/portopts.h"
 
 bool g_enhancements;
 PortSettings g_port_settings;
@@ -24,6 +24,7 @@ void port_settings_defaults(PortSettings *s)
 {
     s->enhancements = false;
     s->ui_scale = 0;
+    s->window = (PlatWindowState){0, 0, PLAT_WINDOW_POS_DEFAULT, PLAT_WINDOW_POS_DEFAULT, false, false};
 }
 
 /* (no strcasecmp: not in C11) */
@@ -55,6 +56,28 @@ static bool parse_bool(const char *v, bool *out)
         return true;
     }
     return false;
+}
+
+/* "WxH", both 1..32767 */
+static bool parse_size(const char *v, int *w, int *h)
+{
+    int a, b;
+    if (sscanf(v, "%d x %d", &a, &b) != 2 || a < 1 || b < 1 || a > 32767 || b > 32767)
+        return false;
+    *w = a;
+    *h = b;
+    return true;
+}
+
+/* "X,Y" (may be negative on multi-monitor desktops) */
+static bool parse_pos(const char *v, int *x, int *y)
+{
+    int a, b;
+    if (sscanf(v, "%d , %d", &a, &b) != 2 || a < -32767 || b < -32767 || a > 32767 || b > 32767)
+        return false;
+    *x = a;
+    *y = b;
+    return true;
 }
 
 static int clamp_scale(int v) { return v < 0 ? 0 : v > PRESENT_SCALE_MAX ? PRESENT_SCALE_MAX : v; }
@@ -91,6 +114,14 @@ bool port_settings_load(const char *path, PortSettings *s)
             parse_bool(val, &s->enhancements);
         else if (!ci_cmp(key, "UI scale"))
             s->ui_scale = clamp_scale(atoi(val));
+        else if (!ci_cmp(key, "Window size"))
+            parse_size(val, &s->window.w, &s->window.h);
+        else if (!ci_cmp(key, "Window position"))
+            parse_pos(val, &s->window.x, &s->window.y);
+        else if (!ci_cmp(key, "Maximized"))
+            parse_bool(val, &s->window.maximized);
+        else if (!ci_cmp(key, "Fullscreen"))
+            parse_bool(val, &s->window.fullscreen);
     }
     fclose(f);
     return true;
@@ -106,8 +137,14 @@ bool port_settings_save(const char *path, const PortSettings *s)
                "; 1: fix bugs of the original and allow the extras below\n"
                "Enhancements = %d\n"
                "; 0 = automatic, else 1..%d (needs Enhancements = 1)\n"
-               "UI scale = %d\n",
+               "UI scale = %d\n"
+               "; the window, saved at exit (desktop units; no size: 80%% of the desktop)\n",
             s->enhancements ? 1 : 0, PRESENT_SCALE_MAX, clamp_scale(s->ui_scale));
+    if (s->window.w > 0 && s->window.h > 0)
+        fprintf(f, "Window size = %dx%d\n", s->window.w, s->window.h);
+    if (s->window.x != PLAT_WINDOW_POS_DEFAULT && s->window.y != PLAT_WINDOW_POS_DEFAULT)
+        fprintf(f, "Window position = %d,%d\n", s->window.x, s->window.y);
+    fprintf(f, "Maximized = %d\nFullscreen = %d\n", s->window.maximized ? 1 : 0, s->window.fullscreen ? 1 : 0);
     return fclose(f) == 0;
 }
 
@@ -153,6 +190,13 @@ void enhance_init(int argc, char **argv)
             g_port_settings.enhancements = false;
         else if (!strncmp(argv[i], "--ui-scale=", 11))
             g_port_settings.ui_scale = clamp_scale(atoi(argv[i] + 11));
+        else if (!strncmp(argv[i], "--window-size=", 14)) {
+            if (parse_size(argv[i] + 14, &g_port_settings.window.w, &g_port_settings.window.h))
+                g_port_settings.window.maximized = false;
+        } else if (!strcmp(argv[i], "--fullscreen"))
+            g_port_settings.window.fullscreen = true;
+        else if (!strcmp(argv[i], "--windowed"))
+            g_port_settings.window.fullscreen = false;
     }
     g_enhancements = g_port_settings.enhancements;
 }
@@ -164,32 +208,21 @@ int enhance_ui_scale_request(void)
 
 bool enhance_save(void)
 {
+    if (plat_window_managed())
+        plat_window_get_state(&g_port_settings.window);
     return port_settings_save(port_settings_path(), &g_port_settings);
 }
 
-void enhance_options_dialog(void)
+bool enhance_save_window_state(void)
 {
-    for (;;) {
-        char scale[32], text[400];
-        if (g_port_settings.ui_scale == 0)
-            snprintf(scale, sizeof scale, "Automatic");
-        else
-            snprintf(scale, sizeof scale, "%dx", g_port_settings.ui_scale);
-        snprintf(text, sizeof text,
-                 "Enhancements: %s.  They fix bugs of the original game and allow the UI scale.\n\n"
-                 "UI scale: %s, now %dx.%s",
-                 g_enhancements ? "On" : "Off", scale, plat_ui_scale(),
-                 g_enhancements ? "  A change takes effect at the next start." : "  Needs the enhancements.");
-        int r = ctl_message_box(-1, -1, "Port Options", text, "&Enhance\0&Scale\0~&Done\0", 0);
-        if (r == 1) {
-            g_enhancements = !g_enhancements;
-            g_port_settings.enhancements = g_enhancements;
-        } else if (r == 2) {
-            g_port_settings.ui_scale = (g_port_settings.ui_scale + 1) % (PRESENT_SCALE_MAX + 1);
-        } else {
-            break;
-        }
-        if (!enhance_save())
-            fprintf(stderr, "Port Options: can't save %s\n", port_settings_path());
-    }
+    if (!plat_window_managed())
+        return false;
+    PortSettings file;
+    port_settings_defaults(&file);
+    port_settings_load(port_settings_path(), &file);
+    plat_window_get_state(&file.window);
+    g_port_settings.window = file.window;
+    return port_settings_save(port_settings_path(), &file);
 }
+
+void enhance_options_dialog(void) { portopts_run(); }

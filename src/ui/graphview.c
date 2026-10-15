@@ -66,16 +66,6 @@ static const uint8_t col_38[9] = {0x0a, 0x0b, 0x0d, 0x1d, 0x0f, 0x0c, 0x0e, 0x10
 static const uint8_t col_48[9] = {0x0a, 0x4d, 0x56, 0x67, 0x36, 0x44, 0x7e, 0x2b, 0x2b};
 static const uint8_t col_58[9] = {0x58, 0x0b, 0x0d, 0x62, 0x30, 0x0c, 0x0e, 0x24, 0x24};
 
-/* 0x664918: the 16 belief types */
-static const char *const belief_names[16] = {"HAHAALFSUMA",  "HOHOALFSUMA",  "OPRAALFSUMA",  "OCRAALFSUMA",
-                                             "HAHARALFSUMA", "HOHORALFSUMA", "OPRARALFSUMA", "OCRARALFSUMA",
-                                             "HAHAALFSUSA",  "HOHOALFSUSA",  "OPRAALFSUSA",  "OCRAALFSUSA",
-                                             "HAHARALFSUSA", "HOHORALFSUSA", "OPRARALFSUSA", "OCRARALFSUSA"};
-/* 0x66c600 / 0x66c658 */
-static const char *const virtue_names[7] = {"CONTENTMENT", "CHARITY", "TEMPERANCE", "DILIGENCE",
-                                            "CHASTITY",    "PEACE",   "HUMILITY"};
-static const char *const sin_names[7] = {"ENVY", "AVARICE", "GLUTTONY", "SLOTH", "LUST", "WRATH", "PRIDE"};
-
 static int32_t i32(uint32_t v) { return (int32_t)v; }
 
 static void font_colors(unsigned c1, unsigned c2)
@@ -718,7 +708,7 @@ static void graph_belief(void)
             GfxRect r = {w + 0x5d, 0x124, top, bottom};
             gfx_frame_rect(g_win->surface, &r, c);
         }
-        text(0xe, top, belief_names[t]);
+        text(0xe, top, views_belief_names[t]);
         top += 0xb;
         bottom += 0xb;
         if (t == 3)
@@ -1613,7 +1603,7 @@ static void graph_hover_help(unsigned x, unsigned y)
                      "and the light color represents the total TEMPORARY population.  The black area inside the "
                      "bar, if any, represents the unused capacity for this virtue/sin.If your unused capacity is "
                      "being eaten away by a grey bar, you've got FROZEN or ABANDONED buildings.",
-                     virtue_names[s], sin_names[s]);
+                     views_virtue_names[s], views_sin_names[s]);
             help(sx, sy, 0x118, buf);
             break;
         }
@@ -1633,7 +1623,7 @@ static void graph_hover_help(unsigned x, unsigned y)
         if (pct > 99)
             pct = 100;
         char a[FMT_NUM_LEN], b[FMT_NUM_LEN], c[FMT_NUM_LEN];
-        const char *name = heaven ? virtue_names[s] : sin_names[s];
+        const char *name = heaven ? views_virtue_names[s] : views_sin_names[s];
         snprintf(buf, sizeof buf,
                  "Totals for %s:\n    Permanent SOULS:   %s\n    Temporary SOULS:   %s\n    Maximum Capacity:  %s\n"
                  "    %s is %lu%% full",
@@ -1722,10 +1712,11 @@ static void graph_hover_help(unsigned x, unsigned y)
                 n += g_state.summary[1].unk_000[t], hl = true;
             const char *where = hv && hl ? "Heaven and Hell." : hv ? "Heaven." : "Hell.";
             if (n == 0)
-                snprintf(buf, sizeof buf, "There are NO %sists in%s", belief_names[t], where);
+                snprintf(buf, sizeof buf, "There are NO %sists in%s", views_belief_names[t], where);
             else {
                 char a[FMT_NUM_LEN];
-                snprintf(buf, sizeof buf, "There are %s %sists in %s", fmt_thousands(a, n), belief_names[t], where);
+                snprintf(buf, sizeof buf, "There are %s %sists in %s", fmt_thousands(a, n), views_belief_names[t],
+                         where);
             }
             help(sx, sy, 0x78, buf);
         }

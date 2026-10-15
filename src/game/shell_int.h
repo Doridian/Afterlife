@@ -45,6 +45,9 @@ void shell_view_sync_origin(void);
 void shell_view_paint(int x, int y, int w, int h);
 /* The whole client area, then wm_redraw (the 0x8235 message). */
 void shell_view_repaint(void);
+/* Port-only: the main window's client area changed size (game/display.c);
+ * keeps the view's centre, clamps, repaints the map into the surface. */
+void shell_view_resized(int old_cw, int old_ch);
 /* Repaints the cells mx..mx+w-1 x my..my+h-1 of the current plane (and
  * those drawn after it) with `extra` zoom-0 pixels of headroom, and puts
  * them on the screen (map_object_redraw 0x4ed550 for the build hooks). */

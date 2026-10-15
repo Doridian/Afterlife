@@ -581,9 +581,12 @@ static void think_thief(int slot, MapObjectRec *o, const MapObjectRec *b)
                 } else if (g_state.unk_5b2f61 & t.bit) {
                     bt_music_fade(0xb4);
                     if (t.set == 0x18)
-                        bt_message(0x65f0f4, 0x65f0b0, 0x65f0a8);
+                        bt_message("Good news!" /* 0x65f0f4 */,
+                                   "The Hell in a Handbasket has flown off towards greener pastures!" /* 0x65f0b0 */,
+                                   "&Yay!\0" /* 0x65f0a8 */);
                     else
-                        bt_message(0x65f09c, 0x65f07c, 0x65f070);
+                        bt_message("Gesundheit!" /* 0x65f09c */, "The Heaven Nose has run away!" /* 0x65f07c */,
+                                   "&Boogers!\0" /* 0x65f070 */);
                     g_state.unk_5b2f61 &= (uint8_t)~t.bit;
                 }
             }
@@ -644,7 +647,7 @@ static void dice_throw(int8_t x, int8_t y)
         g_state.unk_63026c = 0;
 }
 
-static void dice_end(MapObjectRec *croupier, uint32_t t, uint32_t s, uint32_t bn)
+static void dice_end(MapObjectRec *croupier, const char *t, const char *s, const char *bn)
 {
     croupier->delay = 1, croupier->delay_reset = 1;
     send_off(croupier, croupier->x, croupier->y, 0x78);
@@ -712,7 +715,8 @@ static void think_dice(MapObjectRec *o, const MapObjectRec *b)
             if (total == 2 || total == 0xc) {
                 g_state.unk_59324c = 0;
                 g_state.unk_63026c = 0xff;
-                dice_end(croupier(), 0x65eff4, 0x65efc8, 0x65efc0);
+                dice_end(croupier(), "Baby needs a new pair of shoes..." /* 0x65eff4 */,
+                         "The Paradise Pair of Dice have crapped out!" /* 0x65efc8 */, "&Whew!\0" /* 0x65efc0 */);
                 g_state.unk_63050d = 0;
                 return;
             }
@@ -744,7 +748,8 @@ static void think_dice(MapObjectRec *o, const MapObjectRec *b)
             send_off(c, c->x, c->y, 0x78);
             g_state.unk_63050d = 0;
             bt_music_fade(0xb4);
-            bt_message(0x65f04c, 0x65f020, 0x65f018);
+            bt_message("Baby needs a new pair of shoes..." /* 0x65f04c */,
+                       "The Paradise Pair of Dice have crapped out!" /* 0x65f020 */, "&Whew!\0" /* 0x65f018 */);
             g_state.object_count--;
             g_state.unk_5b2f61 &= 0xbf;
             return;

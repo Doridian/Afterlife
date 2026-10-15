@@ -55,6 +55,10 @@ bool gfx_parse_resolution(const char *value, int *w, int *h);
 bool gfx_init(int width, int height, bool force);
 /* 0x4ca6ac di_shutdown */
 void gfx_shutdown(void);
+/* Port-only (the port window, game/display.c): the screen becomes width x
+ * height (cleared to black), the mouse clip the whole screen. The window
+ * manager and the game's windows are not touched. */
+bool gfx_screen_resize(int width, int height);
 
 int gfx_screen_width(void);  /* 0x64dc50 */
 int gfx_screen_height(void); /* 0x64dc54 */
