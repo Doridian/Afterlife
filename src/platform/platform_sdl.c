@@ -409,12 +409,14 @@ void plat_cursor_set(PlatCursor *cursor)
     SDL_SetCursor(cursor ? cursor->cursor : SDL_GetDefaultCursor());
 }
 
-void plat_cursor_show(bool show)
+bool plat_cursor_show(bool show)
 {
+    bool was = SDL_CursorVisible();
     if (show)
         SDL_ShowCursor();
     else
         SDL_HideCursor();
+    return was;
 }
 
 void plat_video_fb_to_window(int x, int y, float *wx, float *wy)

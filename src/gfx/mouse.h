@@ -58,8 +58,8 @@ bool gfx_mouse_queue_pop(int *x, int *y, unsigned *buttons);
 PlatCursor *gfx_cursor_load(unsigned id);
 void gfx_cursor_destroy(PlatCursor *c);   /* 0x4b9164 */
 /* 0x4b9179 ms_show_cursor: forces the cursor visible (show != 0) or hidden,
- * whatever the ShowCursor count was. */
-void gfx_cursor_show(bool show);
+ * whatever the ShowCursor count was. Returns whether it was visible. */
+bool gfx_cursor_show(bool show);
 PlatCursor *gfx_cursor_get(void);         /* 0x4b9274 */
 void gfx_cursor_set(PlatCursor *c);       /* 0x4b928a */
 

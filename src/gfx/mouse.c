@@ -248,7 +248,7 @@ void gfx_cursor_destroy(PlatCursor *c)
 }
 
 /* 0x4b9179 */
-void gfx_cursor_show(bool show) { plat_cursor_show(show); }
+bool gfx_cursor_show(bool show) { return plat_cursor_show(show); }
 
 /* 0x4b9274 */
 PlatCursor *gfx_cursor_get(void) { return g_cursor; }

@@ -159,7 +159,8 @@ typedef struct PlatCursor PlatCursor;
 PlatCursor *plat_cursor_create(const uint8_t *rgba, int w, int h, int hot_x, int hot_y);
 void plat_cursor_destroy(PlatCursor *cursor);
 void plat_cursor_set(PlatCursor *cursor);
-void plat_cursor_show(bool show);
+/* Returns whether the cursor was visible before. */
+bool plat_cursor_show(bool show);
 /* Moves the pointer to framebuffer coordinates (x, y). */
 void plat_mouse_warp(int x, int y);
 

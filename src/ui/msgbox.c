@@ -12,6 +12,7 @@
 
 #include "gfx/draw.h"
 #include "gfx/font.h"
+#include "gfx/mouse.h"
 #include "platform/platform.h"
 #include "ui/controls.h"
 #include "ui/controls_int.h"
@@ -29,6 +30,7 @@ static WmWindow *g_btn[4];       /* 0x6726f0 */
 static WmWindow *g_prev_focus;   /* 0x6726b4 */
 static uint8_t g_cancel;         /* 0x6726c0: Esc / F1 button, 0xff = none */
 static WmWindow *g_pressed;      /* 0x672700: button pressed by a key */
+static bool g_prev_cursor_shown;
 static uint32_t g_prev_font;
 
 WmWindow *ctl_msgbox_window(void) { return ctl_msgbox_dlg; }
@@ -204,8 +206,10 @@ bool ctl_msgbox_open(int x, int y, const char *title, const char *text, const ch
     wm_raise(dlg);
     wm_show(dlg, true);
     wm_activate(dlg);
-    /* ms_show_cursor_get(1) here and (0) on closing: a balanced
-     * ShowCursor pair, nothing to do in the port */
+    /* ms_show_cursor_get(1) here, undone on closing: the box is usable
+     * with the mouse even while the game has the cursor hidden (e.g. a
+     * load between the title and the game) */
+    g_prev_cursor_shown = gfx_cursor_show(true);
     if (timeout_ms && (!ctl_hooks.timeouts_enabled || ctl_hooks.timeouts_enabled()))
         ctl_msgbox_deadline = plat_ticks_ms() + timeout_ms;
     else
@@ -219,6 +223,8 @@ int ctl_msgbox_close(void)
     ctl_msgbox_deadline = 0;
     wm_release_capture();
     wm_show(ctl_msgbox_dlg, false);
+    if (!g_prev_cursor_shown)
+        gfx_cursor_show(false);
     if (g_prev_focus)
         wm_activate(g_prev_focus);
     g_prev_focus = NULL;
