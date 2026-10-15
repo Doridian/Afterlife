@@ -14,7 +14,9 @@ static SDL_Renderer *g_renderer;
 static SDL_Texture *g_texture;
 static SDL_Surface *g_indexed;
 static SDL_Palette *g_palette;
+#ifndef __EMSCRIPTEN__
 static SDL_AudioStream *g_audio;
+#endif
 static char g_data_dir[1024] = ".";
 static int g_ui_scale = 1;     /* port enhancement, in effect: see plat_set_ui_scale */
 static int g_ui_scale_req = 1; /* requested (automatic resolved), 1..4 */
@@ -866,8 +868,18 @@ void plat_delay_ms(uint32_t ms)
 #endif
 }
 
+/* The web build plays through an AudioWorklet (web/audio.js), not SDL's audio
+ * stream: SDL's ScriptProcessorNode callback adds latency to every sound. */
+#ifdef __EMSCRIPTEN__
+/* About two blocks of the mixer (46 ms each at 22050 Hz). */
+#define WEB_AUDIO_QUEUE_FRAMES 2048
+#endif
+
 bool plat_audio_open(int rate)
 {
+#ifdef __EMSCRIPTEN__
+    return EM_ASM_INT({ return afAudioOpen($0); }, rate);
+#else
     SDL_AudioSpec spec = {SDL_AUDIO_S16, 2, rate};
     g_audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
     if (!g_audio) {
@@ -876,17 +888,26 @@ bool plat_audio_open(int rate)
     }
     SDL_ResumeAudioStreamDevice(g_audio);
     return true;
+#endif
 }
 
 void plat_audio_close(void)
 {
+#ifdef __EMSCRIPTEN__
+    EM_ASM({ afAudioClose(); });
+#else
     if (g_audio)
         SDL_DestroyAudioStream(g_audio);
     g_audio = NULL;
+#endif
 }
 
 void plat_audio_pause(bool paused)
 {
+#ifdef __EMSCRIPTEN__
+    if (paused)
+        EM_ASM({ afAudioClear(); });
+#else
     if (!g_audio)
         return;
     if (paused) {
@@ -895,17 +916,35 @@ void plat_audio_pause(bool paused)
     } else {
         SDL_ResumeAudioStreamDevice(g_audio);
     }
+#endif
 }
 
 void plat_audio_queue(const int16_t *frames, int frame_count)
 {
+#ifdef __EMSCRIPTEN__
+    EM_ASM({ afAudioQueue($0, $1); }, frames, frame_count);
+#else
     if (g_audio)
         SDL_PutAudioStreamData(g_audio, frames, frame_count * 4);
+#endif
 }
 
 int plat_audio_queued_frames(void)
 {
+#ifdef __EMSCRIPTEN__
+    return EM_ASM_INT({ return afAudioQueued(); });
+#else
     return g_audio ? SDL_GetAudioStreamQueued(g_audio) / 4 : 0;
+#endif
+}
+
+int plat_audio_queue_limit(void)
+{
+#ifdef __EMSCRIPTEN__
+    return WEB_AUDIO_QUEUE_FRAMES;
+#else
+    return 8 * 1024; /* the mixer's eight 1024-frame blocks */
+#endif
 }
 
 void plat_set_data_dir(const char *dir)

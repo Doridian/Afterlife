@@ -187,6 +187,9 @@ bool plat_audio_open(int rate);
 void plat_audio_close(void);
 void plat_audio_queue(const int16_t *frames, int frame_count);
 int plat_audio_queued_frames(void);
+/* How many frames the mixer may keep queued ahead (the latency the device
+ * adds to each sound). */
+int plat_audio_queue_limit(void);
 /* waveOutReset + close on pause, reopen on resume: pausing also drops
  * whatever is still queued. */
 void plat_audio_pause(bool paused);

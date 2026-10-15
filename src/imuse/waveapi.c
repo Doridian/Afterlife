@@ -86,7 +86,8 @@ void waveapi_get_buffer(void **out, int32_t *frames, int32_t *rate)
     g_have_block = 0;
     if (g_closed)
         return;
-    if (queued_frames() + BLOCK_FRAMES > BLOCK_COUNT * BLOCK_FRAMES)
+    int32_t limit = g_use_device ? plat_audio_queue_limit() : BLOCK_COUNT * BLOCK_FRAMES;
+    if (queued_frames() + BLOCK_FRAMES > limit)
         return;
     *out = g_out_buf;
     *frames = BLOCK_FRAMES;

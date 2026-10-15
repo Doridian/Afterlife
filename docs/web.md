@@ -62,11 +62,14 @@ is 8 MB (`-sSTACK_SIZE`, as on Linux), the ASYNCIFY save stack 64 KB.
 
 ## Audio
 
-iMUSE mixes on the game's tick and queues into an SDL audio stream
-(`plat_audio_queue`). SDL's Emscripten backend plays it through a Web Audio
-ScriptProcessorNode on the main thread, which is why the browser warns that
-it is deprecated. Browsers start audio only after a click or key press. SDL
-resumes it then, and until then the game runs with its output discarded.
+iMUSE mixes on the game's tick and queues into `plat_audio_queue`. On the web
+that goes to `web/audio.js` (`--pre-js`), not SDL's audio stream: an
+AudioWorklet plays it on the audio thread, in 22050 Hz stereo (the
+AudioContext runs at the mixer's rate). The mixer keeps at most two blocks
+queued (`plat_audio_queue_limit`, 2048 frames, about 93 ms); the queue is
+read back from the worklet, which reports what it has played. Native builds
+still use SDL's stream with eight blocks. Browsers start audio only after a
+click or key press; the context is resumed on the first one.
 
 ## Storage
 
