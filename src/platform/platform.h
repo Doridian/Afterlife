@@ -212,6 +212,18 @@ const char *plat_save_dir(void);
 bool plat_file_dialog_begin(bool save, const char *default_location, const char *filter_name, const char *pattern);
 int plat_file_dialog_poll(char *out, size_t out_len);
 
+/* Port-only: a file dropped onto the window (SDL_EVENT_DROP_FILE; on the
+ * web SDL copies it to /tmp/filedrop/N/). The latest drop waits until it is
+ * taken; take copies its path into out and clears it. release deletes the
+ * file if it is such a temporary copy (else does nothing). */
+bool plat_take_dropped_file(char *out, size_t out_len);
+void plat_release_dropped_file(const char *path);
+
+/* Port-only: hands the file at `path` to the user as a download named
+ * `name` (the web build; false elsewhere). The file can be removed after. */
+bool plat_can_download(void);
+bool plat_download_file(const char *path, const char *name);
+
 /* Read-only data files (KERNEL32/CRT file I/O). Same name lookup as
  * plat_fopen_data. seek/tell use the CRT whence values 0 = set, 1 = current,
  * 2 = end, which is what the original passes around. */

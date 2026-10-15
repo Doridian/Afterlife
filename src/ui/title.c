@@ -18,12 +18,14 @@
  */
 #include "ui/title.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "formats/flc.h"
 #include "game/config.h"
 #include "game/resource.h"
+#include "game/savegame.h"
 #include "game/shell.h"
 #include "game/music.h"
 #include "game/sound.h"
@@ -98,7 +100,12 @@ bool title_holds_surface(void) { return g_holds_surface; }
 static WmWindow *main_window(void) { return g_main_window; }
 static GfxSurface *main_surface(void) { return g_main_window->surface; }
 
-static void pump(void) { ctl_modal_pump(); } /* sys_pump */
+static void take_drop(void);
+static void pump(void) /* sys_pump */
+{
+    ctl_modal_pump();
+    take_drop(); /* port-only */
+}
 
 static void fill_main(void)
 {
@@ -940,6 +947,37 @@ void title_relayout(void)
         menu_show_main(true);
     if (diff_shown)
         menu_show_difficulty(true);
+}
+
+/* Port-only: a saved game or scenario dropped onto the window during the
+ * intro, the animation or the menus: everything is skipped and the game
+ * starts with it, as after Load Game. */
+static void take_drop(void)
+{
+    char path[1024];
+    if (g.stage == TITLE_STAGE_NONE || !shell_take_drop(path, sizeof path))
+        return;
+    /* checked here: a failed load would leave the game started empty */
+    GameState *tmp = calloc(1, sizeof *tmp);
+    char err[256] = "out of memory";
+    bool ok = tmp && savegame_load(tmp, path, err, sizeof err);
+    if (ok)
+        savegame_free(tmp);
+    free(tmp);
+    if (!ok) {
+        char text[400];
+        const char *name = strrchr(path, '/');
+        snprintf(text, sizeof text, "Couldn't load %.120s: %.250s", name ? name + 1 : path, err);
+        plat_release_dropped_file(path);
+        ctl_message_box(-1, -1, "Uh oh...", text, "~&OK\0", 0);
+        return;
+    }
+    shell_set_pending_load(path);
+    g.skip = 2;
+    g.waiting = 0;
+    g.quit = 0;
+    g.again = 0;
+    g.leave_menu = 1;
 }
 
 /* 0x426460 */

@@ -52,6 +52,9 @@ int slotdlg_load(int mode);
 /* Returns true with the chosen slot in *slot. */
 bool slotdlg_choose(int mode, int *slot);
 int slotdlg_delete(void);
+/* Port-only: slotdlg_choose in the game's palette, with its own window
+ * title and button text (the web build's Download Saved Game). */
+bool slotdlg_pick(int mode, const char *title, const char *label, int *slot);
 
 /* The open dialog and its list / text field (0x66ae74 / 0x66ae78 /
  * 0x66ae7c), NULL when none is open. */

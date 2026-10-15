@@ -225,8 +225,8 @@ static void copy_result(const char *s)
     g_prompt_result[sizeof g_prompt_result - 1] = 0;
 }
 
-/* 0x4bf970 */
-const char *ctl_prompt(int x, int y, const char *title, const char *prompt, const char *def)
+/* 0x4bf970; `fill` (port-only) puts `def` into the field to edit */
+static const char *prompt_run(int x, int y, const char *title, const char *prompt, const char *def, bool fill)
 {
     GfxSurface *bg = gfx_load_bmp_resource(0x260, NULL);
     if (!bg)
@@ -260,6 +260,8 @@ const char *ctl_prompt(int x, int y, const char *title, const char *prompt, cons
     wm_raise(dlg);
     wm_show(dlg, true);
     wm_show(field, true);
+    if (fill && def)
+        wm_send(field, field, CTL_TEXT_MSG_SET, (intptr_t)def, 0);
     wm_activate(field);
     g_prompt_open = true;
     do
@@ -272,4 +274,14 @@ const char *ctl_prompt(int x, int y, const char *title, const char *prompt, cons
     wm_show(dlg, false);
     wm_destroy(dlg);
     return g_prompt_result;
+}
+
+const char *ctl_prompt(int x, int y, const char *title, const char *prompt, const char *def)
+{
+    return prompt_run(x, y, title, prompt, def, false);
+}
+
+const char *ctl_prompt_filled(int x, int y, const char *title, const char *prompt, const char *def)
+{
+    return prompt_run(x, y, title, prompt, def, true);
 }

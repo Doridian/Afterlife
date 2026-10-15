@@ -215,6 +215,8 @@ intptr_t ctl_text_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t b); /* 0x
  * until Enter. Returns a static buffer: the text, or `def` if it was left
  * empty and def isn't NULL. NULL on failure. (x or y < 0: centred.) */
 const char *ctl_prompt(int x, int y, const char *title, const char *prompt, const char *def);
+/* Port-only: ctl_prompt with `def` already in the field. */
+const char *ctl_prompt_filled(int x, int y, const char *title, const char *prompt, const char *def);
 
 /* --- list box (listbox.c) ------------------------------------------------ *
  * Up to 101 lines of 255 characters with a vertical scrollbar along the

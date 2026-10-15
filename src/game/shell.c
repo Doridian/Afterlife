@@ -268,6 +268,12 @@ static const MenuDef k_file[] = { /* 0x6516c0 */
     {3, "Load S&cenario\tF3", T},
     {4, "&Delete Game", T},
     {5, "&New Game\tF10", T},
+#ifdef __EMSCRIPTEN__
+    SEP, /* port-only: the browser's files */
+    {MENU_SAVE_DOWNLOAD, "Save to Do&wnload", T},
+    {MENU_DOWNLOAD, "Download Sa&ved Game", T},
+    SEP,
+#endif
     {0x1c, "&Afterlife v1.0     ", TC},
     SEP,
     {6, "E&xit Game\tF8", T},
@@ -455,6 +461,13 @@ void shell_menu_dispatch(WmWindow *item, unsigned id)
     case MENU_DELETE:
         g_game_command = GAME_CMD_DELETE;
         shell_busy_cursor(true);
+        break;
+    case MENU_SAVE_DOWNLOAD: /* port-only (web) */
+        g_game_command = GAME_CMD_SAVE_DOWNLOAD;
+        g_save_kind = 1;
+        break;
+    case MENU_DOWNLOAD: /* port-only (web) */
+        g_game_command = GAME_CMD_DOWNLOAD;
         break;
     case MENU_NEW:
         if (!g_build.map_dirty) {
@@ -726,6 +739,122 @@ bool shell_choose_load(int mode)
 
 const char *shell_pending_load(void) { return g_pending_load; }
 
+void shell_set_pending_load(const char *path) { snprintf(g_pending_load, sizeof g_pending_load, "%s", path); }
+
+/* ---- port-only: dropped files, downloads (the web build) ---------------- */
+
+static char g_dropped[1024];                         /* GAME_CMD_LOAD_DROPPED's file */
+static char g_download_name[256] = "AGAME000.ALF"; /* Save to Download's default */
+
+static const char *base_name(const char *path)
+{
+    const char *slash = strrchr(path, '/');
+    const char *bslash = strrchr(path, '\\');
+    if (bslash && (!slash || bslash > slash))
+        slash = bslash;
+    return slash ? slash + 1 : path;
+}
+
+/* `name` as a file name: no folder separators or characters browsers and
+ * Windows refuse; `ext` appended when it has no extension. */
+static void file_name(const char *name, const char *ext, char *out, size_t n)
+{
+    size_t j = 0;
+    for (const char *p = name; *p && j + 1 < n; p++)
+        out[j++] = (strchr("/\\:*?\"<>|", *p) || (unsigned char)*p < 0x20) ? '_' : *p;
+    out[j] = '\0';
+    while (j > 0 && (out[j - 1] == ' ' || out[j - 1] == '.'))
+        out[--j] = '\0';
+    if (!out[0])
+        snprintf(out, n, "AGAME000");
+    if (!strrchr(out, '.') && strlen(out) + strlen(ext) + 1 < n)
+        strcat(strcat(out, "."), ext);
+}
+
+bool shell_take_drop(char *out, size_t out_len)
+{
+#ifndef __EMSCRIPTEN__
+    /* ENHANCEMENT: natively, dropping a file onto the window loads it */
+    if (!g_enhancements) {
+        char ignored[1024];
+        plat_take_dropped_file(ignored, sizeof ignored);
+        return false;
+    }
+#endif
+    if (!plat_take_dropped_file(out, out_len))
+        return false;
+    /* Save to Download offers the dropped file's name next, as a .alf */
+    char stem[256];
+    snprintf(stem, sizeof stem, "%s", base_name(out));
+    char *dot = strrchr(stem, '.');
+    if (dot && dot != stem)
+        *dot = '\0';
+    file_name(stem, "alf", g_download_name, sizeof g_download_name);
+    return true;
+}
+
+/* A drop while the game runs: like Load Game, asking to save first. */
+static void poll_drop(void)
+{
+    if (g_game_command || !shell_take_drop(g_dropped, sizeof g_dropped))
+        return;
+    int r = 2;
+    if (g_build.map_dirty)
+        r = ask("Hey you!", "Save Game Before Loading?", "&Yes\0&No\0~&Cancel\0");
+    if (r == 1) {
+        g_game_command = GAME_CMD_SAVE;
+        g_save_kind = 1;
+        g_game_next_command = GAME_CMD_LOAD_DROPPED;
+        shell_busy_cursor(true);
+    } else if (r == 2) {
+        g_game_command = GAME_CMD_LOAD_DROPPED;
+    } else {
+        plat_release_dropped_file(g_dropped);
+        g_dropped[0] = '\0';
+    }
+}
+
+/* Save to Download: the game under a name (the last one used or dropped),
+ * written to a temporary file that goes to the browser as a download. It
+ * never lands among the saved games. */
+static bool save_download(void)
+{
+    const char *name = ctl_prompt_filled(-1, -1, "Save to Download", "File name:", g_download_name);
+    if (!name || !name[0])
+        return false;
+    char file[256], title[256], path[1024];
+    file_name(name, "alf", file, sizeof file);
+    snprintf(title, sizeof title, "%s", file);
+    char *dot = strrchr(title, '.');
+    if (dot && dot != title)
+        *dot = '\0';
+    snprintf(path, sizeof path, "/tmp/%s", file);
+    bool ok = shell_save_game_to(path, title) && plat_download_file(path, file);
+    remove(path);
+    if (!ok) {
+        ctl_message_box(-1, -1, "Uh oh...", "The game could not be saved.", "~&OK\0", 0);
+        return false;
+    }
+    snprintf(g_download_name, sizeof g_download_name, "%s", file);
+    return true;
+}
+
+/* Download Saved Game: a slot of the browser's saved games as a download
+ * named after its title. */
+static void download_slot(void)
+{
+    int slot = -1;
+    char path[1100], file[256];
+    if (!slotdlg_pick(1, "Download a Game", "Download", &slot) ||
+        !slotdlg_slot_file(1, (unsigned)slot, path, sizeof path))
+        return;
+    SlotInfo info;
+    file_name(slotdlg_read_info(path, &info) && info.title[0] ? info.title : base_name(path), "alf", file,
+              sizeof file);
+    if (!plat_download_file(path, file))
+        ctl_message_box(-1, -1, "Uh oh...", "The game could not be downloaded.", "~&OK\0", 0);
+}
+
 /* 0x47fc20 save_pack_timestamp: (year - 1980) << 25 | month << 21 | day
  * << 16 | hour << 11 | minute << 5 | second / 2 (the FAT date layout). */
 static uint32_t pack_timestamp(void)
@@ -938,6 +1067,38 @@ static void run_command(void)
             if (mode == 2)
                 scenario_box();
         }
+        g_game_command = 0;
+        g_game_paused = 0;
+        break;
+    }
+    case GAME_CMD_SAVE_DOWNLOAD: /* port-only (web) */
+        before_dialog();
+        if (save_download())
+            g_build.map_dirty = 0;
+        else
+            g_game_next_command = 0;
+        g_game_command = 0;
+        g_game_paused = 0;
+        break;
+    case GAME_CMD_DOWNLOAD: /* port-only (web) */
+        before_dialog();
+        download_slot();
+        g_game_command = 0;
+        g_game_paused = 0;
+        break;
+    case GAME_CMD_LOAD_DROPPED: { /* port-only */
+        before_dialog();
+        if (planetview_disaster_window())
+            wm_show(planetview_disaster_window(), false);
+        const char *dot = strrchr(g_dropped, '.');
+        bool scenario = dot && (dot[1] | 0x20) == 'a' && (dot[2] | 0x20) == 's' && (dot[3] | 0x20) == 'c' && !dot[4];
+        if (g_dropped[0] && load_file(g_dropped)) {
+            graphview_refresh();
+            if (scenario)
+                scenario_box();
+        }
+        plat_release_dropped_file(g_dropped);
+        g_dropped[0] = '\0';
         g_game_command = 0;
         g_game_paused = 0;
         break;
@@ -1666,6 +1827,7 @@ int game_main_init(int argc, char **argv)
     create_menus();
     if (g_pending_load[0]) {
         load_file(g_pending_load);
+        plat_release_dropped_file(g_pending_load); /* (a file dropped onto the title) */
         g_pending_load[0] = '\0';
     }
     if (g_arg_load_file[0]) {
@@ -1710,6 +1872,7 @@ void game_main_step(void)
     sim_update(g_game_speed);
     sys_pump();
     planetview_blink_cursor();
+    poll_drop();
     run_command();
 }
 

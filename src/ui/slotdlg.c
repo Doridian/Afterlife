@@ -719,14 +719,18 @@ static intptr_t load_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t b)
     return wm_default_proc(w, msg, a, b);
 }
 
-static int open_load(int mode, bool choose)
+/* `title` / `label` (port: slotdlg_pick) replace the window title and the
+ * Load button's text when given. */
+static int open_load(int mode, bool choose, const char *title, const char *label)
 {
     sd.mode = mode;
     sd.choose = false;
     /* (0x494112 has its own copies of the texts) */
-    if (!open_window(load_proc, choose ? (mode == 1 ? "Load a Game" /* 0x66c338 */ : "Load a Scenario" /* 0x66c344 */)
-                                : mode == 1 ? TEXT_LOAD_GAME
-                                            : TEXT_LOAD_SCENARIO))
+    if (!title)
+        title = choose ? (mode == 1 ? "Load a Game" /* 0x66c338 */ : "Load a Scenario" /* 0x66c344 */)
+                : mode == 1 ? TEXT_LOAD_GAME
+                            : TEXT_LOAD_SCENARIO;
+    if (!open_window(load_proc, title))
         return fail();
     int best = fill_list(mode);
     list_send(CTL_LIST_SELECT, mode == 1 ? best : 0, 0);
@@ -737,7 +741,7 @@ static int open_load(int mode, bool choose)
         return fail();
     GfxRect r = {0, close->width - 1, 0, close->height - 1};
     sd.win->close_button = ctl_button_create(sd.win, &r, SLOTDLG_ID_CANCEL, CTL_STYLE_BITMAP, close);
-    if (!button(0x10b, 0x8b, SLOTDLG_ID_LOAD, 0x227, choose ? "Load" /* 0x66c354 */ : TEXT_LOAD) ||
+    if (!button(0x10b, 0x8b, SLOTDLG_ID_LOAD, 0x227, label ? label : choose ? "Load" /* 0x66c354 */ : TEXT_LOAD) ||
         !button(0x10b, 0xa7, SLOTDLG_ID_CANCEL, 0x227, choose ? "Cancel" /* 0x66c35c */ : TEXT_CANCEL_LOAD))
         return fail();
     views_draw_title(sd.win);
@@ -754,7 +758,7 @@ int slotdlg_load(int mode)
         return 1;
     shell_busy_cursor(true);
     sd.no_help = !g_game_in_progress;
-    return open_load(mode, false);
+    return open_load(mode, false, NULL, NULL);
 }
 
 bool slotdlg_choose(int mode, int *slot)
@@ -782,7 +786,20 @@ bool slotdlg_choose(int mode, int *slot)
     for (long i = len; i < 256; i++)
         sd.remap[i] = (uint8_t)i;
     sd.chosen = -1;
-    int r = open_load(mode, true);
+    int r = open_load(mode, true, NULL, NULL);
+    if (slot)
+        *slot = sd.chosen;
+    return r != 0 && sd.chosen != -1;
+}
+
+bool slotdlg_pick(int mode, const char *title, const char *label, int *slot)
+{
+    if (sd.win)
+        return false;
+    shell_busy_cursor(true);
+    sd.no_help = true;
+    sd.chosen = -1;
+    int r = open_load(mode, true, title, label);
     if (slot)
         *slot = sd.chosen;
     return r != 0 && sd.chosen != -1;

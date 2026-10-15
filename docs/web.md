@@ -57,6 +57,24 @@ and, on the web, the saved games (`plat_save_dir`; natively they go to the
 INI `Save games` folder or the data folder). The slot dialogs list and delete
 them as usual.
 
+## Saved games as files
+
+- **Drag and drop**: dropping a `.alf` save or `.asc` scenario onto the page
+  loads it, at any time: during the intro or the title animation (both are
+  skipped), on the title menu, or in the game (where it asks to save first,
+  like Load Game). SDL's Emscripten backend copies the file to
+  `/tmp/filedrop/N/` and sends `SDL_EVENT_DROP_FILE`; the platform keeps the
+  latest drop until the title's pump or `game_main_step` takes it
+  (`shell_take_drop`), and the copy is deleted after the load. At the title
+  the file is parsed first, so a bad one gets a message box instead of an
+  empty game. Natively the same works with the enhancements on.
+- **File > Save to Download** (web only) asks for a file name (the last one
+  saved or dropped, prefilled) and saves the game to a temporary file in
+  `/tmp` that is handed to the browser as a download and removed. Nothing is
+  written among the browser's saved games.
+- **File > Download Saved Game** (web only) picks one of the browser's saved
+  games in the load list and downloads it, named after its title.
+
 ## Page
 
 - The canvas fills the browser window by CSS. SDL sizes its pixel buffer as

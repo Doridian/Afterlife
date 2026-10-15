@@ -36,6 +36,7 @@ test (`grep -rn "ENHANCEMENT:" src`).
 | Tutorial cell glide, `glide_cell` 0x4aca7d (`game/tutorial.c`) | Re-centres the main view until the cell is in the client area; if it never gets there the lesson loops forever (a hang, unless the lesson is stopped). | Gives up after 4 tries and glides to where the cell is. |
 | Bird droppings on a building in the top rows (`game/badthing_objects.c`) | The row counter is a byte compared against y - size; for y - size = -1 it wraps 0 -> 255 and never ends: **the game hangs**. (Its writes outside the grid go nowhere, see *Always on*.) | Stops at row 0. |
 | Planet tenet shift (`game/planet.c`, the loop taking the points a fate gains from the others) | Loops forever when nothing is left to take: **the game hangs**. | Stops after 5 idle rounds. |
+| Dropping a file onto the window (`shell_take_drop`, `game/shell.c`) | Ignored. | Loads it as a saved game or scenario, at the intro, the title menu or in the game (see [web.md](web.md#saved-games-as-files), where it is always on). |
 | UI scale (`platform/present.c`, `platform_sdl.c`) | 1: the framebuffer maps 1:1 to screen pixels. | See below. |
 
 The hangs are reproduced as hangs on purpose: that is what the original

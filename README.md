@@ -69,7 +69,9 @@ cd build/wasm && python3 -m http.server 8000   # http://localhost:8000/afterlife
 `afterlife.data` (about 150 MB with the CD's `ALIFE.INI`). Don't publish such
 a build. Without it the page asks for the files once and keeps them in the
 browser. Saves and the port settings are kept in the browser too
-(IndexedDB). The canvas follows the browser window. Alt+Enter or F11 toggles
+(IndexedDB). Dropping a `.alf` or `.asc` onto the page loads it, and
+File > Save to Download / Download Saved Game save to your computer. The
+canvas follows the browser window. Alt+Enter or F11 toggles
 fullscreen. `?arg=...` in the URL passes command-line options.
 
 CI (`.github/workflows/build.yml`) builds on Linux and macOS, runs the tests

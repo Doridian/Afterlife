@@ -47,6 +47,9 @@ enum {
     GAME_CMD_NEW = 4,           /* difficulty box, game_reset_world */
     GAME_CMD_LOAD_SCENARIO = 5, /* 0x489e90(2) */
     GAME_CMD_SAVE_SCENARIO = 6, /* 0x480ea4(2), editor only */
+    GAME_CMD_SAVE_DOWNLOAD = 7, /* port-only (web): save into a download */
+    GAME_CMD_DOWNLOAD = 8,      /* port-only (web): download a saved game */
+    GAME_CMD_LOAD_DROPPED = 9,  /* port-only: load the file dropped onto the window */
 };
 
 /* Menu command ids (the items' ids, WM_MSG_MENU_COMMAND a). */
@@ -62,7 +65,9 @@ enum {
     MENU_TUTORIAL_FIRST = 0x25, /* .. 0x2c */
     MENU_NO_BAD_THINGS = 0x31,
     MENU_PORT_OPTIONS = 0x3a, /* port-only: Global > Port Options... */
-    MENU_IDS = 0x3c
+    MENU_SAVE_DOWNLOAD = 0x3c, /* port-only (web): File > Save to Download */
+    MENU_DOWNLOAD = 0x3d,      /* port-only (web): File > Download Saved Game */
+    MENU_IDS = 0x3e
 };
 
 /* Control panel button ids (ctrlpanel_proc). 1-8 zones, 9 ports, 10
@@ -118,6 +123,13 @@ int shell_select_plane(int plane);
 bool shell_choose_load(int mode);
 /* The pending load (0x65006c); "" = none. */
 const char *shell_pending_load(void);
+
+/* Port-only: a saved game or scenario dropped onto the window (on the web
+ * always, natively with the enhancements on). Takes the latest drop into
+ * out; the title then leaves for the game with it as the pending load, the
+ * game loads it (asking to save first) from game_main_step. */
+bool shell_take_drop(char *out, size_t out_len);
+void shell_set_pending_load(const char *path);
 
 /* A file picker (port: stands in for the original's slot dialogs). `mode`
  * 1 = load a saved game, 2 = load a scenario, 3 = save. Runs a modal

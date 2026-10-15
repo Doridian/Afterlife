@@ -24,6 +24,7 @@ static PlatWindowState g_wstate = {0, 0, PLAT_WINDOW_POS_DEFAULT, PLAT_WINDOW_PO
 static SDL_Scancode g_swallow_sc; /* the fullscreen shortcut's key: its key up is dropped too */
 static bool g_swallow_alt;        /* Alt+Enter: drop Alt's key up (it would open the menu bar) */
 static bool g_alt_held, g_ctrl_held; /* from the key events, for the shortcut */
+static char g_dropped[1024];         /* plat_take_dropped_file */
 
 /* How the framebuffer is put into the window (present_layout). The window
  * is sized in pixels (SDL_WINDOW_HIGH_PIXEL_DENSITY, plat_video_set_mode),
@@ -677,6 +678,13 @@ static void translate(SDL_Event *e)
     case SDL_EVENT_WINDOW_EXPOSED:
         push_simple(PLAT_EV_EXPOSE);
         break;
+    case SDL_EVENT_DROP_FILE:
+        if (e->drop.data) {
+            if (g_dropped[0] && strcmp(g_dropped, e->drop.data) != 0)
+                plat_release_dropped_file(g_dropped); /* superseded */
+            SDL_strlcpy(g_dropped, e->drop.data, sizeof(g_dropped));
+        }
+        break;
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
         update_presentation();
         if (g_managed)
@@ -968,6 +976,76 @@ static void SDLCALL dialog_done(void *user, const char *const *files, int filter
     }
 }
 #endif
+
+bool plat_take_dropped_file(char *out, size_t out_len)
+{
+    if (!g_dropped[0])
+        return false;
+    SDL_strlcpy(out, g_dropped, out_len);
+    g_dropped[0] = '\0';
+    return true;
+}
+
+void plat_release_dropped_file(const char *path)
+{
+#ifdef __EMSCRIPTEN__
+    /* SDL's copy, /tmp/filedrop/N/NAME, and its folder N */
+    static const char k_dir[] = "/tmp/filedrop/";
+    if (!path || strncmp(path, k_dir, sizeof(k_dir) - 1) != 0)
+        return;
+    remove(path);
+    char dir[1024];
+    SDL_strlcpy(dir, path, sizeof(dir));
+    char *slash = strrchr(dir, '/');
+    if (slash && slash > dir + sizeof(k_dir) - 1) {
+        *slash = '\0';
+        remove(dir);
+    }
+#else
+    (void)path; /* the user's own file */
+#endif
+}
+
+#ifdef __EMSCRIPTEN__
+/* An <a download> with the file's bytes as a Blob. */
+EM_JS(int, web_download, (const char *path, const char *name), {
+    try {
+        var data = FS.readFile(UTF8ToString(path));
+        var url = URL.createObjectURL(new Blob([data], { type: 'application/octet-stream' }));
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = UTF8ToString(name);
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+        return 1;
+    } catch (e) {
+        console.warn('Afterlife: download failed', e);
+        return 0;
+    }
+});
+#endif
+
+bool plat_can_download(void)
+{
+#ifdef __EMSCRIPTEN__
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool plat_download_file(const char *path, const char *name)
+{
+#ifdef __EMSCRIPTEN__
+    return web_download(path, name) != 0;
+#else
+    (void)path, (void)name;
+    return false;
+#endif
+}
 
 bool plat_file_dialog_begin(bool save, const char *default_location, const char *filter_name, const char *pattern)
 {
