@@ -26,7 +26,8 @@ static int g_fail;
 
 static void push_key(SDL_EventType type, SDL_Keycode key, SDL_Scancode sc, SDL_Keymod mod)
 {
-    SDL_Event e = {0};
+    SDL_Event e;
+    SDL_zero(e); /* not "= {0}": that zeroes only the union's first member (GCC 15+) */
     e.type = type;
     e.key.key = key;
     e.key.scancode = sc;
@@ -37,7 +38,8 @@ static void push_key(SDL_EventType type, SDL_Keycode key, SDL_Scancode sc, SDL_K
 
 static void push_text(const char *t)
 {
-    SDL_Event e = {0};
+    SDL_Event e;
+    SDL_zero(e);
     e.type = SDL_EVENT_TEXT_INPUT;
     e.text.text = SDL_strdup(t); /* leaks a few bytes; test only */
     SDL_PushEvent(&e);
@@ -104,7 +106,8 @@ int main(void)
 
     /* Mouse: button transitions are queued with the position. */
     gfx_mouse_queue_reset();
-    SDL_Event m = {0};
+    SDL_Event m;
+    SDL_zero(m);
     m.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     m.button.button = SDL_BUTTON_LEFT;
     m.button.down = true;
@@ -123,7 +126,8 @@ int main(void)
     CHECK(b == 0);
 
     /* Close button -> WM_CLOSE. */
-    SDL_Event c = {0};
+    SDL_Event c;
+    SDL_zero(c);
     c.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
     SDL_PushEvent(&c);
     drain();

@@ -156,7 +156,8 @@ static void write_png(const char *name, const GfxSurface *s)
 
 static void push_key(SDL_Keycode key, SDL_Scancode sc)
 {
-    SDL_Event e = {0};
+    SDL_Event e;
+    SDL_zero(e); /* not "= {0}": that zeroes only the union's first member (GCC 15+) */
     e.type = SDL_EVENT_KEY_DOWN;
     e.key.key = key;
     e.key.scancode = sc;
@@ -169,7 +170,8 @@ static void push_key(SDL_Keycode key, SDL_Scancode sc)
 
 static void push_move(int x, int y)
 {
-    SDL_Event e = {0};
+    SDL_Event e;
+    SDL_zero(e);
     e.type = SDL_EVENT_MOUSE_MOTION;
     e.motion.x = (float)x;
     e.motion.y = (float)y;
@@ -178,7 +180,8 @@ static void push_move(int x, int y)
 
 static void push_button(int x, int y, bool down)
 {
-    SDL_Event e = {0};
+    SDL_Event e;
+    SDL_zero(e);
     e.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
     e.button.button = SDL_BUTTON_LEFT;
     e.button.down = down;
