@@ -109,9 +109,28 @@ Module['preRun'] = Module['preRun'] || [];
     var error = document.getElementById('pick-error');
     panel.hidden = false;
     function take(list) {
-      var files = Array.prototype.filter.call(list, function (f) { return wanted(f.name); });
+      var image = Array.prototype.find.call(list, function (f) { return /\.(iso|bin|img)$/i.test(f.name); });
+      if (image) {
+        // a CD image: its game files are read out of it (web/iso9660.js)
+        error.textContent = '';
+        panel.hidden = true;
+        Module['setStatus']('Reading the CD image...');
+        Iso9660.extract(image, wanted).then(function (files) {
+          use(files);
+        }, function (e) {
+          Module['setStatus']('');
+          panel.hidden = false;
+          error.textContent = e.message;
+        });
+        return;
+      }
+      use(Array.prototype.filter.call(list, function (f) { return wanted(f.name); }));
+    }
+    function use(files) {
       if (!files.some(function (f) { return f.name.toUpperCase() === 'ALIFE.INI'; }) ||
           !files.some(function (f) { return /\.000$/i.test(f.name); })) {
+        Module['setStatus']('');
+        panel.hidden = false;
         error.textContent = 'ALIFE.INI and at least one .000 bundle are needed.';
         return;
       }
@@ -128,6 +147,7 @@ Module['preRun'] = Module['preRun'] || [];
     }
     document.getElementById('pick-files').onchange = function (e) { take(e.target.files); };
     document.getElementById('pick-dir').onchange = function (e) { take(e.target.files); };
+    document.getElementById('pick-image').onchange = function (e) { take(e.target.files); };
   }
 
   Module['preRun'].push(function () {

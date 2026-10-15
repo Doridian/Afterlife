@@ -1,0 +1,75 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- The front page of the published WebAssembly build (GitHub Pages, see
+     .github/workflows/pages.yml). The game itself is afterlife.html next to it. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Afterlife</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { --bg: #111; --fg: #ddd; --muted: #999; --accent: #8cf; --card: #1b1b1b; --line: #333; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { --bg: #f6f6f4; --fg: #222; --muted: #555; --accent: #15c; --card: #fff; --line: #ccc; }
+  }
+  :root[data-theme="light"] { --bg: #f6f6f4; --fg: #222; --muted: #555; --accent: #15c; --card: #fff; --line: #ccc; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 42em; margin: 0 auto; padding: 32px 16px 48px; box-sizing: border-box; }
+  h1 { margin: 0 0 4px; font-size: 2.2em; }
+  h2 { font-size: 1.2em; margin: 0 0 8px; }
+  p { margin: 8px 0; }
+  .lead { color: var(--muted); }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin: 20px 0; }
+  a { color: var(--accent); }
+  .button { display: inline-block; margin: 6px 6px 6px 0; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--accent);
+            color: var(--accent); text-decoration: none; font-weight: 600; }
+  .button.primary { background: var(--accent); color: var(--bg); }
+  code { font-size: 0.92em; }
+  ol { padding-left: 1.3em; }
+  li { margin: 6px 0; }
+  footer { color: var(--muted); font-size: 0.9em; margin-top: 32px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Afterlife</h1>
+  <p class="lead">A native port of the LucasArts city-building game <em>Afterlife</em> (1996), running in your browser.</p>
+
+  <section>
+    <h2>1. Get the CD</h2>
+    <p>This site carries no game data. You need your own copy of the CD, which the Internet Archive has:</p>
+    <p>
+      <a class="button" href="https://archive.org/details/AfterlifeUSA" target="_blank" rel="noopener">Afterlife on archive.org</a>
+      <a class="button" href="https://archive.org/download/AfterlifeUSA/Afterlife%20(USA).zip" rel="noopener">Download the CD (zip)</a>
+    </p>
+    <p>Unzip the download. You need the <code>.bin</code> file in it (the CD image; its <code>.cue</code> isn't needed).</p>
+  </section>
+
+  <section>
+    <h2>2. Play</h2>
+    <ol>
+      <li>Open the game and choose the <code>.bin</code> file (or the <code>.iso</code> of your own CD, or the CD's folder).</li>
+      <li>Play. The game reads the files in your browser; nothing is uploaded anywhere.</li>
+    </ol>
+    <p>The browser keeps the game files, so you only do this once per browser.</p>
+    <p><a class="button primary" href="afterlife.html">Play Afterlife</a></p>
+  </section>
+
+  <section>
+    <h2>About</h2>
+    <p>
+      Afterlife is a decompilation and native port to portable C and SDL3, for Linux, macOS and the web.
+      The source, and the desktop builds, are on
+      <a href="https://github.com/Doridian/Afterlife" rel="noopener">GitHub</a>.
+    </p>
+    <p>Saved games can be dragged onto the game window, and downloaded from the game's File menu.</p>
+  </section>
+
+  <footer>
+    An unofficial port of the 1996 LucasArts game. The game data is not included.
+  </footer>
+</main>
+</body>
+</html>

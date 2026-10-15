@@ -1,0 +1,62 @@
+# Publishes the WebAssembly build on GitHub Pages, without game data: the
+# page asks the player for their CD (an image from archive.org, or its files).
+# web/index.html is the front page, afterlife.html the game next to it.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: latest
+
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Configure
+        run: emcmake cmake --preset wasm
+
+      - name: Build
+        run: cmake --build --preset wasm
+
+      - name: Assemble the site
+        run: |
+          # The site must never carry game data: no package from AFTERLIFE_WASM_DATA.
+          if ls build/wasm/*.data >/dev/null 2>&1; then echo "game data in the build"; exit 1; fi
+          mkdir _site
+          cp web/index.html _site/
+          cp build/wasm/afterlife.html build/wasm/afterlife.js build/wasm/afterlife.wasm _site/
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

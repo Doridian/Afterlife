@@ -98,6 +98,9 @@ cmake --build --preset wasm
 cd build/wasm && python3 -m http.server 8000   # http://localhost:8000/afterlife.html
 ```
 
+The same build without data is published at <https://doridian.github.io/Afterlife/>:
+the page asks for the CD image, which is on [archive.org](https://archive.org/details/AfterlifeUSA).
+
 `AFTERLIFE_WASM_DATA` builds the game files the port needs into
 `afterlife.data` (about 150 MB with the CD's `ALIFE.INI`). Don't publish such
 a build. Without it the page asks for the files once and keeps them in the
