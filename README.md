@@ -183,5 +183,4 @@ original game, for preservation and interoperability.
 
 The code in this repository is licensed under the
 [GNU Affero General Public License v3.0 or later](LICENSE). Game data is not
-included and is not covered by this license; neither are the texts and number
-tables from `ALIFE.EXE` in the sources, which remain © LucasArts.
+included and is not covered by this license
