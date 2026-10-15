@@ -55,6 +55,10 @@ void mapview_refresh(void);
 /* 0x464105: redraws the layer, legend and view outline and repaints. */
 void mapview_draw(void);
 
+/* 0x466c35: zoom in (to 1) or out by one step, centred on cell (cx, cy);
+ * no redraw (the tutorial calls it, WP8). */
+void mapview_zoom(int in, int cx, int cy);
+
 /* Port-only state access (the original's globals 0x6607b0..0x6607bc). */
 typedef struct MapviewState {
     int layer;   /* MAPVIEW_TEMP_PERM .. MAPVIEW_ROCKS */

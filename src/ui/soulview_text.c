@@ -11,8 +11,8 @@
  * The story is one of 18 templates (pointer table 0x66a7f0), each a format
  * string with three lists of words picked by seed bits; the result is
  * expanded: "&(XY ...)" inserts an item, mostly a word from a list picked
- * by seed bits (lists of string pointers at the addresses below, all read
- * from the user's ALIFE.EXE), sometimes a nested template, a name, a
+ * by seed bits (lists of string pointers at the addresses below, all in
+ * ALIFE.EXE's data, src/data), sometimes a nested template, a name, a
  * number, a date or one of two alternatives "&(OR (a) (b))". After '.',
  * '?' or '!' the next letter is capitalised; "&(CP)" forces it.
  */

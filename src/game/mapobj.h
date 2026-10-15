@@ -110,7 +110,7 @@ void mapobj_step(int plane, int animate);
 /* 0x437184 map_object_think(window, &map_view, slot): the behaviour of
  * object `slot` after it moved (current plane selected). The Bad Things'
  * kinds (sets 3, 6, 0x14, 0x15, 0x18-0x1b) are WP4's
- * (badthings_object_think in game/badthings.h). */
+ * (badthings_object_think, game/badthings.h). */
 void mapobj_think(int slot);
 
 /* The map object part of game_frame_update (0x407282, every 125 ms while

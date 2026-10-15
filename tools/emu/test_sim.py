@@ -49,7 +49,7 @@ UI_STUBS = {
     0x46313b: 'macro_refresh', 0x4bfc69: 'ctl_message_box', 0x4751af: 'snd_play', 0x476582: 'news_popup_show',
     0x4753f2: 'snd_fade_out_music', 0x4754a1: 'snd_unload', 0x447243: 'statusbar_draw',
     0x446904: 'statusbar_draw_date', 0x446dc5: 'statusbar 0x446dc5', 0x4c2830: 'wm_send',
-    0x43dc3c: 'bad_thing_start (WP4, a stub in the port)',
+    0x4754d7: 'snd_music_play', 0x4750f0: 'snd_stop', 0x4cf504: 'font_select', 0x4d0102: 'font_set_colors',
 }
 
 # Runtime globals (not saved) compared after the calls that use them.
@@ -328,8 +328,6 @@ SIM_UPDATE_STUBS = {
     0x4159ba: 'graphview_draw', 0x4640c9: 'mapview_refresh', 0x40d34b: 'graph_history_record',
     0x4154ab: 'graph summary', 0x418a39: 'advisor_update', 0x4486bd: 'cd_spin_up',
     0x47d6fb: 'Soulview trackers age (a hook in the port)',
-    0x4442dd: 'badthings_step', 0x443c9e: 'badthings_step2', 0x442122: 'badthings_spread',
-    0x442287: 'badthings_recover', 0x444d23: 'badthings_bankruptcy',
 }
 SIM_TIMERS = [0x65ee64, 0x65ee68, 0x65ee6c, 0x65ee70, 0x65ee74, 0x65ee78, 0x65ee7c, 0x65ee80, 0x65ee84,
               0x65ee88, 0x4f3120, 0x4f3144]

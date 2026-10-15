@@ -10,10 +10,6 @@
 
 static const uint8_t *va_ptr(uint32_t va, uint32_t *avail)
 {
-    static bool tried;
-    if (!tried)
-        exe_res_open("ALIFE.EXE");
-    tried = true;
     *avail = 0;
     return va ? exe_res_va(va, avail) : NULL;
 }

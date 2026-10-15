@@ -18,7 +18,7 @@
  *     must keep playing past its length and end once the hook is set to
  *     0x80, with no silent gap at the jump.
  *  4. Duration, silence, clipping and the 17x17 pan table against
- *     ALIFE.EXE's copy (0x6771a0) when the exe is in DATA_DIR.
+ *     ALIFE.EXE's copy (0x6771a0, from src/data).
  *
  * Writes OUT_DIR/imuse_sfx.wav and OUT_DIR/imuse_mix.wav (22050 Hz stereo).
  */
@@ -31,6 +31,7 @@
 #include "game/config.h"
 #include "game/resource.h"
 #include "game/sound.h"
+#include "gfx/exe_res.h"
 #include "imuse/imuse.h"
 #include "imuse/waveapi.h"
 #include "platform/platform.h"
@@ -188,36 +189,12 @@ static void on_marker(const char *marker, const intptr_t args[10])
         snprintf(g_first_marker, sizeof(g_first_marker), "%s (arg %ld)", marker ? marker : "(null)", (long)args[0]);
 }
 
-/* The pan table at 0x6771a0 in ALIFE.EXE, via the PE section headers. */
+/* The pan table at 0x6771a0 in ALIFE.EXE (its data is compiled in). */
 static void check_pan_table(void)
 {
-    FILE *f = plat_fopen_data("ALIFE.EXE");
-    if (!f) {
-        printf("skip: ALIFE.EXE not found, pan table not compared\n");
-        return;
-    }
-    uint8_t hdr[4096];
-    size_t n = fread(hdr, 1, sizeof(hdr), f);
-    uint32_t pe = hdr[0x3c] | hdr[0x3d] << 8;
-    if (n < sizeof(hdr) || pe > 3000) {
-        fclose(f);
-        return;
-    }
-    int nsec = hdr[pe + 6] | hdr[pe + 7] << 8;
-    int opt = hdr[pe + 20] | hdr[pe + 21] << 8;
-    uint32_t va = 0x6771a0 - 0x400000;
-    long file_off = -1;
-    for (int i = 0; i < nsec; i++) {
-        const uint8_t *sh = hdr + pe + 24 + opt + i * 40;
-        uint32_t sva = sh[12] | sh[13] << 8 | sh[14] << 16 | (uint32_t)sh[15] << 24;
-        uint32_t ssz = sh[16] | sh[17] << 8 | sh[18] << 16 | (uint32_t)sh[19] << 24;
-        uint32_t sraw = sh[20] | sh[21] << 8 | sh[22] << 16 | (uint32_t)sh[23] << 24;
-        if (va >= sva && va < sva + ssz)
-            file_off = (long)(sraw + (va - sva));
-    }
-    uint8_t tab[17 * 17];
-    int ok = file_off >= 0 && fseek(f, file_off, SEEK_SET) == 0 && fread(tab, 1, sizeof(tab), f) == sizeof(tab);
-    fclose(f);
+    uint32_t avail = 0;
+    const uint8_t *tab = exe_res_va(0x6771a0, &avail);
+    int ok = tab && avail >= 17 * 17;
     int diff = 0;
     for (int v = 0; ok && v < 17; v++)
         for (int p = 0; p < 17; p++)

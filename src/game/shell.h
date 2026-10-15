@@ -125,6 +125,20 @@ typedef bool (*ShellPickFn)(int mode, char *out, size_t out_len);
 extern ShellPickFn shell_pick_file_hook;
 bool shell_pick_file(int mode, char *out, size_t out_len);
 
+/* save_slot_path 0x480552: "<save folder>/agame%03u.alf" (mode 1, saved
+ * games) or "ascen%03u.asc" (mode 2, scenarios). The save folder is INI
+ * "Save games" when usable here, else the data dir, or
+ * shell_save_dir_override (tests). */
+extern const char *shell_save_dir_override;
+void shell_slot_path(int mode, unsigned slot, char *out, size_t n);
+/* save_write_game 0x485fb3: writes the game with `title` in its header. */
+bool shell_save_game_to(const char *path, const char *title);
+/* save_load_game 0x48f837 of a file, or (slot >= 10000, save_open_slot
+ * 0x47fca7) of a save in the bundles, then what the shell does after a
+ * load (views, main view, status). A message box on failure. */
+bool shell_load_game_from(const char *path);
+bool shell_load_game_resource(uint32_t id);
+
 /* ---- hooks into packages that aren't ported yet (NULL = skipped) ------- */
 
 typedef struct ShellHooks {
@@ -136,7 +150,8 @@ typedef struct ShellHooks {
     void (*microview_cell)(int x, int y);
     bool (*soulview_cell)(int x, int y);
     /* views WP6b owns: Microview 0x5c6670, Soulview 0x5b2f50, Macromanager
-     * 0x5f7468 (show / hide), audio dialog 0x5fa5f0 */
+     * 0x5f7468 (show / hide), audio dialog (0x5fa5f0 is the unused
+     * tutorial text window, ui/tutorialwin.h) */
     void (*microview_show)(bool on);
     void (*soulview_show)(bool on);
     void (*macro_show)(bool on);

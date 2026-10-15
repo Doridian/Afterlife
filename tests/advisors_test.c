@@ -302,7 +302,7 @@ int main(int argc, char **argv)
     akos_talk_initialize();
 
     if (!planet_tables_load()) {
-        fprintf(stderr, "can't read the planet tables from ALIFE.EXE in %s\n", argv[1]);
+        fprintf(stderr, "can't unpack the planet tables\n");
         return 1;
     }
     check_texts();

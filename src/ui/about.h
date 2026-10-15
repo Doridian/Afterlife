@@ -9,9 +9,8 @@
  *
  * The credits script is the original's code: 0x4addfb is a long run of
  * calls credits_add(kind, text, x, y, arg, flags) with two random
- * choices. The port interprets those instructions straight from the
- * user's ALIFE.EXE (gfx/exe_res.h), so neither the script nor its text is
- * in the repo; without the EXE the credits area stays empty.
+ * choices. tools/extract_exe.py decodes those instructions into a list of
+ * ops (data/credits_script.c) that about.c runs.
  */
 #ifndef AFTERLIFE_UI_ABOUT_H
 #define AFTERLIFE_UI_ABOUT_H

@@ -11,8 +11,9 @@
  *         akos_talk_wait(talker);
  *
  * so here they are tables of {talker, text, voice}. The subtitles (some
- * 30 KB) are read from the user's ALIFE.EXE at runtime by their original
- * addresses (exe_res_va); only addresses and voice resource ids are here.
+ * 30 KB) are ALIFE.EXE texts looked up by their original addresses
+ * (exe_res_va; the data is in src/data); only addresses and voice
+ * resource ids are here.
  */
 #include <stddef.h>
 #include <string.h>
@@ -438,10 +439,6 @@ const char *advisor_issue_label(unsigned code)
 /* A NUL-terminated string at `va` in ALIFE.EXE, or "". */
 static const char *xs(uint32_t va)
 {
-    static bool tried;
-    if (!tried)
-        exe_res_open("ALIFE.EXE");
-    tried = true;
     uint32_t avail = 0;
     const uint8_t *p = exe_res_va(va, &avail);
     if (!p || !memchr(p, 0, avail))

@@ -18,10 +18,12 @@
 #include "game/resource.h"
 #include "game/sound.h"
 #include "game/timer.h"
+#include "gfx/exe_res.h"
 #include "gfx/font.h"
 #include "gfx/mouse.h"
 #include "gfx/palette.h"
 #include "gfx/surface.h"
+#include "platform/platform.h"
 #include "ui/controls.h"
 #include "ui/wm.h"
 
@@ -196,6 +198,13 @@ static int rc_initialize_from_ini(void)
     if (!rc_initialize(g_config.resource_file, g_config.cd_path) && !rc_local_index()->count)
         error_box("Where oh where is the Afterlife CD?", true,
                   "Please insert the Afterlife CD in the drive.");
+    /* Port-only: the original runs from ALIFE.EXE; the port reads its
+     * cursors, icon and built-in font from it (gfx/exe_res.h). */
+    if (!exe_res_open("ALIFE.EXE"))
+        error_box("HILEVEL ERROR RcInitialize", true,
+                  "Cannot read ALIFE.EXE from the data folder \"%s\". The port needs the "
+                  "Windows 95 ALIFE.EXE of your installation for its cursors, icon and built-in font.",
+                  plat_data_dir());
     return 0;
 }
 

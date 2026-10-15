@@ -28,6 +28,7 @@
 #include "game/sound.h"
 #include "game/startup.h"
 #include "game/timer.h"
+#include "game/tutorial.h"
 #include "game/util.h"
 #include "game/world.h"
 #include "gfx/akos.h"
@@ -41,6 +42,7 @@
 #include "ui/about.h"
 #include "ui/advisors.h"
 #include "ui/controls.h"
+#include "ui/exe_text.h"
 #include "ui/ctrlpanel.h"
 #include "ui/graphview.h"
 #include "ui/macro.h"
@@ -50,6 +52,7 @@
 #include "ui/news.h"
 #include "ui/planetview.h"
 #include "ui/soulview.h"
+#include "ui/slotdlg.h"
 #include "ui/statusbar.h"
 #include "ui/title.h"
 #include "ui/views.h"
@@ -186,7 +189,7 @@ static void show_scrollbars(bool on)
 /* ======================================================================== */
 
 /* 0x4510cd: the last 31 characters typed; "SAMNMAX" three times calls
- * 0x444ea5 (Bad Things range, WP4: not ported). */
+ * 0x444ea5 (badthings_cheat). */
 void shell_cheat_char(int ch)
 {
     static char typed[32]; /* 0x4f3188 */
@@ -195,7 +198,7 @@ void shell_cheat_char(int ch)
     typed[31] = '\0';
     if (strstr(typed, "SAMNMAXSAMNMAXSAMNMAX")) {
         memset(typed, 1, sizeof typed - 1);
-        fprintf(stderr, "shell: SAMNMAX (0x444ea5, Bad Things, not ported)\n");
+        badthings_cheat();
     }
 }
 
@@ -617,18 +620,20 @@ void shell_menu_dispatch(WmWindow *item, unsigned id)
     case 0x2d:
     case 0x2e:
         if (shell_hooks.tutorial)
-            shell_hooks.tutorial((int)id - 9);
+            shell_hooks.tutorial((int)id - 0x24); /* 0x425e3b: lesson 1.. */
         break;
     case MENU_NO_BAD_THINGS:
         if (!menu_is_checked(item)) {
             if (ctl_message_box(-1, -1, NULL, "This will cut your SOUL Rate by 50%.  Are you sure?", "&Yes\0~&No\0",
                                 0) == 1) {
                 menu_set_checked(item, true);
+                g_state.bad_things = 0;
             }
         } else if (ctl_message_box(-1, -1, NULL,
                                    "Are you sure you want to leave your Afterlife vulnerable to Bad Things?",
                                    "&Yes\0~&No\0", 0) == 1) {
             menu_set_checked(item, false);
+            g_state.bad_things = 1;
         }
         break;
     default: /* 8, 9, 10, 0x1e, 0x24, 0x2f, 0x30: nothing; 0x33-0x36: 0x4089f4 (empty) */
@@ -643,8 +648,14 @@ void shell_menu_dispatch(WmWindow *item, unsigned id)
 static const char *mode_ext(int mode) { return mode == 2 ? "asc" : "alf"; }
 
 /* The save folder: INI "Save games" if it exists here, else the data dir. */
+const char *shell_save_dir_override;
+
 static void save_dir(char *out, size_t n)
 {
+    if (shell_save_dir_override) {
+        snprintf(out, n, "%s", shell_save_dir_override);
+        return;
+    }
     char ini[0x800];
     if (cfg_save_games_dir(ini) && ini[0] && !(ini[1] == ':')) {
         snprintf(out, n, "%s", ini);
@@ -688,8 +699,14 @@ bool shell_pick_file(int mode, char *out, size_t out_len)
 bool shell_choose_load(int mode)
 {
     char path[sizeof g_pending_load];
-    if (!shell_pick_file(mode, path, sizeof path))
+    if (!shell_pick_file_hook) { /* 0x494112: the slot dialog */
+        int slot = -1;
+        if (!slotdlg_choose(mode, &slot))
+            return false;
+        slotdlg_slot_file(mode, (unsigned)slot, path, sizeof path);
+    } else if (!shell_pick_file(mode, path, sizeof path)) {
         return false;
+    }
     snprintf(g_pending_load, sizeof g_pending_load, "%s", path);
     return true;
 }
@@ -728,22 +745,37 @@ static void make_thumbnail(void)
         }
 }
 
+/* 0x480552 save_slot_path */
+void shell_slot_path(int mode, unsigned slot, char *out, size_t n)
+{
+    char dir[1024];
+    save_dir(dir, sizeof dir);
+    snprintf(out, n, mode == 2 ? "%s/ascen%03u.asc" : "%s/agame%03u.alf", dir, slot);
+}
+
+/* save_write_game 0x485fb3: the header (version, kind, time stamp, year,
+ * title, thumbnail) and the game. */
+bool shell_save_game_to(const char *path, const char *title)
+{
+    GameState *g = &g_state;
+    g->hdr.version = ALSV_VERSION_CURRENT;
+    g->hdr.kind = g_save_kind;
+    g->hdr.timestamp = pack_timestamp();
+    g->hdr.year = g->year;
+    snprintf(g->hdr.title, sizeof g->hdr.title, "%.200s", title);
+    make_thumbnail();
+    return savegame_save(g, path);
+}
+
 /* 0x480ea4(mode): save (1 a game, 2 a scenario: editor) */
 static bool save_game(int mode)
 {
     char path[1024];
     if (!shell_pick_file(3, path, sizeof path))
         return false;
-    GameState *g = &g_state;
-    g->hdr.version = ALSV_VERSION_CURRENT;
-    g->hdr.kind = g_save_kind;
-    g->hdr.timestamp = pack_timestamp();
-    g->hdr.year = g->year;
     const char *base = strrchr(path, '/');
-    snprintf(g->hdr.title, sizeof g->hdr.title, "%.200s", base ? base + 1 : path);
-    make_thumbnail();
     (void)mode;
-    if (!savegame_save(g, path)) {
+    if (!shell_save_game_to(path, base ? base + 1 : path)) {
         ctl_message_box(-1, -1, "Uh oh...", "The game could not be saved.", "~&OK\0", 0);
         return false;
     }
@@ -764,6 +796,9 @@ static void after_world_change(void)
     statusbar_draw();
     views_refresh_all();
     g_shell_repaint = 1;
+    /* the No Bad Things checkmark follows the game (game_reset_world
+     * 0x453993, save_load_game 0x4940c9) */
+    shell_menu_set_checked(MENU_NO_BAD_THINGS, g_state.bad_things == 0);
 }
 
 /* Loads `path` into the game (save_load_game 0x48f837 at the end of
@@ -771,12 +806,46 @@ static void after_world_change(void)
 static bool load_file(const char *path)
 {
     char err[256] = "";
+    uint32_t bad_things = g_state.bad_things;
     if (!world_load(path, err, sizeof err)) {
         char text[400];
         snprintf(text, sizeof text, "Couldn't load %s: %s", path, err);
         ctl_message_box(-1, -1, "Uh oh...", text, "~&OK\0", 0);
         return false;
     }
+    g_build.map_dirty = 0;
+    after_world_change();
+    if ((g_state.bad_things != 0) != (bad_things != 0)) {
+        /* save_load_game 0x494089: an FYI when the load flips the setting */
+        char buttons[32];
+        uint32_t t = g_state.bad_things ? 0x66c2e4 : 0x66c330, x = g_state.bad_things ? 0x66c2ac : 0x66c2f4;
+        exe_buttons(g_state.bad_things ? 0x66c2a4 : 0x66c2ec, 1, buttons, sizeof buttons);
+        ctl_message_box(-1, -1, exe_str(t), exe_str(x), buttons, 0);
+    }
+    return true;
+}
+
+bool shell_load_game_from(const char *path) { return load_file(path); }
+
+static uint8_t *load_resource(uint32_t id, size_t *len);
+
+/* save_load_game with a slot >= 10000: the save is resource `id`
+ * (save_open_slot 0x47fca7). */
+bool shell_load_game_resource(uint32_t id)
+{
+    size_t len = 0;
+    uint8_t *data = load_resource(id, &len);
+    GameState *tmp = data ? calloc(1, sizeof *tmp) : NULL;
+    char err[256] = "";
+    bool ok = tmp && savegame_load_mem(tmp, data, len, err, sizeof err);
+    free(data);
+    if (!ok) {
+        free(tmp);
+        ctl_message_box(-1, -1, "Uh oh...", "Couldn't load an internal file.", "~&OK\0", 0);
+        return false;
+    }
+    world_apply_loaded(tmp);
+    free(tmp);
     g_build.map_dirty = 0;
     after_world_change();
     return true;
@@ -823,7 +892,16 @@ static void run_command(void)
     case GAME_CMD_SAVE:
     case GAME_CMD_SAVE_SCENARIO:
         before_dialog();
-        if (!save_game(g_game_command == GAME_CMD_SAVE ? 1 : 2)) {
+        /* the original's slot dialog (0x480ea4); the file picker when a
+         * test supplies the path */
+        if (!shell_pick_file_hook) {
+            if (!slotdlg_save(g_game_command == GAME_CMD_SAVE ? 1 : 2)) {
+                g_game_running = 1;
+                g_game_next_command = 0;
+            } else {
+                g_build.map_dirty = 0;
+            }
+        } else if (!save_game(g_game_command == GAME_CMD_SAVE ? 1 : 2)) {
             g_game_running = 1;
             g_game_next_command = 0;
         }
@@ -836,7 +914,7 @@ static void run_command(void)
         before_dialog();
         if (planetview_disaster_window())
             wm_show(planetview_disaster_window(), false);
-        if (!load_game(mode)) {
+        if (!shell_pick_file_hook ? !slotdlg_load(mode) : !load_game(mode)) { /* 0x489e90 */
             g_game_next_command = 0;
         } else {
             graphview_refresh();
@@ -850,7 +928,10 @@ static void run_command(void)
     case GAME_CMD_DELETE: { /* 0x4946bd: pick a saved game and delete it */
         before_dialog();
         char path[1024];
-        if (shell_pick_file(1, path, sizeof path)) {
+        if (!shell_pick_file_hook) {
+            if (!slotdlg_delete())
+                g_game_next_command = 0;
+        } else if (shell_pick_file(1, path, sizeof path)) {
             char text[1200];
             snprintf(text, sizeof text, "Delete %s?", path);
             if (ctl_message_box(-1, -1, "Delete Game", text, "&Yes\0~&No\0", 0) == 1)
@@ -1215,6 +1296,18 @@ static void hook_voice_hold(bool hold)
         advisor_unsilence();
 }
 static void hook_window_update(void) { wm_update(g_main_window); }
+static void hook_repaint(void) { g_shell_repaint = 1; }
+static void hook_sound_stop(uint32_t id)
+{
+    if (snd_running())
+        snd_stop(id);
+}
+/* the bankruptcy (0x444d23): the helpers resign */
+static void hook_helpers_off(void)
+{
+    if (advisor_window() && wm_is_visible(advisor_window()))
+        shell_menu_command(MENU_HELPERS);
+}
 static void hook_mapobj_plane(int plane)
 {
     map_view_select_plane(&g_map_view, &g_map_planes, plane);
@@ -1303,6 +1396,18 @@ static void install_hooks(void)
     g_mapobj_hooks.sound = hook_sound;
     g_mapobj_hooks.window_update = hook_window_update;
     g_mapobj_hooks.select_plane = hook_mapobj_plane;
+    /* the Bad Things (WP4) */
+    g_badthings_hooks.message = hook_message;
+    g_badthings_hooks.news = news_popup;
+    g_badthings_hooks.sound = hook_sound;
+    g_badthings_hooks.sound_stop = hook_sound_stop;
+    g_badthings_hooks.sound_unload = hook_sound_unload;
+    g_badthings_hooks.music_play = music_switch;
+    g_badthings_hooks.music_fade = music_fade_out;
+    g_badthings_hooks.select_plane = hook_sim_select_plane;
+    g_badthings_hooks.window_update = hook_window_update;
+    g_badthings_hooks.repaint = hook_repaint;
+    g_badthings_hooks.helpers_off = hook_helpers_off;
     news_hooks.paint_main = shell_view_paint;
     news_hooks.music = music_switch;
     news_hooks.voice_hold = hook_voice_hold;
@@ -1321,6 +1426,9 @@ static void install_hooks(void)
     shell_hooks.soulview_show = infoviews_soulview_show;
     shell_hooks.macro_show = infoviews_macro_show;
     shell_hooks.views_changed = infoviews_changed;
+    /* the tutorial (WP8) */
+    shell_hooks.tutorial = tutorial_run;
+    wm_hooks.attract_stop = tutorial_attract_stop;
 }
 
 /* ======================================================================== */
@@ -1392,7 +1500,11 @@ int game_main_init(int argc, char **argv)
     ctl_msgbox_init();
     news_init(); /* 0x478304 */
     ctl_hooks.pump = sys_pump;
-    wm_set_input_live(true); /* no attract mode (WP8) */
+    /* The original starts with wm_input_live 0, so the first click at the
+     * title runs attract_stop(0) (0x4ac69c), which ends a tutorial that
+     * isn't running (harmless there: silences the advisors, re-centres the
+     * view). The port starts live; only tutorial_run turns it off. */
+    wm_set_input_live(true);
 
     if (g_arg_load_file[0] == '\0') {
         g_game_in_progress = 0;
@@ -1415,6 +1527,9 @@ int game_main_init(int argc, char **argv)
         return -1;
     }
     load_step();
+    /* the views are children of the main window, as in the original
+     * (their create functions take it from the views' context) */
+    views_set_context(g_main_window, &g_map_view, &g_game_paused);
     soulview_create();
     load_step();
     mapview_create();

@@ -352,7 +352,7 @@ typedef struct GameState {
     uint8_t karma_pending;              /* 0x6301f4: trains dispatched and not yet arrived */
     uint8_t karma_stations;             /* 0x59ceb0: Karma stations built */
     uint32_t karma_busy;                /* 0x630508: bit n: a train runs on Karma network n */
-    uint8_t unk_5b2f61;
+    uint8_t unk_5b2f61;                 /* Bad Things in progress, bit per kind (game/badthings.h) */
     uint32_t unk_5f746c, unk_5b2f5c;
     uint8_t object_count;               /* 0x6301f2: map objects alive (trains, boats, parked ones) */
     uint8_t unk_5bb0b0[20][3];          /* [i][0] ver > 7149 */
@@ -361,7 +361,7 @@ typedef struct GameState {
         unk_630484, unk_638664, unk_5f25a8, unk_5931f0, unk_5f7ed0;
     uint8_t unk_5f7400[8];
     uint32_t unk_638670[8];
-    uint8_t unk_5f4cd0[4][6];
+    uint8_t unk_5f4cd0[4][6];           /* the bankruptcy's walkers {plane, x, y, dx, dy, steps} */
     uint8_t unk_593247;                 /* ver > 6999 */
     uint16_t karma_load[16];            /* 0x5bb1e0: cells the train on network n has run so far, ver > 7009 */
     uint16_t karma_history[16];         /* 0x5931d0: recent train trips (karma.c), ver > 7009 */

@@ -29,6 +29,7 @@ void sim_reset(void)
     memset(&g_sim, 0, sizeof g_sim);
     economy_reset();
     karma_reset(); /* the train dispatcher's cursor and whistle timer */
+    badthings_reset(); /* the giant's footstep */
     if (!g_planet_hooks.souls)
         g_planet_hooks.souls = realm_souls_from_planet;
 }
@@ -472,8 +473,8 @@ void sim_update(int speed)
         (now = sim_clock_ms()) - g_sim.t_badthings > 0xf0) {
         g_build.map_dirty = 1;
         g_sim.t_badthings = now;
-        badthings_step();
-        badthings_step2();
+        badthings_doom_step();
+        badthings_fire_step();
     }
     if (g_sim.update_count > 0xfffffff0u)
         g_sim.update_count = 0;

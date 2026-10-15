@@ -193,6 +193,34 @@ void advisor_show(bool on)
     wm_redraw(w, NULL);
 }
 
+/* The advisor half of the tutorial's setup (0x425e3b, WP8): the issue
+ * buttons hidden, the subtitle area cleared, both heads opened and the
+ * subtitle rectangles narrowed to each head's side. */
+void advisor_tutorial_setup(void)
+{
+    WmWindow *w = adv.win;
+    if (!w)
+        return;
+    for (int i = 1; i <= ADV_ISSUES; i++) {
+        if (!adv.buttons[i])
+            continue;
+        ctl_button_enable(adv.buttons[i], false);
+        ctl_button_show(adv.buttons[i], false);
+    }
+    gfx_fill_rect(w->surface, 0xe, 0x91, 0x120, 0x46, BG);
+    akos_talk_open(1, w, adv.jasper, 0xff, 0xff, 0xc, BG, 8);
+    akos_talk_place(1, 0x50, 0x8b, w);
+    akos_talk_set_direction(1, 2);
+    akos_talk_set_anim(1, 1);
+    akos_talk_open(2, w, adv.aria, 0xff, 0xff, 0xe, BG, 8);
+    akos_talk_place(2, 0xeb, 0x8b, w);
+    akos_talk_set_direction(2, 2);
+    akos_talk_set_anim(2, 1);
+    static const GfxRect jasper = {0x13, 0x104, 0x95, 0xd2}, aria = {0x36, 0x128, 0x95, 0xd2};
+    g_adv_talk.text_rect[1] = jasper;
+    g_adv_talk.text_rect[2] = aria;
+}
+
 /* 0x417e28: right click on a control. */
 static void advisor_help(WmWindow *c)
 {

@@ -40,7 +40,8 @@
  * window code; hooks left NULL are skipped.
  *
  * Data tables that live in ALIFE.EXE (tech levels, disasters, tech names)
- * are read from the user's copy by planet_tables_load().
+ * are unpacked from its compiled-in data (gfx/exe_res.h, src/data) by
+ * planet_tables_load().
  */
 #ifndef GAME_PLANET_H
 #define GAME_PLANET_H
@@ -110,8 +111,8 @@ typedef struct PlanetTables {
 
 extern PlanetTables g_planet_tables;
 
-/* Reads the tables from ALIFE.EXE in the data directory (exe_res). Safe to
- * call again. False if the executable isn't there. */
+/* Unpacks the tables from ALIFE.EXE's data (exe_res). Safe to call
+ * again. Always true with the generated src/data. */
 bool planet_tables_load(void);
 
 /* ---- Runtime state (not saved) ----------------------------------------- */

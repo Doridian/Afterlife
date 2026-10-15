@@ -1,12 +1,18 @@
 /*
- * Port-only PE32 resource reader. See exe_res.h.
+ * Port-only: ALIFE.EXE's resources and data by id or address. See
+ * exe_res.h. Texts and number tables come from the compiled-in copy in
+ * src/data/; image data (the PE resources, the built-in font) from the
+ * user's ALIFE.EXE, through a minimal PE32 reader.
  */
 #include "gfx/exe_res.h"
 
 #include <stdlib.h>
 #include <string.h>
 
+#include "data/exe_data.h"
 #include "platform/platform.h"
+
+/* ---- the user's EXE ---- */
 
 static uint8_t *g_img;
 static uint32_t g_len;
@@ -14,6 +20,14 @@ static uint32_t g_base;     /* ImageBase */
 static uint32_t g_rsrc_rva; /* resource directory */
 static uint32_t g_nsect;
 static uint32_t g_sect;     /* file offset of the section table */
+
+/* ---- .rdata and .data: the embedded pieces plus the image regions ---- */
+
+static uint8_t g_rdata[0x400];
+static uint8_t g_data[0x27800];
+static uint8_t *const g_image[EXE_SECTIONS] = {g_rdata, g_data};
+static const uint32_t g_image_size[EXE_SECTIONS] = {sizeof g_rdata, sizeof g_data};
+static bool g_built;
 
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | p[1] << 8); }
 static uint32_t rd32(const uint8_t *p)
@@ -36,17 +50,66 @@ static bool rva_to_off(uint32_t rva, uint32_t *off, uint32_t *avail)
     return false;
 }
 
+/* The section image holding [va, va + len), or NULL. */
+static uint8_t *image_at(uint32_t va, uint32_t len, uint32_t *avail)
+{
+    for (int s = 0; s < EXE_SECTIONS; s++) {
+        const ExeSection *sec = &exe_sections[s];
+        if (sec->size == g_image_size[s] && va >= sec->va && va - sec->va < sec->size &&
+            len <= sec->size - (va - sec->va)) {
+            *avail = sec->size - (va - sec->va);
+            return g_image[s] + (va - sec->va);
+        }
+    }
+    return NULL;
+}
+
+static void build(void)
+{
+    for (int s = 0; s < EXE_SECTIONS; s++) {
+        const ExeSection *sec = &exe_sections[s];
+        if (sec->size != g_image_size[s])
+            continue; /* regenerated for another layout: leave it unmapped */
+        for (size_t i = 0; i < sec->n_pieces; i++) {
+            const ExePiece *p = &sec->pieces[i];
+            if (p->va >= sec->va && p->va - sec->va + p->len <= sec->size)
+                memcpy(g_image[s] + (p->va - sec->va), p->bytes, p->len);
+        }
+    }
+    g_built = true;
+}
+
+/* Copies the image regions from the loaded EXE into the section images. */
+static void fill_image_regions(void)
+{
+    for (size_t i = 0; i < exe_n_image_regions; i++) {
+        const ExeRegion *r = &exe_image_regions[i];
+        uint32_t off, avail, img_avail;
+        uint8_t *dst = image_at(r->va, r->len, &img_avail);
+        if (dst && r->va >= g_base && rva_to_off(r->va - g_base, &off, &avail) && avail >= r->len)
+            memcpy(dst, g_img + off, r->len);
+    }
+}
+
 void exe_res_close(void)
 {
     free(g_img);
     g_img = NULL;
     g_len = 0;
+    for (size_t i = 0; i < exe_n_image_regions; i++) {
+        uint32_t avail;
+        uint8_t *dst = image_at(exe_image_regions[i].va, exe_image_regions[i].len, &avail);
+        if (dst)
+            memset(dst, 0, exe_image_regions[i].len);
+    }
 }
 
 bool exe_res_open(const char *name)
 {
     if (g_img)
         return true;
+    if (!g_built)
+        build();
     PlatFile *f = plat_file_open(name);
     if (!f)
         return false;
@@ -73,6 +136,7 @@ bool exe_res_open(const char *name)
         exe_res_close();
         return false;
     }
+    fill_image_regions();
     return true;
 }
 
@@ -116,8 +180,13 @@ const uint8_t *exe_res_find(uint32_t type, uint32_t id, uint32_t *size)
 
 const uint8_t *exe_res_va(uint32_t va, uint32_t *avail)
 {
-    uint32_t off;
-    if (!g_img || va < g_base || !rva_to_off(va - g_base, &off, avail))
-        return NULL;
-    return g_img + off;
+    if (!g_built)
+        build();
+    if (!g_img) {
+        /* image data needs the EXE */
+        for (size_t i = 0; i < exe_n_image_regions; i++)
+            if (va >= exe_image_regions[i].va && va - exe_image_regions[i].va < exe_image_regions[i].len)
+                return NULL;
+    }
+    return image_at(va, 1, avail);
 }

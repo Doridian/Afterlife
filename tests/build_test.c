@@ -2,7 +2,6 @@
 /*
  * build_test [-d <data dir> <bundle> <out dir>] [save.ASC|.ALF ...]
  *
- * The data dir (default orig/) must hold ALIFE.EXE (planet tables).
  *
  * Checks the build tools, structures, rotation and world generation (WP2:
  * src/game/build.c, structure.c, rotate.c, newworld.c):
@@ -573,10 +572,10 @@ int main(int argc, char **argv)
         data = argv[2], bundle = argv[3], out = argv[4];
         a = 5;
     }
-    /* the new world's planet generator needs ALIFE.EXE's tables */
+    /* the new world's planet generator needs the planet tables */
     plat_set_data_dir(data ? data : "orig");
     if (!planet_tables_load()) {
-        printf("can't read the planet tables from ALIFE.EXE (give -d <data dir>)\n");
+        printf("can't unpack the planet tables\n");
         return 2;
     }
     tables_init_defaults();

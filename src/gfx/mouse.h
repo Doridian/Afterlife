@@ -53,8 +53,8 @@ bool gfx_mouse_queue_pop(int *x, int *y, unsigned *buttons);
 
 /* --- cursors -------------------------------------------------------------- */
 
-/* 0x4b9125 ms_load_cursor: cursor resource `id` from ALIFE.EXE, or NULL
- * (the system arrow) if it can't be loaded. */
+/* 0x4b9125 ms_load_cursor: cursor resource `id` from the user's ALIFE.EXE
+ * (gfx/exe_res.h), or NULL (the system arrow) if it can't be loaded. */
 PlatCursor *gfx_cursor_load(unsigned id);
 void gfx_cursor_destroy(PlatCursor *c);   /* 0x4b9164 */
 /* 0x4b9179 ms_show_cursor: forces the cursor visible (show != 0) or hidden,

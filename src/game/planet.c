@@ -58,8 +58,6 @@ bool planet_tables_load(void)
     PlanetTables *t = &g_planet_tables;
     if (t->loaded)
         return true;
-    if (!exe_res_open("ALIFE.EXE"))
-        return false;
     const uint8_t *tech = exe_bytes(0x64f048, 0x14 * PLANET_TECHS);
     const uint8_t *sin = exe_bytes(0x64f178, sizeof t->tech_sin);
     const uint8_t *bel = exe_bytes(0x66c918, 9);

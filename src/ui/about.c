@@ -21,11 +21,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "data/exe_data.h"
 #include "game/shell.h"
 #include "game/timer.h"
 #include "game/util.h"
 #include "gfx/draw.h"
-#include "gfx/exe_res.h"
 #include "gfx/font.h"
 #include "gfx/surface.h"
 #include "ui/controls.h"
@@ -269,116 +269,39 @@ static void credit_draw(const Credit *c, WmWindow *w, const GfxRect *clip)
     }
 }
 
-/* ---- the script, from the EXE ----------------------------------------------------------- */
+/* ---- the script ------------------------------------------------------------------------ */
 
-/* Where 0x4addfb's calls start (after the font slots and the list reset),
- * the functions it calls and the globals holding its three font slots. */
-#define SCRIPT_VA 0x4adec8u
-#define SCRIPT_END_VA 0x4b1007u
-#define CREDITS_ADD_VA 0x4ad624u
-#define RAND_RANGE_VA 0x42b088u
-static const uint32_t k_slot_vars[3] = {0x522e14u, 0x522e10u, 0x522bd8u};
-
-static bool fetch(uint32_t va, unsigned n, const uint8_t **out)
-{
-    uint32_t avail = 0;
-    const uint8_t *p = va >= SCRIPT_VA && va < SCRIPT_END_VA ? exe_res_va(va, &avail) : NULL;
-    *out = p;
-    return p && avail >= n;
-}
-
-static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
-
-static const char *exe_text(uint32_t va)
-{
-    uint32_t avail = 0;
-    const uint8_t *p = va ? exe_res_va(va, &avail) : NULL;
-    return p && memchr(p, 0, avail) ? (const char *)p : NULL;
-}
-
-/* Runs 0x4addfb's call sequence: the handful of x86 instructions it is
- * made of (pushes, the slot loads, calls with their stack cleanup, and the
- * two rand_range switches through their jump tables). Stops at the
- * epilogue or at anything else. Returns the number of entries added. */
+/* Runs 0x4addfb's call sequence, decoded into ops by tools/extract_exe.py
+ * (data/credits_script.c): the credits_add calls in order and the two
+ * rand_range switches. Returns the number of entries added. */
 static int run_script(void)
 {
-    if (!exe_res_open("ALIFE.EXE"))
-        return 0;
-    uint32_t stack[32];
-    int sp = 0, added = 0;
-    uint32_t eax = 0, locals[256] = {0};
-    uint32_t cmp_a = 0, cmp_b = 0;
-    uint32_t pc = SCRIPT_VA;
-    const uint8_t *p;
-    for (int steps = 0; steps < 20000 && fetch(pc, 1, &p); steps++) {
-        uint8_t op = p[0];
-        if (op == 0x6a && fetch(pc, 2, &p)) { /* push imm8 */
-            if (sp >= 32)
-                break;
-            stack[sp++] = (uint32_t)(int32_t)(int8_t)p[1];
-            pc += 2;
-        } else if (op == 0x68 && fetch(pc, 5, &p)) { /* push imm32 */
-            if (sp >= 32)
-                break;
-            stack[sp++] = rd32(p + 1);
-            pc += 5;
-        } else if (op == 0x50) { /* push eax */
-            if (sp >= 32)
-                break;
-            stack[sp++] = eax;
-            pc += 1;
-        } else if (op == 0xa1 && fetch(pc, 5, &p)) { /* mov eax, [slot var] */
-            uint32_t var = rd32(p + 1);
-            int slot = var == k_slot_vars[0] ? g_font_small1 : var == k_slot_vars[1] ? g_font_small2
-                       : var == k_slot_vars[2] ? g_font_big : -2;
-            if (slot == -2)
-                break;
-            eax = (uint32_t)slot;
-            pc += 5;
-        } else if (op == 0xe8 && fetch(pc, 5, &p)) { /* call */
-            uint32_t target = pc + 5 + rd32(p + 1);
-            if (target == CREDITS_ADD_VA && sp >= 6) {
-                uint32_t *a = &stack[sp - 1]; /* a[0] = first argument */
-                int kind = (int)a[0];
-                const char *text = kind == CR_TEXT ? exe_text(a[-1]) : NULL;
-                credits_add(kind, text, (int32_t)a[-2], (int32_t)a[-3], (intptr_t)(int32_t)a[-4], a[-5]);
-                added++;
-            } else if (target == RAND_RANGE_VA && sp >= 2) {
-                eax = (uint32_t)rand_range((int32_t)stack[sp - 1], (int32_t)stack[sp - 2]);
-            } else {
-                break;
-            }
-            pc += 5;
-        } else if (op == 0x83 && fetch(pc, 3, &p) && p[1] == 0xc4) { /* add esp, imm8 */
-            int n = p[2] / 4;
-            sp = n > sp ? 0 : sp - n;
-            pc += 3;
-        } else if (op == 0x83 && fetch(pc, 4, &p) && p[1] == 0x7d) { /* cmp [ebp+d], imm8 */
-            cmp_a = locals[p[2]];
-            cmp_b = (uint32_t)(int32_t)(int8_t)p[3];
-            pc += 4;
-        } else if (op == 0x89 && fetch(pc, 3, &p) && p[1] == 0x45) { /* mov [ebp+d], eax */
-            locals[p[2]] = eax;
-            pc += 3;
-        } else if (op == 0x8b && fetch(pc, 3, &p) && p[1] == 0x45) { /* mov eax, [ebp+d] */
-            eax = locals[p[2]];
-            pc += 3;
-        } else if (op == 0x0f && fetch(pc, 6, &p) && p[1] == 0x87) { /* ja rel32 */
-            pc += 6;
-            if (cmp_a > cmp_b)
-                pc += rd32(p + 2);
-        } else if (op == 0xe9 && fetch(pc, 5, &p)) { /* jmp rel32 */
-            pc += 5 + rd32(p + 1);
-        } else if (op == 0xeb && fetch(pc, 2, &p)) { /* jmp rel8 */
-            pc += 2 + (uint32_t)(int32_t)(int8_t)p[1];
-        } else if (op == 0xff && fetch(pc, 7, &p) && p[1] == 0x24 && p[2] == 0x85) { /* jmp [table + eax*4] */
-            uint32_t avail = 0;
-            const uint8_t *t = exe_res_va(rd32(p + 3) + eax * 4, &avail);
-            if (!t || avail < 4)
-                break;
-            pc = rd32(t);
-        } else {
-            break; /* pop edi: the epilogue */
+    uint32_t locals[256] = {0};
+    int added = 0;
+    size_t pc = 0;
+    for (int steps = 0; steps < 20000 && pc < credits_script_len; steps++) {
+        const CreditsOp *op = &credits_script[pc++];
+        switch (op->op) {
+        case CREDITS_ADD: {
+            int slot = op->font == 0 ? g_font_small1 : op->font == 1 ? g_font_small2 : op->font == 2 ? g_font_big : 0;
+            intptr_t arg = op->font >= 0 ? (intptr_t)slot : (intptr_t)op->arg;
+            credits_add(op->kind, op->kind == CR_TEXT ? op->text : NULL, op->x, op->y, arg, op->flags);
+            added++;
+            break;
+        }
+        case CREDITS_RAND:
+            locals[op->var & 0xff] = (uint32_t)rand_range(op->lo, op->hi);
+            break;
+        case CREDITS_SWITCH: {
+            uint32_t v = locals[op->var & 0xff];
+            pc = (size_t)(v < (uint32_t)op->n_cases ? op->cases[v] : op->target);
+            break;
+        }
+        case CREDITS_GOTO:
+            pc = (size_t)op->target;
+            break;
+        case CREDITS_END:
+            return added;
         }
     }
     return added;

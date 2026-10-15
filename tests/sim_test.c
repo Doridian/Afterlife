@@ -18,7 +18,6 @@
  * - determinism: two runs from the same load and RNG state end in
  *   byte-identical saves, and the result still round-trips through the
  *   ALSV writer.
- * The data dir must hold ALIFE.EXE (the planet's tables come from it).
  */
 #include <inttypes.h>
 #include <stdio.h>
@@ -305,7 +304,7 @@ int main(int argc, char **argv)
     }
     plat_set_data_dir(argv[1]);
     if (!planet_tables_load()) {
-        fprintf(stderr, "cannot read the planet tables from %s/ALIFE.EXE\n", argv[1]);
+        fprintf(stderr, "cannot unpack the planet tables\n");
         return 2;
     }
     int years = 3;

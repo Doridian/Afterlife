@@ -15,7 +15,6 @@
  * - totals change plausibly from year to year;
  * - the run is deterministic (same RNG seed -> same planet).
  * Then it generates a new planet (planet_generate) and runs it too.
- * The data dir must hold ALIFE.EXE (the planet's tables come from it).
  */
 #include <inttypes.h>
 #include <stdio.h>
@@ -196,7 +195,7 @@ int main(int argc, char **argv)
     }
     plat_set_data_dir(argv[1]);
     if (!planet_tables_load()) {
-        fprintf(stderr, "can't read the planet tables from ALIFE.EXE in %s\n", argv[1]);
+        fprintf(stderr, "can't unpack the planet tables\n");
         return 2;
     }
     CHECK(strcmp(g_planet_tables.tech_name[0], "Fire") == 0, "tech 0 is \"%s\"", g_planet_tables.tech_name[0]);

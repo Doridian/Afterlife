@@ -619,6 +619,8 @@ static void zoom(int in, int cx, int cy)
     g_y0 = (uint8_t)cy;
 }
 
+void mapview_zoom(int in, int cx, int cy) { zoom(in, cx, cy); }
+
 static void center_main(int cx, int cy)
 {
     int plane = g_layer == MAPVIEW_KARMA ? GS_PLANE_MIDDLE : g_heaven ? GS_PLANE_HEAVEN : GS_PLANE_HELL;

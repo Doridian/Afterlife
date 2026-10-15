@@ -51,6 +51,11 @@ intptr_t advisor_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t b);
  * only lip sync, idle animations and ADVISOR_MSG_HUSH. */
 intptr_t advisor_tutorial_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t b);
 
+/* Part of 0x425e3b (the tutorial, WP8): hides the issue buttons, clears
+ * the subtitle area, opens both heads and gives each its own subtitle
+ * rectangle. The caller installs advisor_tutorial_proc. */
+void advisor_tutorial_setup(void);
+
 /* 0x4196ae: what issue button i (0..4) does: Jasper and Aria talk about
  * that issue (blocking in akos_talk_wait while the voice plays), or make a
  * random remark if the button has none. */

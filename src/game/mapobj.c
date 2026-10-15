@@ -334,11 +334,12 @@ static void retire(MapObjectRec *o, int x, int y)
     g_state.object_count--;
 }
 
-/* 0x437184 map_object_think, minus the Bad Things' kinds (WP4) */
+/* 0x437184 map_object_think (the Bad Things' kinds: game/badthing_objects.c) */
 void mapobj_think(int slot)
 {
     slot &= 0xff;
     MapObjectRec *o = &g_state.objects[slot];
+    const MapObjectRec before = *o; /* what the original reads into locals first */
     int dx = o->dx, dy = o->dy;
     int x = o->x, y = o->y;
     int set = o->set;
@@ -392,7 +393,7 @@ void mapobj_think(int slot)
     case 0x19:
     case 0x1a:
     case 0x1b:
-        badthings_object_think(slot);
+        badthings_object_think(slot, &before);
         break;
     case 0x0e:
     case 0x0f:

@@ -11,9 +11,9 @@
  *                      influence controls (amount slider, Wield button,
  *                      sin sliders / tenet buttons / scientist info, cost)
  *
- * Texts, word lists and colour tables are read from the user's ALIFE.EXE
- * at runtime (exe_res_va) by their original addresses; none are in the
- * repo. Window-local state (0x66c7a8-0x66c914) is in `pv` below.
+ * Texts, word lists and colour tables are looked up in ALIFE.EXE's data
+ * (exe_res_va, compiled in from src/data) by their original addresses.
+ * Window-local state (0x66c7a8-0x66c914) is in `pv` below.
  */
 #include "ui/planetview.h"
 #include "ui/soulview.h"
@@ -124,20 +124,10 @@ static struct {
 
 /* ---- Small helpers ------------------------------------------------------------ */
 
-/* ALIFE.EXE, opened on first use (tried once). */
-static void exe_open(void)
-{
-    static bool tried;
-    if (!tried)
-        exe_res_open("ALIFE.EXE");
-    tried = true;
-}
-
 /* A NUL-terminated string at `va` in ALIFE.EXE, or "". */
 static const char *xs(uint32_t va)
 {
     uint32_t avail = 0;
-    exe_open();
     const uint8_t *p = va ? exe_res_va(va, &avail) : NULL;
     if (!p || !memchr(p, 0, avail))
         return "";
@@ -148,7 +138,6 @@ static const char *xs(uint32_t va)
 static const char *xsp(uint32_t va)
 {
     uint32_t avail = 0;
-    exe_open();
     const uint8_t *p = exe_res_va(va, &avail);
     if (!p || avail < 4)
         return "";
@@ -1911,7 +1900,6 @@ static intptr_t planetview_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t 
 static void load_colour_tables(void)
 {
     uint32_t avail = 0;
-    exe_open();
     const uint8_t *p = exe_res_va(0x64f1f7, &avail);
     if (p && avail >= sizeof pv.sin_colours)
         memcpy(pv.sin_colours, p, sizeof pv.sin_colours);
