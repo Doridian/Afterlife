@@ -471,8 +471,8 @@ the original address in a comment to the *owner's* header, never its own copy.
   the guard's existence bit. Deviations (see
   [enhancements.md](enhancements.md)): a bird soiling a building in the
   top rows (y - size = -1) loops forever in the original (byte row
-  counter); by default the port hangs too, with the enhancements on it
-  stops at row 0. Always on: a failed croupier spawn and off-grid cell
+  counter); with the enhancements off the port hangs too, with them on
+  (the default) it stops at row 0. Always on: a failed croupier spawn and off-grid cell
   accesses don't write past the tables. structure_destroy's flags 3/4 leave a
   realm's population a little above its cells' SOULs, in the original too.
   Tests: `tests/badthings_test` (every kind, bankruptcy, cheats, the
@@ -659,7 +659,7 @@ the original address in a comment to the *owner's* header, never its own copy.
   (`tutorial_glide_start/step`, pure) to a control's centre, a menu item,
   a map cell (scrolling until visible) or a window-relative point; clicks
   first glide back to where the last glide ended if the pointer moved.
-  Enhancements (off by default, see [enhancements.md](enhancements.md)):
+  Enhancements (on by default, see [enhancements.md](enhancements.md)):
   the waits stop when the lesson is stopped (the original ran the
   reloaded player's game on for the rest of the seconds / years), the
   cell glide gives up scrolling after 4 tries (the original loops).

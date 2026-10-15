@@ -1,10 +1,17 @@
 # Enhancements and port deviations
 
-By default the port behaves like the original, bugs included. The
-**enhancements** switch (`g_enhancements`, `src/game/enhance.{c,h}`) turns on
+The **enhancements** switch (`g_enhancements`, `src/game/enhance.{c,h}`)
+turns on
 
 - fixes for obvious bugs of the original, and
 - quality-of-life additions, starting with the UI scale.
+
+It is **on by default** (opt-out): with no settings file, or one without an
+`Enhancements` key, the game runs enhanced. Turned off, the port behaves
+like the original, bugs included. The tests are the exception: they don't
+load the settings, so `g_enhancements` stays off unless
+`AFTERLIFE_ENHANCEMENTS=1` (see *Tests*), and the differential tests
+compare against the original's behaviour.
 
 The resizable port window, its fullscreen toggle (Alt+Enter, F11) and its
 remembered geometry are port behaviour, not enhancements: they are on in
@@ -14,7 +21,7 @@ Some deviations can't be switched off: where the original reads or writes
 memory it doesn't own, the port can't reproduce that, so those guards are
 always on (listed below under *Always on*).
 
-## Turning it on
+## Turning it off (or on)
 
 | Where | How |
 |---|---|
@@ -23,14 +30,14 @@ always on (listed below under *Always on*).
 | Environment | `AFTERLIFE_ENHANCEMENTS=1` / `0` (between the file and the command line). The tests use it (`enhance_init_env`). |
 | In game | Global menu > **Port Options...** (port-only item, the Port Options window below). Every change applies at once; OK saves it to the settings file, Cancel puts the old settings back. |
 
-Precedence: command line > environment > file > default (off).
+Precedence: command line > environment > file > default (on).
 
 ## Gated behaviour
 
 Each place has an `/* ENHANCEMENT: ... */` comment and a `g_enhancements`
 test (`grep -rn "ENHANCEMENT:" src`).
 
-| Where | Original (default) | Enhanced |
+| Where | Original (enhancements off) | Enhanced (default) |
 |---|---|---|
 | Tutorial waits, `wait_seconds` 0x4ac5a3 / `wait_years` 0x4ac61f (`game/tutorial.c`) | The lesson's stopped state is checked only on entry: after a click or Esc ends a lesson, the wait goes on running the player's reloaded game for the rest of its seconds or years (up to 7 years at the lesson's tempo). | The wait ends with the lesson. |
 | Tutorial cell glide, `glide_cell` 0x4aca7d (`game/tutorial.c`) | Re-centres the main view until the cell is in the client area; if it never gets there the lesson loops forever (a hang, unless the lesson is stopped). | Gives up after 4 tries and glides to where the cell is. |
@@ -46,8 +53,8 @@ does. Neither is known to be reached by the shipped saves and lessons
 ## UI scale
 
 At native pixels (e.g. a 2560x1600 panel) the 1996 UI is tiny. With the
-enhancements on, UI scale k makes the game's screen k times smaller than
-the port window's pixels (`present_logical_size`): a 2048x1280 window
+enhancements on (the default), UI scale k makes the game's screen k times
+smaller than the port window's pixels (`present_logical_size`): a 2048x1280 window
 gives a 1024x640 screen at k = 2, presented back at k x k pixels per
 framebuffer pixel, nearest-neighbour (crisp). Mouse positions are mapped
 back through the same layout (`present_to_fb`), and pointer warps forward
@@ -112,4 +119,6 @@ faithfully. These guards stay on regardless of the switch (marked
   window through injected clicks (toggle, slider, OK saves, Cancel
   restores).
 - `badthings_test_enh` and `tutorial_test_enh`: the two tests that cover
-  gated code, run again with `AFTERLIFE_ENHANCEMENTS=1`.
+  gated code, run again with `AFTERLIFE_ENHANCEMENTS=1` (the plain runs
+  keep the original's behaviour, since the tests don't load the settings
+  and `g_enhancements` starts off).

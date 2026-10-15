@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 /*
  * Port-only settings and UI scale (docs/enhancements.md), no game data:
- *   - g_enhancements is off by default;
+ *   - g_enhancements is off until enhance_init, the settings default to on;
  *   - ALIFEPORT.INI round trip, defaults, comments, other sections, junk;
  *   - enhance_init: --port-ini, --enhancements / --no-enhancements,
  *     --ui-scale, AFTERLIFE_ENHANCEMENTS, and the scale it asks for;
@@ -43,11 +43,11 @@ static void test_settings(const char *dir)
     char path[1024];
     snprintf(path, sizeof path, "%s/enhance_test.ini", dir);
 
-    CHECK(!g_enhancements); /* faithful by default */
+    CHECK(!g_enhancements); /* faithful until enhance_init (the tests) */
 
     PortSettings s;
     port_settings_defaults(&s);
-    CHECK(!s.enhancements && s.ui_scale == 0);
+    CHECK(s.enhancements && s.ui_scale == 0); /* the game: enhanced by default */
 
     /* round trip */
     for (int e = 0; e < 2; e++)
@@ -79,6 +79,7 @@ static void test_settings(const char *dir)
                      "UI SCALE = 9\n"
                      "garbage line\n");
     port_settings_defaults(&s);
+    s.enhancements = false;
     CHECK(port_settings_load(path, &s));
     CHECK(s.enhancements);
     CHECK(s.ui_scale == PRESENT_SCALE_MAX); /* clamped */
@@ -134,13 +135,19 @@ static void test_settings(const char *dir)
     CHECK(port_settings_load(path, &back));
     CHECK(!back.enhancements && back.ui_scale == 1);
 
-    /* no file at all: defaults, enhancements off */
+    /* no file at all: defaults, enhancements on, automatic scale */
     remove(path);
     {
         char *argv[] = {"afterlife", arg_ini, NULL};
         enhance_init(2, argv);
-        CHECK(!g_enhancements && g_port_settings.ui_scale == 0);
-        CHECK(enhance_ui_scale_request() == 1);
+        CHECK(g_enhancements && g_port_settings.ui_scale == 0);
+        CHECK(enhance_ui_scale_request() == 0);
+    }
+    /* ... and --no-enhancements opts out */
+    {
+        char *argv[] = {"afterlife", arg_ini, "--no-enhancements", NULL};
+        enhance_init(3, argv);
+        CHECK(!g_enhancements && enhance_ui_scale_request() == 1);
     }
     g_enhancements = false;
 }

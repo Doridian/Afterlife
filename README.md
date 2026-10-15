@@ -41,8 +41,9 @@ script can download for you from the Internet Archive.
    ```
 
 The fetch step downloads 167 MB once and puts the game files in `orig/`,
-where the port finds them on its own. **Global → Port Options...** in the
-game turns on bug fixes and UI scaling for big screens (see
+where the port finds them on its own. The port starts with its bug fixes
+and UI scaling for big screens on; **Global → Port Options...** in the game
+turns them off for the original's exact behaviour (see
 [Enhancements](#enhancements)).
 
 ## Getting the game data
@@ -85,8 +86,9 @@ There's also a `debug` preset with ASan/UBSan.
 **macOS**: `brew install cmake ninja sdl3`, then the same commands. Without
 a `DATA_DIR` argument the port looks for `orig/` in the current folder, then
 next to the executable. Ctrl+Cmd+F toggles fullscreen and Cmd+Q asks before
-quitting. On a Retina screen the faithful mode draws at native pixels, so
-it looks small; turn on the enhancements and leave the UI scale on automatic.
+quitting. On a Retina screen the automatic UI scale (an enhancement) keeps
+the game readable; with the enhancements off it draws at native pixels and
+looks small.
 
 **WebAssembly** (Emscripten, [docs/web.md](docs/web.md)):
 
@@ -119,7 +121,7 @@ The port opens in a resizable window that remembers its size and position.
 
 | Option | |
 |---|---|
-| `--enhancements` / `--no-enhancements` | turn the enhancements on or off |
+| `--enhancements` / `--no-enhancements` | turn the enhancements on (the default) or off |
 | `--ui-scale=N` | UI scale, `0` = auto, `1`–`4` (enhancements only) |
 | `--window-size=WxH` | starting window size |
 | `--fullscreen` / `--windowed` | start fullscreen or windowed |
@@ -128,11 +130,12 @@ The port opens in a resizable window that remembers its size and position.
 
 ### Enhancements
 
-By default the port behaves like the original, bugs included. **Global → Port
-Options...** turns on *enhancements*: fixes for the original's bugs (two hangs
-among them) and an integer UI scale, so the 1996 interface stays usable on
-high-resolution screens. [docs/enhancements.md](docs/enhancements.md) lists
-them all.
+By default the port runs with its *enhancements* on: fixes for the
+original's bugs (two hangs among them) and an integer UI scale, so the 1996
+interface stays usable on high-resolution screens.
+[docs/enhancements.md](docs/enhancements.md) lists them all. **Global → Port
+Options...** (or `--no-enhancements`) turns them off, and the port then
+behaves like the original, bugs included.
 
 The port keeps its own settings in `ALIFEPORT.INI` in the SDL preferences
 folder (`~/.local/share/Afterlife/Afterlife/` on Linux,

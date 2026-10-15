@@ -22,7 +22,7 @@ static bool g_path_set;
 
 void port_settings_defaults(PortSettings *s)
 {
-    s->enhancements = false;
+    s->enhancements = true;
     s->ui_scale = 0;
     s->window = (PlatWindowState){0, 0, PLAT_WINDOW_POS_DEFAULT, PLAT_WINDOW_POS_DEFAULT, false, false};
 }
@@ -134,7 +134,7 @@ bool port_settings_save(const char *path, const PortSettings *s)
         return false;
     fprintf(f, "; Afterlife port settings (the original game never reads this file)\n"
                "[Port]\n"
-               "; 1: fix bugs of the original and allow the extras below\n"
+               "; 1: fix bugs of the original and allow the extras below; 0: behave like the original\n"
                "Enhancements = %d\n"
                "; 0 = automatic, else 1..%d (needs Enhancements = 1)\n"
                "UI scale = %d\n"

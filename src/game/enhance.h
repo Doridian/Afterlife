@@ -3,10 +3,13 @@
  * Port-only: the "enhancements" switch and the port's own settings. See
  * docs/enhancements.md.
  *
- * By default the port behaves like the original, bugs included. With
- * g_enhancements on, the places marked `ENHANCEMENT:` in the code fix
- * obvious bugs of the original, and quality-of-life additions (the UI
- * scale) become available.
+ * The game starts with the enhancements on (port_settings_defaults): the
+ * places marked `ENHANCEMENT:` in the code fix obvious bugs of the
+ * original, and quality-of-life additions (the UI scale) are available.
+ * Turned off (Enhancements = 0, --no-enhancements), the port behaves like
+ * the original, bugs included. g_enhancements itself starts off, so the
+ * tests, which don't call enhance_init, run the original's behaviour unless
+ * AFTERLIFE_ENHANCEMENTS=1.
  *
  * The settings live in their own INI (ALIFEPORT.INI in the user's settings
  * folder, plat_pref_path), so ALIFE.INI stays exactly what the original
@@ -33,7 +36,8 @@
 
 #define PORT_INI_NAME "ALIFEPORT.INI"
 
-/* The switch the gated code tests. Off unless the settings turn it on. */
+/* The switch the gated code tests. Off until enhance_init (or
+ * enhance_init_env) sets it; the settings default to on. */
 extern bool g_enhancements;
 
 typedef struct {

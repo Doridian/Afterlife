@@ -518,15 +518,23 @@ static void check_window_state(void)
 {
     plat_window_resize(1234, 777);
     settle();
+    /* live (unsaved) settings that differ from the file's (the defaults) */
+    PortSettings live = g_port_settings;
+    g_port_settings.enhancements = false;
+    g_port_settings.ui_scale = 3;
     CHECK(enhance_save_window_state());
     PortSettings s;
     port_settings_defaults(&s);
+    s.enhancements = false;
+    s.ui_scale = 3;
     CHECK(port_settings_load(port_settings_path(), &s));
     printf("saved window: %dx%d fullscreen %d maximized %d\n", s.window.w, s.window.h, s.window.fullscreen,
            s.window.maximized);
     CHECK(s.window.w == 1234 && s.window.h == 777 && !s.window.fullscreen && !s.window.maximized);
     /* the other keys are the file's, not the live (unsaved) settings */
-    CHECK(s.enhancements == false && s.ui_scale == 0);
+    CHECK(s.enhancements && s.ui_scale == 0);
+    g_port_settings.enhancements = live.enhancements;
+    g_port_settings.ui_scale = live.ui_scale;
     plat_window_set_fullscreen(true);
     CHECK(enhance_save_window_state());
     port_settings_defaults(&s);

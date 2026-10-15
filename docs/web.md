@@ -67,7 +67,7 @@ them as usual.
   latest drop until the title's pump or `game_main_step` takes it
   (`shell_take_drop`), and the copy is deleted after the load. At the title
   the file is parsed first, so a bad one gets a message box instead of an
-  empty game. Natively the same works with the enhancements on.
+  empty game. Natively the same works with the enhancements on (the default).
 - **File > Save to Download** (web only) asks for a file name (the last one
   saved or dropped, prefilled) and saves the game to a temporary file in
   `/tmp` that is handed to the browser as a download and removed. Nothing is
@@ -89,7 +89,7 @@ them as usual.
 - Alt+Enter and F11 make the canvas fullscreen. SDL keeps F1-F12 and
   Backspace from the browser, so F5 saves instead of reloading.
 - URL arguments: each `?arg=` is passed on the command line after the data
-  folder, e.g. `afterlife.html?arg=ASCEN001.ASC&arg=--enhancements`.
+  folder, e.g. `afterlife.html?arg=ASCEN001.ASC&arg=--no-enhancements`.
 - Quitting (File > Exit Game, or Quit at the title) ends the program
   (`-sEXIT_RUNTIME`, so `atexit` runs). The page then offers a reload. A crash
   says so too.

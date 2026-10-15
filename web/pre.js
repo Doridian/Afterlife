@@ -10,7 +10,7 @@
 //    cap a single serialized value below its 148 MB) and copied into
 //    /userdata at every start. ?pick on the URL asks for them again.
 //  - Arguments: the data folder, then each ?arg=... of the page's URL
-//    (e.g. ?arg=ASCEN001.ASC&arg=--enhancements).
+//    (e.g. ?arg=ASCEN001.ASC&arg=--no-enhancements).
 //  - When main returns (File > Quit) the page says so and offers a reload.
 
 Module['arguments'] = Module['arguments'] || [];
