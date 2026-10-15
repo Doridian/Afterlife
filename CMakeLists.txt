@@ -75,13 +75,14 @@ if(EMSCRIPTEN)
     set(AFTERLIFE_WASM_FILES "" CACHE STRING
         "Files of AFTERLIFE_WASM_DATA to package (default: ALIFE.INI, the bundles it names, ALIFE.EXE, ASCEN*.ASC)")
     set_target_properties(afterlife PROPERTIES SUFFIX ".html"
-        LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/pre.js;${CMAKE_CURRENT_SOURCE_DIR}/web/iso9660.js")
+        LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html;${CMAKE_CURRENT_SOURCE_DIR}/web/pre.js;${CMAKE_CURRENT_SOURCE_DIR}/web/iso9660.js;${CMAKE_CURRENT_SOURCE_DIR}/web/zip.js")
     target_link_options(afterlife PRIVATE
         -sASYNCIFY -sASYNCIFY_STACK_SIZE=65536
         -sSTACK_SIZE=8MB -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=64MB
         -sEXIT_RUNTIME -sFORCE_FILESYSTEM -lidbfs.js -sENVIRONMENT=web
         "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html"
         "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/iso9660.js"
+        "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/zip.js"
         "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/pre.js")
     if(AFTERLIFE_WASM_DATA)
         # Data file names are matched case-insensitively, like the game does.

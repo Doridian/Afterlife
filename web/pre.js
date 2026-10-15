@@ -109,13 +109,14 @@ Module['preRun'] = Module['preRun'] || [];
     var error = document.getElementById('pick-error');
     panel.hidden = false;
     function take(list) {
-      var image = Array.prototype.find.call(list, function (f) { return /\.(iso|bin|img)$/i.test(f.name); });
+      var image = Array.prototype.find.call(list, function (f) { return /\.(zip|iso|bin|img)$/i.test(f.name); });
       if (image) {
-        // a CD image: its game files are read out of it (web/iso9660.js)
+        // a CD image or a zip: its game files are read out of it (web/iso9660.js, web/zip.js)
         error.textContent = '';
         panel.hidden = true;
-        Module['setStatus']('Reading the CD image...');
-        Iso9660.extract(image, wanted).then(function (files) {
+        Module['setStatus']('Reading the CD...');
+        var read = /\.zip$/i.test(image.name) ? Zip.extract : Iso9660.extract;
+        read(image, wanted).then(function (files) {
           use(files);
         }, function (e) {
           Module['setStatus']('');

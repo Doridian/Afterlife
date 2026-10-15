@@ -23,13 +23,17 @@ The page must come from a web server (not `file://`). The output is
   `"ALIFE.INI;MEDIUM.000;ALIFE.000;ALIFE.EXE;ASCEN001.ASC"`). The data is
   copyrighted: don't put such a build on a public server.
 - **Picked by the player**: without `AFTERLIFE_WASM_DATA` the page asks for
-  the CD: a CD image (`.bin` or `.iso`, read by `web/iso9660.js`), the CD's
-  files, or its folder. The files are kept as blobs in an IndexedDB store of
+  the CD: a CD image (`.bin` or `.iso`, read by `web/iso9660.js`), a `.zip`
+  of either (read by `web/zip.js`, the archive.org download as it is), the
+  CD's files, or its folder. The files are kept as blobs in an IndexedDB store of
   its own (`afterlife-game-data`), so this happens once per browser. They are
   copied into `/userdata` at every start. IDBFS can't hold them: browsers cap
   one stored value below ALIFE.000's size. `?pick` in the URL asks again.
   The picker links to the CD on archive.org (`AfterlifeUSA`, zip with the
   Redump `.bin`).
+- **Zips**: `zip.js` reads the central directory and stored or deflated
+  entries (deflate through `DecompressionStream`, so Firefox 113+, Safari
+  16.4+). Zip64 isn't handled.
 - **CD images**: `iso9660.js` reads the ISO 9660 tree of the data track, from
   a 2048-byte `.iso` or a raw 2352-byte `.bin` (mode 1 or mode 2 form 1). The
   game files are Blobs that point into the image, so it is never loaded whole.
