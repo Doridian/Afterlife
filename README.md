@@ -17,12 +17,43 @@ the data-less tests in CI, but nobody has played it on a Mac yet.
 
 This repository contains **no game data files or original code** (only the
 texts and number tables from `ALIFE.EXE` the port needs, as C data in the
-modules that use them).
-You need your own copy of the Afterlife CD.
+modules that use them). The game data comes from the original CD, which a
+script can download for you from the Internet Archive.
+
+## Quick start
+
+1. Install the build tools:
+   - **Arch / CachyOS**: `sudo pacman -S base-devel cmake ninja sdl3 python`
+   - **Debian 13 / Ubuntu 25.04 or newer**: `sudo apt install build-essential cmake ninja-build python3 libsdl3-dev`
+     (on older releases leave out `libsdl3-dev`: the build fetches SDL3 and
+     compiles it, which needs [SDL's build dependencies](https://wiki.libsdl.org/SDL3/README-linux))
+   - **Fedora**: `sudo dnf install gcc cmake ninja-build SDL3-devel python3`
+   - **macOS**: `brew install cmake ninja sdl3`
+2. Get the code and the game data, then build and play:
+
+   ```sh
+   git clone https://github.com/Doridian/Afterlife
+   cd Afterlife
+   tools/fetch_archive_org.py orig/
+   cmake --preset native
+   cmake --build --preset native
+   build/native/afterlife
+   ```
+
+The fetch step downloads 167 MB once and puts the game files in `orig/`,
+where the port finds them on its own. **Global → Port Options...** in the
+game turns on bug fixes and UI scaling for big screens (see
+[Enhancements](#enhancements)).
 
 ## Getting the game data
 
-From a BIN/CUE (or ISO) image of the CD:
+`tools/fetch_archive_org.py orig/` downloads the US CD (a Redump BIN/CUE) from
+<https://archive.org/details/AfterlifeUSA> and extracts it. It checks the
+download's SHA-1 and the extracted files against
+[docs/binaries.md](docs/binaries.md). `--keep-zip FILE` keeps the zip, and
+`--zip FILE` uses one you already have.
+
+If you have your own BIN/CUE (or ISO) image of the CD:
 
 ```sh
 tools/extract_cd.py /path/to/Afterlife.cue orig/
@@ -124,6 +155,7 @@ side by side with the port, on real saves, and compares state and RNG. See
 
 ## Tools
 
+- `tools/fetch_archive_org.py`: downloads the CD from archive.org and extracts it.
 - `tools/extract_cd.py`: pure-Python ISO9660 extractor for BIN/CUE and ISO images.
 - `tools/jiff.py`: list, summarise or dump the resources in the `.000` bundles.
 - `tools/gh`, `tools/ghidra/`: headless Ghidra setup and scripts for the decompilation.

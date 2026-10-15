@@ -80,13 +80,9 @@ def walk(img, lba, size, prefix, out):
             out.append((rel, ext_lba, ext_size))
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("image", help=".cue, .bin or .iso")
-    ap.add_argument("outdir")
-    args = ap.parse_args()
-
-    img = open_image(args.image)
+def extract(image, outdir):
+    """Extract every file on the CD image into outdir; return {path: sha256}."""
+    img = open_image(image)
     pvd = img.read_sectors(16, 1)
     if pvd[1:6] != b"CD001" or pvd[0] != 1:
         sys.exit("no ISO9660 primary volume descriptor found")
@@ -95,8 +91,9 @@ def main():
     files = []
     walk(img, struct.unpack_from("<I", root, 2)[0], struct.unpack_from("<I", root, 10)[0], "", files)
 
+    hashes = {}
     for rel, lba, size in sorted(files):
-        dst = os.path.join(args.outdir, rel)
+        dst = os.path.join(outdir, rel)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         h = hashlib.sha256()
         with open(dst, "wb") as f:
@@ -109,6 +106,16 @@ def main():
                 remaining -= n
                 cur += n // SECTOR
         print(f"{h.hexdigest()}  {rel}")
+        hashes[rel] = h.hexdigest()
+    return hashes
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("image", help=".cue, .bin or .iso")
+    ap.add_argument("outdir")
+    args = ap.parse_args()
+    extract(args.image, args.outdir)
 
 
 if __name__ == "__main__":
