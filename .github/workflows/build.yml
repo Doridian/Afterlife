@@ -68,7 +68,7 @@ jobs:
           cmake --build --preset wasm 2>&1 | tee build.log
           if grep -E '(^|/)(src|tests)/[^ ]*: warning:|^(em\+\+|emcc|wasm-ld): warning:' build.log; then exit 1; fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: afterlife-wasm
           path: |
