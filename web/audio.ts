@@ -22,66 +22,81 @@ interface AfAudio {
   pendingFrames: number;
 }
 
+// The worklet's global scope, which the DOM typings don't have.
+declare class AudioWorkletProcessor {
+  readonly port: MessagePort;
+  constructor();
+  process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean;
+}
+declare function registerProcessor(name: string, processor: unknown): void;
+
 let afAudio: AfAudio | null = null;
 
-// The worklet's code, as a string: it runs in the audio thread.
-const afAudioWorkletSource = [
-  'class Feed extends AudioWorkletProcessor {',
-  '  constructor() {',
-  '    super();',
-  '    this.q = [];',
-  '    this.off = 0;',
-  '    this.consumed = 0;',
-  '    this.reported = -1;',
-  '    this.port.onmessage = (e) => {',
-  '      if (e.data.clear) {',
-  '        let dropped = 0;',
-  '        for (let j = 0; j < this.q.length; j++) {',
-  '          dropped += this.q[j].length / 2 - (j === 0 ? this.off : 0);',
-  '        }',
-  '        this.consumed += dropped;',
-  '        this.q = [];',
-  '        this.off = 0;',
-  '      } else {',
-  '        this.q.push(e.data.frames);',
-  '      }',
-  '    };',
-  '  }',
-  '  process(inputs, outputs) {',
-  '    const L = outputs[0][0];',
-  '    const R = outputs[0][1];',
-  '    const n = L.length;',
-  '    let i = 0;',
-  '    while (i < n && this.q.length) {',
-  '      const b = this.q[0];',
-  '      const frames = b.length / 2;',
-  '      const take = Math.min(frames - this.off, n - i);',
-  '      for (let k = 0; k < take; k++) {',
-  '        const s = (this.off + k) * 2;',
-  '        L[i + k] = b[s] / 32768;',
-  '        R[i + k] = b[s + 1] / 32768;',
-  '      }',
-  '      i += take;',
-  '      this.off += take;',
-  '      if (this.off >= frames) {',
-  '        this.q.shift();',
-  '        this.off = 0;',
-  '      }',
-  '    }',
-  '    for (let k = i; k < n; k++) {',
-  '      L[k] = 0;',
-  '      R[k] = 0;',
-  '    }',
-  '    this.consumed += i;',
-  '    if (this.consumed !== this.reported) {',
-  '      this.reported = this.consumed;',
-  '      this.port.postMessage(this.consumed);',
-  '    }',
-  '    return true;',
-  '  }',
-  '}',
-  'registerProcessor("feed", Feed);',
-].join('\n');
+// The worklet, which runs on the audio thread in its own global scope (no
+// page, no glue). It is written as a function so the compiler checks it, and
+// afAudioWorkletSource sends its text to the context. It is never called here.
+function afFeedWorklet(): void {
+  class Feed extends AudioWorkletProcessor {
+    private q: Int16Array[] = []; // the chunks not yet played, interleaved stereo
+    private off = 0; // frames of q[0] already played
+    private consumed = 0; // frames played or dropped so far
+    private reported = -1; // the last consumed count sent to the page
+
+    constructor() {
+      super();
+      this.port.onmessage = (e: MessageEvent) => {
+        if (e.data.clear) {
+          let dropped = 0;
+          for (let j = 0; j < this.q.length; j++) {
+            dropped += this.q[j].length / 2 - (j === 0 ? this.off : 0);
+          }
+          this.consumed += dropped;
+          this.q = [];
+          this.off = 0;
+        } else {
+          this.q.push(e.data.frames);
+        }
+      };
+    }
+
+    process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+      const L = outputs[0][0];
+      const R = outputs[0][1];
+      const n = L.length;
+      let i = 0;
+      while (i < n && this.q.length) {
+        const b = this.q[0];
+        const frames = b.length / 2;
+        const take = Math.min(frames - this.off, n - i);
+        for (let k = 0; k < take; k++) {
+          const s = (this.off + k) * 2;
+          L[i + k] = b[s] / 32768;
+          R[i + k] = b[s + 1] / 32768;
+        }
+        i += take;
+        this.off += take;
+        if (this.off >= frames) {
+          this.q.shift();
+          this.off = 0;
+        }
+      }
+      for (let k = i; k < n; k++) {
+        L[k] = 0;
+        R[k] = 0;
+      }
+      this.consumed += i;
+      if (this.consumed !== this.reported) {
+        this.reported = this.consumed;
+        this.port.postMessage(this.consumed);
+      }
+      return true;
+    }
+  }
+  registerProcessor('feed', Feed);
+}
+
+// The worklet's source, for a Blob URL: the function above, called once.
+const afAudioWorkletSource = `(${afFeedWorklet.toString()})();`;
 
 // Browsers start audio only after a user gesture; the context is resumed on
 // the first one (SDL did the same).

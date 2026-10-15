@@ -11,6 +11,7 @@
     "noImplicitThis": true,
     "useUnknownInCatchVariables": true,
     "noEmitOnError": true,
+    "useDefineForClassFields": false,
     "rootDir": ".",
     "outDir": "../build/web-js"
   },
