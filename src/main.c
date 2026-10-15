@@ -7,7 +7,7 @@
  * Usage: afterlife [DATA_DIR] [FILE.INI] [SAVE.ALF|SCENARIO.ASC] [--quit]
  *                  [--enhancements | --no-enhancements] [--ui-scale=N]
  *                  [--port-ini=FILE] [--window-size=WxH] [--fullscreen | --windowed]
- *                  [--window-test=DIR]
+ *                  [--window-test=DIR] [--debug-window]
  *   DATA_DIR stands in for the original's install folder (default: the
  *   folder of FILE.INI if one is given, else "orig"). FILE.INI is resolved
  *   in it (default ALIFE.ini, matched case-insensitively). --quit exits right
@@ -19,6 +19,8 @@
  *   screenshot of the window (BMP) into DIR after each step, and quits.
  *   Message boxes are answered with Enter. Run it on a headless compositor
  *   (weston --backend=headless) or SDL's offscreen driver, not a desktop.
+ *   --debug-window opens the original's unused "Debug" tile browser
+ *   (ui/debugwin.h) once a game is running.
  *
  * The game itself is game_main (0x401000, src/game/shell.c): the title,
  * then the main loop until the player quits.
@@ -201,7 +203,7 @@ int main(int argc, char **argv)
     if (!app_parse_args(argc, argv, &dir)) {
         printf("usage: %s [DATA_DIR] [FILE.INI] [SAVE.ALF|SCENARIO.ASC] [--quit]\n"
                "       [--enhancements | --no-enhancements] [--ui-scale=N (0 = auto)] [--port-ini=FILE]\n"
-               "       [--window-size=WxH] [--fullscreen | --windowed] [--window-test=DIR]\n",
+               "       [--window-size=WxH] [--fullscreen | --windowed] [--window-test=DIR] [--debug-window]\n",
                argv[0]);
         return 0;
     }

@@ -435,6 +435,45 @@ calls 0x4946bd, and 4 asks for the difficulty with a message box and starts
 a new game. The game also sends 0x1006 itself to run a command (its
 keyboard shortcuts, and 0x0e after a new game).
 
+## Debug window
+
+`src/ui/debugwin.c` (0x457b01 `debugwin_create`, 0x457d98
+`debugwin_step`, 0x458200 `debugwin_proc`): a developers' tile browser,
+bitmap 610 ("Mikey's debug window", title "Debug" 0x65fe04) at
+(0xaa, 0x28), 240 x 163. Two pairs of arrows (bitmaps 0x8a / 0x89, ids
+0x66 / 0x65 for the set, "genus", and 0x68 / 0x67 for the index,
+"species") and the close box (0x259, id 0x69, also `close_button`).
+
+- A click (`WM_MSG_CTL_CLICK`) steps by 1, a right click
+  (`WM_MSG_CTL_RUP`) by 10. The set wraps through 1..30; stepping onto
+  a set takes that set's index range from a switch (0..1 for most, 0..9
+  for 4, 0x11..0x14 for 10, 0..0x6f for the zone sets 14 and 15, ...);
+  set 11 becomes 12, so going down by 1 stops at 12. The index is
+  clamped into the range, signed bytes throughout. State: 0x65edd0 min,
+  0x65edd4 max, 0x65edd8 set, 0x65eddc index; starts at set 14, index
+  1, range 0..0x6f.
+- Each step clears the preview box (3, 0x14, 0x74 x 0x8b) to colour 0
+  and draws the whole building `set`:`index + 1` centred in it at zoom 0
+  (`tile_draw_preview`), then repaints. The window opens with the bare
+  bitmap; nothing is drawn before the first step. The view is the main
+  view's geometry; the original leaves its other fields as stack garbage,
+  the port uses the Microview's (no focus, all sets, zone sets drawn as
+  they are).
+- Close: `g_build.editor = 0` (build_editor_mode) and hide. Dragging the
+  frame moves the window.
+
+The original never creates or shows it: `debugwin_create` has no callers,
+no pointer to it exists, and nothing calls `wm_show(..., 1)` on it, so even
+a call would leave it hidden. The scenario editor flag it clears is only
+written elsewhere by `game_init_defaults` (to 0). The port opens it with
+the port-only command-line option **`--debug-window`**: `game_main_init`
+creates, shows and raises it once the game is up (`debugwin_open`); after
+the close box nothing reopens it, as in the original. Port difference: it
+is a child of the main window; the original passes its own (still NULL)
+window pointer as the parent, which puts it on the root, where the main
+window covers it whenever it is activated again (after any dialog), the
+problem the shell already fixed for the views.
+
 ## Port notes
 
 - Messages carry `intptr_t` arguments and extra data is stored in
@@ -537,3 +576,13 @@ and the `key_poll` hook, with `wm_idle` making the messages:
 
 It writes `<prefix>_menu.ppm` (File open, Load Game highlighted),
 `<prefix>_widgets.ppm` and `<prefix>_msgbox.ppm`. Clean under ASan/UBSan.
+
+`debugwin_test` starts the real game on ASCEN001.ASC with
+`--debug-window` and checks the window's place, size, title, buttons and
+start state, the stepping logic against the original's switch (fixed
+cases and 20000 random steps), nine arrow clicks (left and right) with
+the preview box cleared and a building drawn on screen, a drag, and the
+close box (hidden, editor flag off); PNGs. `tools/emu/test_debugwin.py`
+sends the same button messages to the original's `debugwin_proc` under
+the emulator and compares the state, the editor flag and the drawing
+calls (6700 messages: all sets, both directions, random runs).

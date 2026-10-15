@@ -322,9 +322,9 @@ endif()
 # The game shell (docs/game-map.md WP7): game_main and the main window
 # (src/game/shell*.c), the main map view, control panel and tile chooser,
 # status bar, title and intro, advisors, news pop-up and help balloon,
-# about box and credits.
+# about box and credits, the debug window (--debug-window).
 target_sources(afterlife_core PRIVATE src/game/shell.c src/ui/title.c src/ui/advisors.c src/ui/news.c
-    src/ui/about.c src/ui/about_credits.c)
+    src/ui/about.c src/ui/about_credits.c src/ui/debugwin.c)
 
 # tests/title_test: the title sequence (intro, animated title, menus)
 # driven by synthetic input from the modal pump; writes PPM screenshots.
@@ -456,6 +456,18 @@ if(NOT EMSCRIPTEN)
     endif()
 endif()
 
+# The debug window (docs/ui.md, 0x457b01): opened by --debug-window.
+if(NOT EMSCRIPTEN)
+    # tests/debugwin_test: the real game headless with --debug-window: the
+    # window's layout, its stepping logic, the buttons through clicks, the
+    # preview it draws, dragging and the close box (PNGs).
+    add_executable(debugwin_test tests/debugwin_test.c)
+    target_link_libraries(debugwin_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(debugwin_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
 # ctest. Tests that need no game data always run; the rest need
 # -DAFTERLIFE_DATA=<folder with the original game files>.
 if(NOT EMSCRIPTEN)
@@ -491,10 +503,12 @@ if(NOT EMSCRIPTEN)
         add_test(NAME shell_test COMMAND shell_test "${D}" "${_out}/shell")
         add_test(NAME tutorial_test COMMAND tutorial_test "${D}" "${_out}/tutorial")
         add_test(NAME display_test COMMAND display_test "${D}" "${_out}/display")
+        add_test(NAME debugwin_test COMMAND debugwin_test "${D}" "${_out}/debugwin")
         # The two that cover gated behaviour again, with the enhancements on.
         add_test(NAME badthings_test_enh COMMAND badthings_test "${D}" - ${S})
         add_test(NAME tutorial_test_enh COMMAND tutorial_test "${D}" "${_out}/tutorial_enh")
         set_tests_properties(badthings_test_enh tutorial_test_enh PROPERTIES ENVIRONMENT AFTERLIFE_ENHANCEMENTS=1)
-        file(MAKE_DIRECTORY "${_out}/shell" "${_out}/tutorial" "${_out}/tutorial_enh" "${_out}/display")
+        file(MAKE_DIRECTORY "${_out}/shell" "${_out}/tutorial" "${_out}/tutorial_enh" "${_out}/display"
+            "${_out}/debugwin")
     endif()
 endif()

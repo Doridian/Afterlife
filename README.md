@@ -68,6 +68,7 @@ The port opens in a resizable window that remembers its size and position.
 | `--window-size=WxH` | starting window size |
 | `--fullscreen` / `--windowed` | start fullscreen or windowed |
 | `--port-ini=FILE` | use another port settings file |
+| `--debug-window` | open the original's hidden debug window (a tile browser, [docs/ui.md](docs/ui.md#debug-window)) |
 
 ### Enhancements
 

@@ -45,6 +45,7 @@
 #include "ui/advisors.h"
 #include "ui/controls.h"
 #include "ui/ctrlpanel.h"
+#include "ui/debugwin.h"
 #include "ui/graphview.h"
 #include "ui/macro.h"
 #include "ui/mapview.h"
@@ -1547,7 +1548,6 @@ static void load_palette(void)
 
 int game_main_init(int argc, char **argv)
 {
-    (void)argc, (void)argv;
     akos_initialize(); /* 0x4b9470 */
     akos_talk_initialize();
     gfx_font_load(500);
@@ -1687,6 +1687,9 @@ int game_main_init(int argc, char **argv)
     shell_view_repaint();
     g_shell_repaint = 0;
     wm_activate(g_main_window);
+    /* port-only: the original never opens its debug window (0x457b01) */
+    if (debugwin_requested(argc, argv))
+        debugwin_open();
     wm_flush_input();
     g_game_in_progress = 1;
     scenario_box();
@@ -1712,6 +1715,7 @@ void game_main_shutdown(void)
     akos_talk_shutdown(); /* 0x4b94b0 */
     akos_shutdown();
     about_destroy();
+    debugwin_destroy();
     microview_destroy();
     macro_destroy();
     soulview_destroy();

@@ -245,7 +245,7 @@ proposals.
 | 0x449c6e-0x4514a3 | 23 (0) | **Build tools**: zoning/placement 0x44aede, 0x44b4fb (7.5 KB, place a building), road/zone drag 0x44d34f, map click tool dispatcher 0x44da29 (6.6 KB; called by the three procs), bulldoze/cost 0x44f44c/0x44fc9b, 0x45011d, recompute on load 0x4506b6, special structures / "great disturbance" 0x450aba, cheats 0x4510cd ("SAMNMAX") / 0x451055, 0x45129a | 0x44da29, 0x44d34f | medium |
 | 0x4514a4-0x455ed6 | 9 (3) | `map_rotate_cells`, realm table reset 0x452267, 0x452581, 0x452da1 (recursive), **new world** `game_reset_world` 0x4535db, `game_init_defaults` 0x45546c (scenario constants: costs, thresholds) | | medium |
 | 0x455ed7-0x457b00 | 3 (0) | tile chooser drawing 0x455f6e, tile info 0x456402 ("Capacity", "One Per Customer", "Can't Build This") | | medium |
-| 0x457b01-0x45848f | 3 (2) | debug window | `debugwin_create`, `debugwin_proc` | high |
+| 0x457b01-0x45848f | 3 (3) | **Debug window** ("Mikey's debug window", a tile browser; created by nothing in the original, port: `--debug-window`, `src/ui/debugwin.c`, done) | `debugwin_create`, `debugwin_step` 0x457d98, `debugwin_proc` | high |
 | 0x458490-0x4619ef | 49 (1) | **SOUL flow**: soul groups (0x458490 get, 0x45852f set, 0x4609c7 add), zone matching 0x4586ca/0x458cf1/0x4599f4/0x45a29d, road walking 0x45c038/0x45d19d/0x45d4ac, per-zone pass 0x45e1fc, phase 40/50 `0x45e44b`, area search 0x45ebe2 (24 callers), zone cell update 0x45f382 / 0x45fd84, `sim_zone_scan`, arrivals 0x460b16/0x46114f/0x461636 | 0x45e44b, `sim_zone_scan`, 0x460b16, 0x46114f | medium |
 | 0x4619f0-0x463b6f | 10 (3) | **Macromanager** (funding, lock/auto-balance, punishments/rewards) | `macro_create`, `macro_proc`, `macro_refresh` | high |
 | 0x463b70-0x4678f3 | 26 (4) | **Mapview** (minimap with data layers: vibes, vacancy, transport, temp/perm, efficiency, rocks, traffic, sins) | `mapview_create`, `mapview_proc`, `mapview_draw`, `mapview_refresh` | high |
@@ -598,8 +598,20 @@ the original address in a comment to the *owner's* header, never its own copy.
   "Do You Really Want To Quit?"); SDL_EVENT_QUIT (SIGTERM / SIGINT) and a
   second close request while that dialog is open exit at once
   (`main_wnd_proc`, game/input.c). Not done:
-  the debug window (0x457b01), scenario-editor extras of the tile
-  chooser.
+  scenario-editor extras of the tile chooser.
+- **Debug window** (`src/ui/debugwin.c`, 0x457b01-0x45848f, "Mikey's
+  debug window"): a tile browser, set ("genus") and index ("species")
+  arrows, a left click steps by 1, a right click by 10, each step draws
+  the building into the preview box; the close box hides it and turns
+  the scenario editor flag off. Nothing in ALIFE.EXE creates or shows it
+  (`debugwin_create` has no callers, and nothing calls `wm_show` on it);
+  like `build_editor_mode` it is a development-build leftover. The port
+  opens it with the port-only option `--debug-window` once a game runs
+  (`game_main_init`). Port difference: a child of the main window (the
+  original passes its own, still NULL, pointer as the parent, i.e. the
+  root, where the main window would cover it on its next activation).
+  See [ui.md](ui.md#debug-window). Tests: `tests/debugwin_test`,
+  `tools/emu/test_debugwin.py`.
 - **Port window** (port-only, [rendering.md](rendering.md#port-window)):
   the game runs in a resizable window and the screen follows it live.
   `game/display.c` reallocates the screen and resizes the root window;

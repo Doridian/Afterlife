@@ -342,6 +342,7 @@
 0x00455f6e func tilechooser_select
 0x00456402 func tilechooser_open
 0x00457b01 func debugwin_create
+0x00457d98 func debugwin_step
 0x00458200 func debugwin_proc
 0x00458490 func soul_group_get
 0x0045852f func soul_group_set
@@ -1782,6 +1783,7 @@
 0x006391c8 data sim_milestone_shown
 0x006391d0 data soul_rate_curve
 0x0063921c data plane_select_count
+0x00639244 data debugwin_window
 0x00639250 data zone_levels
 0x00639280 data advisor_jasper_text_rect
 0x00639294 data advisor_jasper_costume
@@ -1859,6 +1861,10 @@
 0x0065ed80 data realm_objframe_base
 0x0065eda8 data karma_scan_x
 0x0065edac data karma_scan_y
+0x0065edd0 data debugwin_index_min
+0x0065edd4 data debugwin_index_max
+0x0065edd8 data debugwin_set
+0x0065eddc data debugwin_index
 0x0065ede4 data karma_whistle_time
 0x0065ede8 data economy_column
 0x0065ee64 data sim_t_year
