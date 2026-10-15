@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "game/build.h"
+#include "game/enhance.h"
 #include "game/input.h"
 #include "game/mapobj.h"
 #include "game/music.h"
@@ -229,8 +230,8 @@ static void glide_menu(int id)
 static int zoomed(int v) { return (v >> g_map_view.zoom) << g_map_view.magnify; }
 
 /* 0x4aca7d: to the middle of map cell (x, y) of `plane`, scrolling the
- * main view until it is in the client area. (Port: gives up scrolling
- * after a few tries; the original would loop.) */
+ * main view until it is in the client area. Like the original, it loops
+ * until the cell is visible or the lesson stops. */
 static void glide_cell(int plane, int x, int y)
 {
     if (plane < 1 || plane > 3)
@@ -247,8 +248,13 @@ static void glide_cell(int plane, int x, int y)
         WmWindow *m = g_main_window;
         if (!m)
             return;
-        if ((sx >= m->client.left && sx <= m->client.right && sy >= m->client.top && sy <= m->client.bottom) ||
-            tries >= 4) {
+        bool visible = sx >= m->client.left && sx <= m->client.right && sy >= m->client.top && sy <= m->client.bottom;
+        /* ENHANCEMENT: give up scrolling after 4 tries and glide to where
+         * the cell is; the original loops forever (the lesson hangs) if
+         * centring never brings the cell into the client area. */
+        if (g_enhancements && tries >= 4)
+            visible = true;
+        if (visible) {
             glide_to(sx + m->rect.left, sy + m->rect.top);
             return;
         }
@@ -311,8 +317,13 @@ static void run_game(void)
     sim_update(g_game_speed);
 }
 
-/* 0x4ac5a3: the game runs for n seconds. (Port: also stops when the
- * lesson was stopped, which the original only checks on entry.) */
+/* ENHANCEMENT: the waits end as soon as the lesson is stopped. The
+ * original checks only on entry, so after a click or Esc it went on
+ * running the player's reloaded game for the rest of the seconds / years
+ * (up to 7 years at the lesson's tempo). */
+static bool wait_goes_on(void) { return tut.active || !g_enhancements; }
+
+/* 0x4ac5a3: the game runs for n seconds. */
 static void wait_seconds(int n)
 {
     if (!tut.active)
@@ -320,12 +331,10 @@ static void wait_seconds(int n)
     uint32_t t0 = now_ms();
     do
         run_game();
-    while (tut.active && now_ms() < t0 + (uint32_t)n * 1000u);
+    while (wait_goes_on() && now_ms() < t0 + (uint32_t)n * 1000u);
 }
 
-/* 0x4ac61f: the game runs for n years, if it isn't stopped. (Port: stops
- * with the lesson; the original went on running the player's reloaded
- * game for the rest of the years.) */
+/* 0x4ac61f: the game runs for n years, if it isn't stopped. */
 static void wait_years(int n)
 {
     uint32_t y0 = g_state.year;
@@ -333,7 +342,7 @@ static void wait_years(int n)
         return;
     do
         run_game();
-    while (tut.active && g_state.year < y0 + (uint32_t)n);
+    while (wait_goes_on() && g_state.year < y0 + (uint32_t)n);
 }
 
 /* 0x4acbee (unused by the lessons): a key press and release */

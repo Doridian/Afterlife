@@ -80,6 +80,18 @@ endif()
 
 # Startup / INI (docs/startup.md).
 target_sources(afterlife_core PRIVATE src/game/ini.c src/game/config.c src/game/startup.c)
+# Port-only: the enhancements switch, the port's settings and the UI scale
+# (docs/enhancements.md).
+target_sources(afterlife_core PRIVATE src/game/enhance.c src/platform/present.c)
+if(NOT EMSCRIPTEN)
+    # tests/enhance_test: the settings file round trip, the switches, and the
+    # UI scale's layout and mouse mapping. No game data.
+    add_executable(enhance_test tests/enhance_test.c)
+    target_link_libraries(enhance_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(enhance_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
 if(NOT EMSCRIPTEN)
     # tests/ini_dump: prints what the init sequence reads from an ALIFE.INI.
     add_executable(ini_dump tests/ini_dump.c)
@@ -444,6 +456,7 @@ if(NOT EMSCRIPTEN)
     foreach(t ui_region_test world_test stride_test input_test build_test)
         add_test(NAME ${t} COMMAND ${t})
     endforeach()
+    add_test(NAME enhance_test COMMAND enhance_test "${_out}")
     if(AFTERLIFE_DATA)
         set(D "${AFTERLIFE_DATA}")
         set(S "${D}/ASCEN001.ASC" "${D}/ASCEN002.ASC" "${D}/ASCEN003.ASC" "${D}/ASCEN004.ASC")
@@ -467,6 +480,10 @@ if(NOT EMSCRIPTEN)
         add_test(NAME imuse_test COMMAND imuse_test "${D}" "${_out}")
         add_test(NAME shell_test COMMAND shell_test "${D}" "${_out}/shell")
         add_test(NAME tutorial_test COMMAND tutorial_test "${D}" "${_out}/tutorial")
-        file(MAKE_DIRECTORY "${_out}/shell" "${_out}/tutorial")
+        # The two that cover gated behaviour again, with the enhancements on.
+        add_test(NAME badthings_test_enh COMMAND badthings_test "${D}" - ${S})
+        add_test(NAME tutorial_test_enh COMMAND tutorial_test "${D}" "${_out}/tutorial_enh")
+        set_tests_properties(badthings_test_enh tutorial_test_enh PROPERTIES ENVIRONMENT AFTERLIFE_ENHANCEMENTS=1)
+        file(MAKE_DIRECTORY "${_out}/shell" "${_out}/tutorial" "${_out}/tutorial_enh")
     endif()
 endif()

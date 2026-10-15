@@ -314,7 +314,7 @@ void bt_dice_start(void)
     }
     int r = rand_range(0x14, 0x50);
     if (g_state.unk_63050d >= GS_MAP_OBJECTS)
-        return; /* ENHANCEMENT: the spawn failed; the original writes past the object table */
+        return; /* SAFETY (always on): the spawn failed; the original writes past the object table */
     MapObjectRec *d = &g_state.objects[g_state.unk_63050d];
     d->dx = x < r ? 4 : -4;
     d->fade = (uint8_t)(abs(r - x) / 4);

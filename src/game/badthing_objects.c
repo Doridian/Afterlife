@@ -11,6 +11,7 @@
 
 #include "game/badthings.h"
 #include "game/badthings_int.h"
+#include "game/enhance.h"
 #include "game/mapobj.h"
 #include "game/realm.h"
 #include "game/structure.h"
@@ -317,12 +318,20 @@ static void think_flock(MapObjectRec *o, const MapObjectRec *b)
     default:
         return;
     }
-    /* ENHANCEMENT: the original's row counter is a byte compared against
-     * y - size: for a building in the top rows (y - size == -1) it never
-     * ends (the game hangs, writing past the grid); the port stops at row 0 */
-    for (unsigned lx = ox; (int)lx < i8(ox) + size; lx = (lx + 1) & 0xff)
-        for (int ly = oy; i8(oy) - size < ly && ly >= 0; ly--)
-            *bt_cellp((int)lx, ly) |= 4u;
+    /* ENHANCEMENT: stop at row 0. The original's row counter is a byte
+     * compared against y - size: for a building in the top rows (y - size
+     * == -1) it wraps from 0 to 255 and never ends, so the game hangs. The
+     * faithful branch hangs too, but its writes outside the grid go nowhere
+     * (bt_cellp, a safety guard that is always on). */
+    for (unsigned lx = ox; (int)lx < i8(ox) + size; lx = (lx + 1) & 0xff) {
+        if (g_enhancements) {
+            for (int ly = oy; i8(oy) - size < ly && ly >= 0; ly--)
+                *bt_cellp((int)lx, ly) |= 4u;
+        } else {
+            for (unsigned ly = oy & 0xffu; i8(oy) - size < (int)ly; ly = (ly - 1) & 0xffu)
+                *bt_cellp((int)lx, i8(ly)) |= 4u;
+        }
+    }
     bt_sound(g_world.plane == GS_PLANE_HEAVEN ? 0x10010 : 0x10014, 1);
     mapobj_redraw(i8(ox), i8(oy), size, 0, 0, 0, 1);
 }

@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "game/enhance.h"
 #include "game/util.h"
 #include "gfx/exe_res.h"
 
@@ -263,9 +264,10 @@ void planet_add_fate(int x, int y, unsigned amount, unsigned fate)
             left = (uint16_t)(left - take);
             int half = (int16_t)left / 2;
             chunk = (uint16_t)(half < 2 ? 1 : half);
-            /* port: the original loops forever if nothing is left to take */
+            /* ENHANCEMENT: stop when nothing is left to take; the original
+             * loops forever (the game hangs) */
             idle = take ? 0 : idle + 1;
-            if (idle > 4)
+            if (g_enhancements && idle > 4)
                 break;
         }
         if (++i > 4)

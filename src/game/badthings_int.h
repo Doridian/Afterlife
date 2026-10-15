@@ -14,8 +14,9 @@
 
 /* Flat cell access like the original's cells[y * 100 + x] with signed byte
  * coordinates: out-of-row x wraps into the neighbouring row; outside the
- * grid reads 0 and writes go nowhere (ENHANCEMENT: the original reads and
- * writes whatever memory is there; no differential test reaches it). */
+ * grid reads 0 and writes go nowhere (SAFETY, always on: the original reads
+ * and writes whatever memory is there, which can't be reproduced; no
+ * differential test reaches it). */
 static inline uint32_t *bt_cellp(int x, int y)
 {
     static uint32_t dummy;

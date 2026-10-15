@@ -61,6 +61,7 @@ enum {
     MENU_MSGBOX_TIMEOUT = 0x22, MENU_HIDE_SCROLLBARS = 0x23,
     MENU_TUTORIAL_FIRST = 0x25, /* .. 0x2c */
     MENU_NO_BAD_THINGS = 0x31,
+    MENU_PORT_OPTIONS = 0x3a, /* port-only: Global > Port Options... */
     MENU_IDS = 0x3c
 };
 

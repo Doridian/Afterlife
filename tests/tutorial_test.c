@@ -30,6 +30,7 @@
 #include <string.h>
 
 #include "game/build.h"
+#include "game/enhance.h"
 #include "game/ini.h"
 #include "game/shell.h"
 #include "game/shell_int.h"
@@ -752,6 +753,8 @@ int main(int argc, char **argv)
         return 2;
     }
     g_out = argv[2];
+    enhance_init_env(); /* AFTERLIFE_ENHANCEMENTS=1: the enhanced behaviour */
+    printf("enhancements %s\n", g_enhancements ? "on" : "off");
     setvbuf(stdout, NULL, _IONBF, 0);
     crc_init();
     setenv("SDL_VIDEODRIVER", "dummy", 1);

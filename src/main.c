@@ -5,10 +5,13 @@
  * subsystem init sequence, run the game, shut down.
  *
  * Usage: afterlife [DATA_DIR] [FILE.INI] [SAVE.ALF|SCENARIO.ASC] [--quit]
+ *                  [--enhancements | --no-enhancements] [--ui-scale=N]
+ *                  [--port-ini=FILE]
  *   DATA_DIR stands in for the original's install folder (default: the
  *   folder of FILE.INI if one is given, else "orig"). FILE.INI is resolved
  *   in it (default ALIFE.ini, matched case-insensitively). --quit exits right
- *   after initialisation (for testing).
+ *   after initialisation (for testing). The rest are port settings
+ *   (game/enhance.h, docs/enhancements.md), overriding ALIFEPORT.INI.
  *
  * The game itself is game_main (0x401000, src/game/shell.c): the title,
  * then the main loop until the player quits.
@@ -19,6 +22,7 @@
 #include <string.h>
 
 #include "game/config.h"
+#include "game/enhance.h"
 #include "game/ini.h"
 #include "game/resource.h"
 #include "game/shell.h"
@@ -57,6 +61,8 @@ static void print_config(void)
     printf("Voice stream:    %d, %d, %d\n", c->voice_stream[0], c->voice_stream[1],
            c->voice_stream[2]);
     printf("Mixer channels:  %d\n", c->mixer_channels);
+    printf("Port settings:   %s\n", port_settings_path());
+    printf("Enhancements:    %s, UI scale %d\n", g_enhancements ? "on" : "off", plat_ui_scale());
     if (g_arg_load_file[0])
         printf("Load file:       %s\n", g_arg_load_file);
 }
@@ -72,7 +78,9 @@ int main(int argc, char **argv)
      * no port equivalent; the data dir plays the role of the exe's folder. */
     const char *dir = NULL;
     if (!app_parse_args(argc, argv, &dir)) {
-        printf("usage: %s [DATA_DIR] [FILE.INI] [SAVE.ALF|SCENARIO.ASC] [--quit]\n", argv[0]);
+        printf("usage: %s [DATA_DIR] [FILE.INI] [SAVE.ALF|SCENARIO.ASC] [--quit]\n"
+               "       [--enhancements | --no-enhancements] [--ui-scale=N (0 = auto)] [--port-ini=FILE]\n",
+               argv[0]);
         return 0;
     }
 
@@ -99,6 +107,11 @@ int main(int argc, char **argv)
      * window, before any subsystem. The display init sizes and shows it. */
     if (!plat_init(NULL, 1, 1))
         return 1;
+
+    /* Port settings (ALIFEPORT.INI and the switches above); the UI scale
+     * must be known before the display init reads the desktop size. */
+    enhance_init(argc, argv);
+    plat_set_ui_scale(enhance_ui_scale_request());
 
     int ret = 1;
     if (sys_initialize() == 0) {

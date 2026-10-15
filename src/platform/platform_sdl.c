@@ -1,4 +1,5 @@
 #include "platform.h"
+#include "present.h"
 
 #include <SDL3/SDL.h>
 #include <stdlib.h>
@@ -15,22 +16,22 @@ static SDL_Surface *g_indexed;
 static SDL_Palette *g_palette;
 static SDL_AudioStream *g_audio;
 static char g_data_dir[1024] = ".";
+static int g_ui_scale = 1;   /* port enhancement: see plat_set_ui_scale */
+static PresentRect g_dst;    /* where the framebuffer goes, output pixels */
 
-/* How the framebuffer is put into the window. The window is sized in
- * pixels (SDL_WINDOW_HIGH_PIXEL_DENSITY, plat_video_set_mode), so normally
- * it maps 1:1. When the window is at least as large as the framebuffer it
- * is scaled by a whole factor and centred (crisp); only a smaller window
- * (the user shrank it) scales down with letterboxing. */
+/* How the framebuffer is put into the window (present_layout). The window
+ * is sized in pixels (SDL_WINDOW_HIGH_PIXEL_DENSITY, plat_video_set_mode),
+ * so normally it maps 1:1, or k:1 with UI scale k. When the window is at
+ * least as large as the framebuffer it is scaled by a whole factor and
+ * centred (crisp); only a smaller window (the user shrank it) scales down
+ * with letterboxing. Mouse positions go back through present_to_fb. */
 static void update_presentation(void)
 {
     if (!g_renderer || !g_indexed)
         return;
     int ow = 0, oh = 0;
     SDL_GetRenderOutputSize(g_renderer, &ow, &oh); /* pixels */
-    bool fits = ow >= g_indexed->w && oh >= g_indexed->h;
-    SDL_SetRenderLogicalPresentation(g_renderer, g_indexed->w, g_indexed->h,
-                                     fits ? SDL_LOGICAL_PRESENTATION_INTEGER_SCALE
-                                          : SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    g_dst = present_layout(ow, oh, g_indexed->w, g_indexed->h);
 }
 
 /* The desktop's pixel density (1.5 for 150 % scaling), 1 if unknown. */
@@ -39,6 +40,28 @@ static float desktop_density(void)
     const SDL_DisplayMode *mode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
     return mode && mode->pixel_density > 0 ? mode->pixel_density : 1.0f;
 }
+
+/* The desktop in real pixels (unscaled). */
+static void desktop_pixels(int *width, int *height)
+{
+    /* SDL's mode size is in points; GetClientRect(GetDesktopWindow()) of a
+     * DPI-unaware 1996 program is the whole screen in pixels. */
+    const SDL_DisplayMode *mode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+    float d = desktop_density();
+    *width = mode ? (int)SDL_lroundf((float)mode->w * d) : 0;
+    *height = mode ? (int)SDL_lroundf((float)mode->h * d) : 0;
+}
+
+void plat_set_ui_scale(int scale)
+{
+    int dw = 0, dh = 0;
+    desktop_pixels(&dw, &dh);
+    if (scale <= 0)
+        scale = present_auto_scale(desktop_density());
+    g_ui_scale = present_clamp_scale(scale, dw, dh);
+}
+
+int plat_ui_scale(void) { return g_ui_scale; }
 
 bool plat_init(const char *title, int width, int height)
 {
@@ -55,13 +78,13 @@ bool plat_init(const char *title, int width, int height)
         SDL_Log("SDL_CreateWindowAndRenderer: %s", SDL_GetError());
         return false;
     }
-    SDL_SetRenderLogicalPresentation(g_renderer, width, height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
     SDL_SetRenderVSync(g_renderer, 1);
 
     g_indexed = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_INDEX8);
     g_palette = SDL_CreateSurfacePalette(g_indexed);
     g_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
     SDL_SetTextureScaleMode(g_texture, SDL_SCALEMODE_NEAREST);
+    update_presentation();
     /* WM_CHAR comes from SDL's text input events (see plat_poll_event). */
     SDL_StartTextInput(g_window);
     return g_indexed && g_palette && g_texture;
@@ -125,14 +148,16 @@ bool plat_video_set_mode(int width, int height, bool fullscreen)
      * size. A desktop-sized framed window doesn't fit next to the title bar
      * and panels, so the window manager shrank it and the picture came out
      * letterboxed; the port uses a borderless fullscreen window instead.
-     * Sizes are in pixels: the window size is divided by the density. */
+     * Sizes are in pixels: the window size is divided by the density (and
+     * multiplied by the UI scale, an enhancement). */
     int dw = 0, dh = 0;
     plat_video_desktop_size(&dw, &dh);
     bool cover = fullscreen || (dw > 0 && width >= dw && height >= dh);
     if (!cover) {
         SDL_SetWindowFullscreen(g_window, false);
         float d = desktop_density();
-        SDL_SetWindowSize(g_window, (int)SDL_ceilf((float)width / d), (int)SDL_ceilf((float)height / d));
+        float k = (float)g_ui_scale;
+        SDL_SetWindowSize(g_window, (int)SDL_ceilf((float)width * k / d), (int)SDL_ceilf((float)height * k / d));
     } else {
         SDL_SetWindowFullscreenMode(g_window, NULL); /* the desktop's mode */
         SDL_SetWindowFullscreen(g_window, true);
@@ -145,12 +170,12 @@ bool plat_video_set_mode(int width, int height, bool fullscreen)
 
 void plat_video_desktop_size(int *width, int *height)
 {
-    /* SDL's mode size is in points; GetClientRect(GetDesktopWindow()) of a
-     * DPI-unaware 1996 program is the whole screen in pixels. */
-    const SDL_DisplayMode *mode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
-    float d = desktop_density();
-    *width = mode ? (int)SDL_lroundf((float)mode->w * d) : 0;
-    *height = mode ? (int)SDL_lroundf((float)mode->h * d) : 0;
+    /* With UI scale k (an enhancement) the game sees a desktop k times
+     * smaller, so Resolution=MAX makes a framebuffer that is scaled back up
+     * k times. */
+    desktop_pixels(width, height);
+    *width /= g_ui_scale;
+    *height /= g_ui_scale;
 }
 
 struct PlatCursor {
@@ -197,8 +222,11 @@ void plat_cursor_show(bool show)
 
 void plat_mouse_warp(int x, int y)
 {
-    float wx = 0, wy = 0;
-    if (g_renderer && SDL_RenderCoordinatesToWindow(g_renderer, (float)x, (float)y, &wx, &wy))
+    if (!g_window || !g_indexed)
+        return;
+    float px, py, wx = 0, wy = 0;
+    present_from_fb(g_dst, g_indexed->w, g_indexed->h, x, y, &px, &py);
+    if (g_renderer && SDL_RenderCoordinatesToWindow(g_renderer, px, py, &wx, &wy))
         SDL_WarpMouseInWindow(g_window, wx, wy);
 }
 
@@ -210,7 +238,8 @@ void plat_video_present(void)
         SDL_UnlockTexture(g_texture);
     }
     SDL_RenderClear(g_renderer);
-    SDL_RenderTexture(g_renderer, g_texture, NULL, NULL);
+    SDL_FRect out = {(float)g_dst.x, (float)g_dst.y, (float)g_dst.w, (float)g_dst.h};
+    SDL_RenderTexture(g_renderer, g_texture, NULL, &out);
     SDL_RenderPresent(g_renderer);
 }
 
@@ -436,16 +465,15 @@ static void translate(SDL_Event *e)
     case SDL_EVENT_MOUSE_MOTION:
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
+        /* window points -> output pixels -> framebuffer */
         SDL_ConvertEventToRenderCoordinates(g_renderer, e);
         if (e->type == SDL_EVENT_MOUSE_MOTION) {
             ev.type = PLAT_EV_MOUSE_MOVE;
-            ev.x = (int)SDL_floorf(e->motion.x);
-            ev.y = (int)SDL_floorf(e->motion.y);
+            present_to_fb(g_dst, g_indexed->w, g_indexed->h, e->motion.x, e->motion.y, &ev.x, &ev.y);
         } else {
             ev.type = e->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? PLAT_EV_MOUSE_DOWN : PLAT_EV_MOUSE_UP;
             ev.button = e->button.button;
-            ev.x = (int)SDL_floorf(e->button.x);
-            ev.y = (int)SDL_floorf(e->button.y);
+            present_to_fb(g_dst, g_indexed->w, g_indexed->h, e->button.x, e->button.y, &ev.x, &ev.y);
         }
         evq_push(&ev);
         break;
@@ -557,6 +585,16 @@ static bool find_ci(const char *dir, const char *name, char *out, size_t out_len
 }
 
 const char *plat_data_dir(void) { return g_data_dir; }
+
+bool plat_pref_path(const char *name, char *out, size_t out_len)
+{
+    char *dir = SDL_GetPrefPath("Afterlife", "Afterlife");
+    if (!dir)
+        return false;
+    SDL_snprintf(out, out_len, "%s%s", dir, name);
+    SDL_free(dir);
+    return true;
+}
 
 bool plat_data_path(const char *name, char *out, size_t out_len)
 {

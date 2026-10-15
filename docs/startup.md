@@ -38,6 +38,9 @@ plain argument, else the folder of a given .INI, else `orig`) takes the place of
 the exe folder, and every file name, INI included, is resolved in it
 case-insensitively (DOS drive letters stripped). Only `-x` and `/?` count as
 switches, so absolute Unix paths work. `--quit` exits after init.
+`--enhancements`, `--no-enhancements`, `--ui-scale=N` and `--port-ini=FILE`
+are the port's own settings, kept in `ALIFEPORT.INI` outside ALIFE.INI (see
+[enhancements.md](enhancements.md)).
 
 ## ALIFE.INI
 

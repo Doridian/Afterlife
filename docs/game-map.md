@@ -470,10 +470,11 @@ the original address in a comment to the *owner's* header, never its own copy.
   Quirks kept: 0x442287's scan jumps to a building's origin; Nose's
   Heaven-side guard tests bit 3 at site 2 and marks site 7; the flocks'
   droppings test CELL_DEFER with x and y swapped; trample paths don't check
-  the guard's existence bit. Deviations (marked `ENHANCEMENT` in the
-  code, for the enhancements flag): a bird soiling a building in the top
-  rows (y - size = -1) loops forever in the original (byte row counter),
-  the port stops at row 0; a failed croupier spawn and off-grid cell
+  the guard's existence bit. Deviations (see
+  [enhancements.md](enhancements.md)): a bird soiling a building in the
+  top rows (y - size = -1) loops forever in the original (byte row
+  counter); by default the port hangs too, with the enhancements on it
+  stops at row 0. Always on: a failed croupier spawn and off-grid cell
   accesses don't write past the tables. structure_destroy's flags 3/4 leave a
   realm's population a little above its cells' SOULs, in the original too.
   Tests: `tests/badthings_test` (every kind, bankruptcy, cheats, the
@@ -637,9 +638,10 @@ the original address in a comment to the *owner's* header, never its own copy.
   (`tutorial_glide_start/step`, pure) to a control's centre, a menu item,
   a map cell (scrolling until visible) or a window-relative point; clicks
   first glide back to where the last glide ended if the pointer moved.
-  Port deviations: the waits stop when the lesson is stopped (the
-  original ran the reloaded player's game on for the rest of the
-  seconds / years), the cell glide gives up scrolling after 4 tries.
+  Enhancements (off by default, see [enhancements.md](enhancements.md)):
+  the waits stop when the lesson is stopped (the original ran the
+  reloaded player's game on for the rest of the seconds / years), the
+  cell glide gives up scrolling after 4 tries (the original loops).
   `src/ui/tutorialwin.c` is the "Afterlife Tutorial" text window
   (0x4ab8e0-0x4ac2dd, pages 1401-1410 with Prev/Next): left over from
   the demo version, created by nothing (its 0x5fa5f0 is in game_main's

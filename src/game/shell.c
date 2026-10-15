@@ -17,6 +17,7 @@
 #include "game/badthings.h"
 #include "game/build.h"
 #include "game/config.h"
+#include "game/enhance.h"
 #include "game/mapobj.h"
 #include "game/music.h"
 #include "game/newworld.h"
@@ -276,6 +277,8 @@ static const MenuDef k_global[] = { /* 0x651770 */
     {8, "&Tempo", TC},
     {9, "&Bad Things", T},
     {10, "&Misc. Options", T},
+    SEP, /* port-only */
+    {MENU_PORT_OPTIONS, "&Port Options...", T},
     {0, NULL, 0},
 };
 static const MenuDef k_tempo[] = { /* 0x651808 */
@@ -635,6 +638,9 @@ void shell_menu_dispatch(WmWindow *item, unsigned id)
             menu_set_checked(item, false);
             g_state.bad_things = 1;
         }
+        break;
+    case MENU_PORT_OPTIONS: /* port-only: enhancements and UI scale */
+        enhance_options_dialog();
         break;
     default: /* 8, 9, 10, 0x1e, 0x24, 0x2f, 0x30: nothing; 0x33-0x36: 0x4089f4 (empty) */
         break;

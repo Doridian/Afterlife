@@ -88,8 +88,15 @@ void plat_video_present(void);
  * (re)creates the framebuffer at width x height (contents undefined) and
  * sizes the window, fullscreen or not. The palette is kept. */
 bool plat_video_set_mode(int width, int height, bool fullscreen);
-/* Desktop size in pixels, or 0 x 0 if unknown. */
+/* Desktop size in pixels, or 0 x 0 if unknown. Divided by the UI scale. */
 void plat_video_desktop_size(int *width, int *height);
+/* Port enhancement (docs/enhancements.md): the UI scale k, 1 by default.
+ * The game sees a desktop k times smaller (plat_video_desktop_size) and
+ * the framebuffer is presented k times larger, crisp. 0 picks one from the
+ * desktop's pixel density. Clamped so the scaled desktop stays at least
+ * 640x480. Must be set before the display init (plat_init first). */
+void plat_set_ui_scale(int scale);
+int plat_ui_scale(void);
 
 /* Mouse cursor (USER32 LoadCursor/SetCursor/ShowCursor/SetCursorPos).
  * plat_cursor_create takes w * h RGBA pixels (4 bytes each, A = 0 is
@@ -134,6 +141,9 @@ FILE *plat_fopen_data(const char *name);
  * plat_fopen_data). False if it doesn't exist. */
 const char *plat_data_dir(void);
 bool plat_data_path(const char *name, char *out, size_t out_len);
+/* Port-only: `name` in the user's writable settings folder (created if
+ * needed; ~/.local/share/Afterlife/Afterlife/ on Linux). */
+bool plat_pref_path(const char *name, char *out, size_t out_len);
 
 /* A native file picker (port: the original has its own slot dialogs).
  * Asynchronous: begin opens it (false if there is none, e.g. headless or

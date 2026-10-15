@@ -100,7 +100,11 @@ desktop-sized window doesn't fit next to the title bar and panels, so the
 window manager used to shrink it and letterboxing drew the game smaller
 with black margins (and blurry, from the compositor's upscaling). The
 presentation is integer-scaled and centred while the window is at least
-the framebuffer's size, letterboxed only when it is smaller.
+the framebuffer's size, letterboxed only when it is smaller
+(`platform/present.c`, which also maps mouse positions back). With the
+enhancements on, a UI scale k makes the game see a desktop k times
+smaller, so the framebuffer is presented k times larger (see
+[enhancements.md](enhancements.md)).
 
 The title's 640x480 art is never scaled and the display mode never changes
 (`di_change_display_mode` is only reached with flags 4): the menu
