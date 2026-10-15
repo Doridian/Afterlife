@@ -35,6 +35,35 @@ Module['preRun'] = Module['preRun'] || [];
     return /\.000$/.test(n) || n === 'ALIFE.INI' || n === 'ALIFE.EXE' || /^ASCEN.*\.ASC$/.test(n);
   }
 
+  // A long step's bar: its label with the percentage, and the share done.
+  function progress(label, done, total) {
+    var share = total ? Math.min(done / total, 1) : 0;
+    Module['setStatus'](label + ' ' + Math.floor(share * 100) + '%');
+    Module['setProgress'](share);
+  }
+
+  // The bytes of a Blob, as Uint8Array; onBytes(n) is called as chunks arrive.
+  function readBlob(blob, onBytes) {
+    if (!blob.stream) {
+      return blob.arrayBuffer().then(function (buf) {
+        onBytes(buf.byteLength);
+        return new Uint8Array(buf);
+      });
+    }
+    var out = new Uint8Array(blob.size), at = 0, reader = blob.stream().getReader();
+    function pump() {
+      return reader.read().then(function (r) {
+        if (r.done)
+          return out;
+        out.set(r.value, at);
+        at += r.value.byteLength;
+        onBytes(r.value.byteLength);
+        return pump();
+      });
+    }
+    return pump();
+  }
+
   // --- the picked files' store: name -> Blob ---------------------------
   function openDataDb(cb) {
     var req;
@@ -63,10 +92,14 @@ Module['preRun'] = Module['preRun'] || [];
         db.close();
         if (!left)
           return cb();
-        Module['setStatus']('Loading game data...');
+        var total = blobs.reduce(function (sum, b) { return sum + b.size; }, 0), done = 0;
+        progress('Loading game data...', 0, total);
         blobs.forEach(function (blob, i) {
-          blob.arrayBuffer().then(function (buf) {
-            FS.writeFile(dir + '/' + names[i], new Uint8Array(buf));
+          readBlob(blob, function (n) {
+            done += n;
+            progress('Loading game data...', done, total);
+          }).then(function (bytes) {
+            FS.writeFile(dir + '/' + names[i], bytes);
           }, function (e) {
             console.warn('Afterlife: reading stored ' + names[i] + ' failed', e);
           }).then(function () {
@@ -82,14 +115,21 @@ Module['preRun'] = Module['preRun'] || [];
     });
   }
 
-  function storeData(files, cb) {
+  function storeData(files, total, cb) {
     openDataDb(function (db) {
       if (!db)
         return cb();
       var tx = db.transaction(DATA_STORE, 'readwrite');
       var store = tx.objectStore(DATA_STORE);
+      var done = 0;
       store.clear();
-      files.forEach(function (f) { store.put(f, f.name); });
+      progress('Storing game data...', 0, total);
+      files.forEach(function (f) {
+        store.put(f, f.name).onsuccess = function () {
+          done += f.size;
+          progress('Storing game data...', done, total);
+        };
+      });
       tx.oncomplete = function () {
         db.close();
         cb();
@@ -115,8 +155,10 @@ Module['preRun'] = Module['preRun'] || [];
         error.textContent = '';
         panel.hidden = true;
         Module['setStatus']('Reading the CD...');
-        var read = /\.zip$/i.test(image.name) ? Zip.extract : Iso9660.extract;
-        read(image, wanted).then(function (files) {
+        var read = /\.zip$/i.test(image.name) ?
+          Zip.extract(image, wanted, function (done, total) { progress('Reading the CD...', done, total); }) :
+          Iso9660.extract(image, wanted);
+        read.then(function (files) {
           use(files);
         }, function (e) {
           Module['setStatus']('');
@@ -136,13 +178,17 @@ Module['preRun'] = Module['preRun'] || [];
         return;
       }
       panel.hidden = true;
-      Module['setStatus']('Storing game data...');
+      var total = files.reduce(function (sum, f) { return sum + f.size; }, 0), copied = 0;
       var left = files.length;
+      progress('Reading the game files...', 0, total);
       files.forEach(function (f) {
-        f.arrayBuffer().then(function (buf) {
-          FS.writeFile(dir + '/' + f.name, new Uint8Array(buf));
+        readBlob(f, function (n) {
+          copied += n;
+          progress('Reading the game files...', copied, total);
+        }).then(function (bytes) {
+          FS.writeFile(dir + '/' + f.name, bytes);
           if (--left === 0)
-            storeData(files, done);
+            storeData(files, total, done);
         });
       });
     }

@@ -30,7 +30,10 @@ The page must come from a web server (not `file://`). The output is
   copied into `/userdata` at every start. IDBFS can't hold them: browsers cap
   one stored value below ALIFE.000's size. `?pick` in the URL asks again.
   The picker links to the CD on archive.org (`AfterlifeUSA`, zip with the
-  Redump `.bin`).
+  Redump `.bin`). The steps that take a while (reading a zip's deflated
+  entries, copying the files, storing them, and reading them back at each
+  start) show a progress bar in the status panel (`progress` in `pre.js`,
+  `setProgress` in `shell.html`).
 - **Zips**: `zip.js` reads the central directory and stored or deflated
   entries (deflate through `DecompressionStream`, so Firefox 113+, Safari
   16.4+). Zip64 isn't handled.

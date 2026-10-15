@@ -19,6 +19,10 @@
   .panel > div { max-width: 36em; }
   .panel[hidden] { display: none; }
   #status { pointer-events: none; }
+  #status-bar { width: 280px; max-width: 80vw; height: 6px; margin: 12px auto 0; background: #333;
+                border-radius: 3px; overflow: hidden; }
+  #status-bar[hidden] { display: none; }
+  #status-fill { height: 100%; width: 0; background: #8cf; transition: width 0.2s linear; }
   #pick, #ended { background: #000; }
   button, label.btn { font: inherit; padding: 6px 14px; margin: 4px; cursor: pointer; background: #333;
                       color: #eee; border: 1px solid #777; border-radius: 4px; display: inline-block; }
@@ -30,7 +34,10 @@
 </head>
 <body>
 <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
-<div id="status" class="panel"><div id="status-text">Loading...</div></div>
+<div id="status" class="panel"><div>
+  <div id="status-text">Loading...</div>
+  <div id="status-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" hidden><div id="status-fill"></div></div>
+</div></div>
 <div id="pick" class="panel" hidden><div>
   <h2>Afterlife</h2>
   <p>This build carries no game data. Pick your Afterlife CD: the CD image
@@ -57,6 +64,15 @@
       var el = document.getElementById('status');
       if (text) document.getElementById('status-text').textContent = text;
       el.hidden = !text;
+      document.getElementById('status-bar').hidden = true;
+    },
+    // share is 0..1 of the step shown by setStatus
+    setProgress: function (share) {
+      var bar = document.getElementById('status-bar');
+      var pct = Math.round(share * 100);
+      document.getElementById('status-fill').style.width = pct + '%';
+      bar.setAttribute('aria-valuenow', pct);
+      bar.hidden = false;
     },
   };
   window.addEventListener('error', function (e) {

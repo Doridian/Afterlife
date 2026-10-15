@@ -4,9 +4,9 @@
 // Stored and deflated entries are read; deflate uses DecompressionStream.
 // Zip64 (4 GB and up) is not handled.
 //
-// Zip.extract(file, wanted) -> Promise<File[]>: the wanted files of the zip,
-// and the wanted files of any CD image (.bin, .iso, .img) it holds (read by
-// web/iso9660.js).
+// Zip.extract(file, wanted, progress) -> Promise<File[]>: the wanted files of
+// the zip, and the wanted files of any CD image (.bin, .iso, .img) it holds
+// (read by web/iso9660.js). progress(done, total) is optional (bytes read).
 var Zip = (function () {
   var EOCD = 0x06054b50, CENTRAL = 0x02014b50, LOCAL = 0x04034b50;
 
@@ -61,45 +61,62 @@ var Zip = (function () {
   }
 
   // The file of one entry: its data is at the local header's name and extra.
-  function member(file, e) {
+  // onBytes(n) gets the compressed bytes of the entry as they are read.
+  function member(file, e, onBytes) {
     return bytes(file, e.offset, 30).then(function (lh) {
       if (lh.getUint32(0, true) !== LOCAL)
         throw new Error('The zip is damaged.');
       var start = e.offset + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
       var data = file.slice(start, start + e.csize);
       var base = e.name.split('/').pop();
-      if (e.method === 0)
+      if (e.method === 0) {
+        onBytes(e.csize);
         return new File([data], base);
+      }
       if (e.method !== 8)
         throw new Error('This zip uses a compression the browser cannot read; unzip it instead.');
       if (typeof DecompressionStream === 'undefined')
         throw new Error('This browser cannot unzip; unzip the file and choose the .bin instead.');
-      return new Response(data.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob()
+      var counted = data.stream().pipeThrough(new TransformStream({
+        transform: function (chunk, out) {
+          onBytes(chunk.byteLength);
+          out.enqueue(chunk);
+        },
+      }));
+      return new Response(counted.pipeThrough(new DecompressionStream('deflate-raw'))).blob()
         .then(function (blob) {
           return new File([blob], base);
         });
     });
   }
 
-  function extract(file, wanted) {
+  // progress(done, total), if given, counts the compressed bytes of the entries read.
+  function extract(file, wanted, progress) {
     return directory(file).then(function (entries) {
       var found = [];
-      return entries.reduce(function (prev, e) {
+      var todo = entries.filter(function (e) {
+        var base = e.name.split('/').pop();
+        return base && !/\/$/.test(e.name) && (/\.(iso|bin|img)$/i.test(base) || wanted(base));
+      });
+      var total = todo.reduce(function (sum, e) { return sum + e.csize; }, 0), done = 0;
+      function onBytes(n) {
+        done += n;
+        if (progress)
+          progress(done, total);
+      }
+      return todo.reduce(function (prev, e) {
         return prev.then(function () {
           var base = e.name.split('/').pop();
-          if (!base || /\/$/.test(e.name))
-            return; // a folder
           if (/\.(iso|bin|img)$/i.test(base)) {
-            return member(file, e).then(function (image) {
+            return member(file, e, onBytes).then(function (image) {
               return Iso9660.extract(image, wanted);
             }).then(function (files) {
               Array.prototype.push.apply(found, files);
             });
           }
-          if (wanted(base))
-            return member(file, e).then(function (f) {
-              found.push(f);
-            });
+          return member(file, e, onBytes).then(function (f) {
+            found.push(f);
+          });
         });
       }, Promise.resolve()).then(function () {
         return found;
