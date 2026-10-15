@@ -30,3 +30,5 @@ __pycache__/
 
 # Python venv for tools/emu
 /.venv/
+
+.playwright-mcp
