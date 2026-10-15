@@ -156,8 +156,17 @@ Module['preRun'] = Module['preRun'] || [];
     FS.syncfs(true, function (err) {
       if (err)
         console.warn('Afterlife: reading browser storage failed', err);
-      if (hasGameData(BUILTIN))
-        return start(BUILTIN);
+      if (Module['expectedDataFileDownloads']) {
+        // A build with AFTERLIFE_WASM_DATA: its package is still being
+        // fetched (IDBFS is usually done first), so wait for /orig to fill.
+        (function wait() {
+          if (hasGameData(BUILTIN))
+            start(BUILTIN);
+          else
+            setTimeout(wait, 50);
+        })();
+        return;
+      }
       if (params.has('pick'))
         return pickData(USER, function () { start(USER); });
       loadStoredData(USER, function () {
