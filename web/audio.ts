@@ -22,10 +22,10 @@ interface AfAudio {
   pendingFrames: number;
 }
 
-var afAudio: AfAudio | null = null;
+let afAudio: AfAudio | null = null;
 
 // The worklet's code, as a string: it runs in the audio thread.
-var afAudioWorkletSource = [
+const afAudioWorkletSource = [
   'class Feed extends AudioWorkletProcessor {',
   '  constructor() {',
   '    super();',
@@ -86,15 +86,12 @@ var afAudioWorkletSource = [
 // Browsers start audio only after a user gesture; the context is resumed on
 // the first one (SDL did the same).
 function afAudioResumeOnGesture(ctx: AudioContext): void {
-  var resume = function () {
+  const events = ['pointerdown', 'keydown', 'touchend'];
+  const resume = () => {
     ctx.resume();
-    ['pointerdown', 'keydown', 'touchend'].forEach(function (t) {
-      document.removeEventListener(t, resume, true);
-    });
+    events.forEach((t) => document.removeEventListener(t, resume, true));
   };
-  ['pointerdown', 'keydown', 'touchend'].forEach(function (t) {
-    document.addEventListener(t, resume, true);
-  });
+  events.forEach((t) => document.addEventListener(t, resume, true));
 }
 
 // Returns 1 if the output is set up (it starts once the worklet has loaded).
@@ -103,26 +100,26 @@ function afAudioOpen(rate: number): number {
     return 0;
   }
   afAudioClose();
-  var ctx: AudioContext;
+  let ctx: AudioContext;
   try {
     ctx = new AudioContext({ sampleRate: rate, latencyHint: 'interactive' });
-  } catch (e) {
+  } catch {
     return 0;
   }
-  afAudio = { ctx: ctx, node: null, sent: 0, consumed: 0, pending: [], pendingFrames: 0 };
-  var url = URL.createObjectURL(new Blob([afAudioWorkletSource], { type: 'application/javascript' }));
-  ctx.audioWorklet.addModule(url).then(function () {
+  afAudio = { ctx, node: null, sent: 0, consumed: 0, pending: [], pendingFrames: 0 };
+  const url = URL.createObjectURL(new Blob([afAudioWorkletSource], { type: 'application/javascript' }));
+  ctx.audioWorklet.addModule(url).then(() => {
     URL.revokeObjectURL(url);
-    var state = afAudio;
+    const state = afAudio;
     if (!state || state.ctx !== ctx) return;
-    var node = new AudioWorkletNode(ctx, 'feed', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
-    node.port.onmessage = function (e) { if (afAudio) afAudio.consumed = e.data; };
+    const node = new AudioWorkletNode(ctx, 'feed', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+    node.port.onmessage = (e) => { if (afAudio) afAudio.consumed = e.data; };
     node.connect(ctx.destination);
     state.node = node;
-    state.pending.forEach(function (chunk) { node.port.postMessage({ frames: chunk }, [chunk.buffer]); });
+    state.pending.forEach((chunk) => node.port.postMessage({ frames: chunk }, [chunk.buffer]));
     state.pending = [];
     state.pendingFrames = 0;
-  }).catch(function (e) {
+  }).catch((e) => {
     console.warn('audio: worklet failed to load', e);
   });
   afAudioResumeOnGesture(ctx);
@@ -132,7 +129,7 @@ function afAudioOpen(rate: number): number {
 // frames: an Int16Array of interleaved stereo, copied out of the heap.
 function afAudioQueue(ptr: number, frameCount: number): void {
   if (!afAudio) return;
-  var chunk = HEAP16.slice(ptr >> 1, (ptr >> 1) + frameCount * 2);
+  const chunk = HEAP16.slice(ptr >> 1, (ptr >> 1) + frameCount * 2);
   afAudio.sent += frameCount;
   if (afAudio.node) {
     afAudio.node.port.postMessage({ frames: chunk }, [chunk.buffer]);
@@ -165,4 +162,4 @@ function afAudioClose(): void {
 }
 
 // For the browser tests: the backend's state (context, queue counts).
-Module['afAudioState'] = function () { return afAudio; };
+Module.afAudioState = () => afAudio;

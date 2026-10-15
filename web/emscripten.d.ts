@@ -5,7 +5,7 @@
 
 interface EmscriptenModule {
   arguments: string[];
-  preRun: Array<() => void>;
+  preRun: (() => void)[];
   expectedDataFileDownloads?: number;
   setStatus(text: string): void;
   setProgress(share: number): void;
@@ -15,9 +15,9 @@ interface EmscriptenModule {
   afAudioState?: () => AfAudio | null;
 }
 
-declare var Module: EmscriptenModule;
+declare const Module: EmscriptenModule;
 
-declare var FS: {
+declare const FS: {
   mkdir(path: string): void;
   mount(type: object, options: { autoPersist?: boolean }, mountpoint: string): void;
   readdir(path: string): string[];
@@ -25,9 +25,9 @@ declare var FS: {
   syncfs(populate: boolean, callback: (err: unknown) => void): void;
 };
 
-declare var IDBFS: { queuePersist?: unknown };
+declare const IDBFS: { queuePersist?: unknown };
 
 declare function addRunDependency(id: string): void;
 declare function removeRunDependency(id: string): void;
 
-declare var HEAP16: Int16Array;
+declare const HEAP16: Int16Array;

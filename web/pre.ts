@@ -13,68 +13,75 @@
 //    (e.g. ?arg=ASCEN001.ASC&arg=--no-enhancements).
 //  - When main returns (File > Quit) the page says so and offers a reload.
 
-Module['arguments'] = Module['arguments'] || [];
-Module['preRun'] = Module['preRun'] || [];
+Module.arguments ??= [];
+Module.preRun ??= [];
 
-(function () {
-  var PREF = '/libsdl', USER = '/userdata', BUILTIN = '/orig';
-  var DATA_DB = 'afterlife-game-data', DATA_STORE = 'files';
-  var params = new URLSearchParams(location.search);
+(() => {
+  const PREF = '/libsdl', USER = '/userdata', BUILTIN = '/orig';
+  const DATA_DB = 'afterlife-game-data', DATA_STORE = 'files';
+  const params = new URLSearchParams(location.search);
+
+  // An element of web/shell.html, which must be there.
+  function element<T extends HTMLElement>(id: string): T {
+    const e = document.getElementById(id);
+    if (!e)
+      throw new Error(`Afterlife: no #${id} in the page`);
+    return e as T;
+  }
 
   function hasGameData(dir: string): boolean {
     try {
-      return FS.readdir(dir).some(function (n) { return n.toUpperCase() === 'ALIFE.INI'; });
-    } catch (e) {
+      return FS.readdir(dir).some((n) => n.toUpperCase() === 'ALIFE.INI');
+    } catch {
       return false;
     }
   }
 
   // The files the port reads; anything else on the CD is skipped.
   function wanted(name: string): boolean {
-    var n = name.toUpperCase();
+    const n = name.toUpperCase();
     return /\.000$/.test(n) || n === 'ALIFE.INI' || n === 'ALIFE.EXE' || /^ASCEN.*\.ASC$/.test(n);
   }
 
   // A long step's bar: its label with the percentage, and the share done.
   function progress(label: string, done: number, total: number): void {
-    var share = total ? Math.min(done / total, 1) : 0;
-    Module['setStatus'](label + ' ' + Math.floor(share * 100) + '%');
-    Module['setProgress'](share);
+    const share = total ? Math.min(done / total, 1) : 0;
+    Module.setStatus(`${label} ${Math.floor(share * 100)}%`);
+    Module.setProgress(share);
   }
 
   // The bytes of a Blob, as Uint8Array; onBytes(n) is called as chunks arrive.
   function readBlob(blob: Blob, onBytes: (n: number) => void): Promise<Uint8Array> {
     if (!blob.stream) {
-      return blob.arrayBuffer().then(function (buf) {
+      return blob.arrayBuffer().then((buf) => {
         onBytes(buf.byteLength);
         return new Uint8Array(buf);
       });
     }
-    var out = new Uint8Array(blob.size), at = 0, reader = blob.stream().getReader();
-    function pump(): Promise<Uint8Array> {
-      return reader.read().then(function (r) {
-        if (r.done)
-          return out;
-        out.set(r.value, at);
-        at += r.value.byteLength;
-        onBytes(r.value.byteLength);
-        return pump();
-      });
-    }
+    const out = new Uint8Array(blob.size), reader = blob.stream().getReader();
+    let at = 0;
+    const pump = (): Promise<Uint8Array> => reader.read().then((r) => {
+      if (r.done)
+        return out;
+      out.set(r.value, at);
+      at += r.value.byteLength;
+      onBytes(r.value.byteLength);
+      return pump();
+    });
     return pump();
   }
 
   // --- the picked files' store: name -> Blob ---------------------------
   function openDataDb(cb: (db: IDBDatabase | null) => void): void {
-    var req: IDBOpenDBRequest;
+    let req: IDBOpenDBRequest;
     try {
       req = indexedDB.open(DATA_DB, 1);
-    } catch (e) {
+    } catch {
       return cb(null);
     }
-    req.onupgradeneeded = function () { req.result.createObjectStore(DATA_STORE); };
-    req.onsuccess = function () { cb(req.result); };
-    req.onerror = function () {
+    req.onupgradeneeded = () => { req.result.createObjectStore(DATA_STORE); };
+    req.onsuccess = () => cb(req.result);
+    req.onerror = () => {
       console.warn('Afterlife: no IndexedDB for the game data', req.error);
       cb(null);
     };
@@ -82,33 +89,35 @@ Module['preRun'] = Module['preRun'] || [];
 
   // Copies the stored files into dir; cb() when done (also on failure).
   function loadStoredData(dir: string, cb: () => void): void {
-    openDataDb(function (db) {
+    openDataDb((db) => {
       if (!db)
         return cb();
-      var store = db.transaction(DATA_STORE, 'readonly').objectStore(DATA_STORE);
-      var keys = store.getAllKeys(), vals = store.getAll();
-      vals.onsuccess = function () {
-        var names = keys.result, blobs: Blob[] = vals.result, left = blobs.length;
+      const store = db.transaction(DATA_STORE, 'readonly').objectStore(DATA_STORE);
+      const keys = store.getAllKeys(), vals = store.getAll();
+      vals.onsuccess = () => {
+        const names = keys.result, blobs: Blob[] = vals.result;
+        let left = blobs.length;
         db.close();
         if (!left)
           return cb();
-        var total = blobs.reduce(function (sum, b) { return sum + b.size; }, 0), done = 0;
+        const total = blobs.reduce((sum, b) => sum + b.size, 0);
+        let done = 0;
         progress('Loading game data...', 0, total);
-        blobs.forEach(function (blob, i) {
-          readBlob(blob, function (n) {
+        blobs.forEach((blob, i) => {
+          readBlob(blob, (n) => {
             done += n;
             progress('Loading game data...', done, total);
-          }).then(function (bytes) {
-            FS.writeFile(dir + '/' + names[i], bytes);
-          }, function (e) {
-            console.warn('Afterlife: reading stored ' + names[i] + ' failed', e);
-          }).then(function () {
+          }).then((bytes) => {
+            FS.writeFile(`${dir}/${names[i]}`, bytes);
+          }, (e) => {
+            console.warn(`Afterlife: reading stored ${names[i]} failed`, e);
+          }).then(() => {
             if (--left === 0)
               cb();
           });
         });
       };
-      vals.onerror = function () {
+      vals.onerror = () => {
         db.close();
         cb();
       };
@@ -116,25 +125,25 @@ Module['preRun'] = Module['preRun'] || [];
   }
 
   function storeData(files: File[], total: number, cb: () => void): void {
-    openDataDb(function (db) {
+    openDataDb((db) => {
       if (!db)
         return cb();
-      var tx = db.transaction(DATA_STORE, 'readwrite');
-      var store = tx.objectStore(DATA_STORE);
-      var done = 0;
+      const tx = db.transaction(DATA_STORE, 'readwrite');
+      const store = tx.objectStore(DATA_STORE);
+      let done = 0;
       store.clear();
       progress('Storing game data...', 0, total);
-      files.forEach(function (f) {
-        store.put(f, f.name).onsuccess = function () {
+      files.forEach((f) => {
+        store.put(f, f.name).onsuccess = () => {
           done += f.size;
           progress('Storing game data...', done, total);
         };
       });
-      tx.oncomplete = function () {
+      tx.oncomplete = () => {
         db.close();
         cb();
       };
-      tx.onerror = tx.onabort = function () {
+      tx.onerror = tx.onabort = () => {
         console.warn('Afterlife: storing the game data failed (it will be asked for again)', tx.error);
         db.close();
         cb();
@@ -144,114 +153,113 @@ Module['preRun'] = Module['preRun'] || [];
 
   // Shows the picker of web/shell.html; puts the files into dir.
   function pickData(dir: string, done: () => void): void {
-    Module['setStatus']('');
-    var panel = document.getElementById('pick') as HTMLElement;
-    var error = document.getElementById('pick-error') as HTMLElement;
+    Module.setStatus('');
+    const panel = element('pick');
+    const error = element('pick-error');
     panel.hidden = false;
-    function take(list: FileList): void {
-      var image = Array.prototype.find.call(list, function (f: File) { return /\.(zip|iso|bin|img)$/i.test(f.name); }) as File | undefined;
+    function take(list: File[]): void {
+      const image = list.find((f) => /\.(zip|iso|bin|img)$/i.test(f.name));
       if (image) {
         // a CD image or a zip: its game files are read out of it (web/iso9660.ts, web/zip.ts)
         error.textContent = '';
         panel.hidden = true;
-        Module['setStatus']('Reading the CD...');
-        var read = /\.zip$/i.test(image.name) ?
-          Zip.extract(image, wanted, function (done, total) { progress('Reading the CD...', done, total); }) :
+        Module.setStatus('Reading the CD...');
+        const read = /\.zip$/i.test(image.name) ?
+          Zip.extract(image, wanted, (d, t) => progress('Reading the CD...', d, t)) :
           Iso9660.extract(image, wanted);
-        read.then(function (files) {
-          use(files);
-        }, function (e: Error) {
-          Module['setStatus']('');
+        read.then(use, (e) => {
+          Module.setStatus('');
           panel.hidden = false;
           error.textContent = e.message;
         });
         return;
       }
-      use(Array.prototype.filter.call(list, function (f: File) { return wanted(f.name); }) as File[]);
+      use(list.filter((f) => wanted(f.name)));
     }
     function use(files: File[]): void {
-      if (!files.some(function (f) { return f.name.toUpperCase() === 'ALIFE.INI'; }) ||
-          !files.some(function (f) { return /\.000$/i.test(f.name); })) {
-        Module['setStatus']('');
+      if (!files.some((f) => f.name.toUpperCase() === 'ALIFE.INI') ||
+          !files.some((f) => /\.000$/i.test(f.name))) {
+        Module.setStatus('');
         panel.hidden = false;
         error.textContent = 'ALIFE.INI and at least one .000 bundle are needed.';
         return;
       }
       panel.hidden = true;
-      var total = files.reduce(function (sum, f) { return sum + f.size; }, 0), copied = 0;
-      var left = files.length;
+      const total = files.reduce((sum, f) => sum + f.size, 0);
+      let copied = 0, left = files.length;
       progress('Reading the game files...', 0, total);
-      files.forEach(function (f) {
-        readBlob(f, function (n) {
+      files.forEach((f) => {
+        readBlob(f, (n) => {
           copied += n;
           progress('Reading the game files...', copied, total);
-        }).then(function (bytes) {
-          FS.writeFile(dir + '/' + f.name, bytes);
+        }).then((bytes) => {
+          FS.writeFile(`${dir}/${f.name}`, bytes);
           if (--left === 0)
             storeData(files, total, done);
         });
       });
     }
-    (document.getElementById('pick-files') as HTMLInputElement).onchange = function (e) { take((e.target as HTMLInputElement).files as FileList); };
-    (document.getElementById('pick-dir') as HTMLInputElement).onchange = function (e) { take((e.target as HTMLInputElement).files as FileList); };
-    (document.getElementById('pick-image') as HTMLInputElement).onchange = function (e) { take((e.target as HTMLInputElement).files as FileList); };
+    // the picker's inputs: the files, a folder, or a CD image
+    for (const id of ['pick-files', 'pick-dir', 'pick-image']) {
+      const input = element<HTMLInputElement>(id);
+      input.onchange = () => take(Array.from(input.files ?? []));
+    }
   }
 
-  Module['preRun'].push(function () {
+  Module.preRun.push(() => {
     FS.mkdir(PREF);
     FS.mount(IDBFS, { autoPersist: true }, PREF);
     if (!IDBFS.queuePersist) {
       // an Emscripten without autoPersist (before 4.0.11): write back now and then
-      setInterval(function () { FS.syncfs(false, function () {}); }, 3000);
-      Module['onExit'] = (function (onExit) {
-        return function (status: number) {
-          FS.syncfs(false, function () {});
-          onExit(status);
-        };
-      })(Module['onExit']);
+      setInterval(() => FS.syncfs(false, () => {}), 3000);
+      const onExit = Module.onExit;
+      Module.onExit = (status) => {
+        FS.syncfs(false, () => {});
+        onExit(status);
+      };
     }
     FS.mkdir(USER);
     addRunDependency('afterlife-storage');
-    Module['setStatus']('Loading saved games...');
-    function start(dir: string): void {
-      var args = Module['arguments'];
-      args.push(dir);
-      params.getAll('arg').forEach(function (a) { args.push(a); });
-      Module['setStatus']('');
+    Module.setStatus('Loading saved games...');
+    const start = (dir: string): void => {
+      Module.arguments.push(dir);
+      params.getAll('arg').forEach((a) => Module.arguments.push(a));
+      Module.setStatus('');
       removeRunDependency('afterlife-storage');
-    }
-    FS.syncfs(true, function (err) {
+    };
+    FS.syncfs(true, (err) => {
       if (err)
         console.warn('Afterlife: reading browser storage failed', err);
-      if (Module['expectedDataFileDownloads']) {
+      if (Module.expectedDataFileDownloads) {
         // A build with AFTERLIFE_WASM_DATA: its package is still being
         // fetched (IDBFS is usually done first), so wait for /orig to fill.
-        (function wait() {
+        const wait = () => {
           if (hasGameData(BUILTIN))
             start(BUILTIN);
           else
             setTimeout(wait, 50);
-        })();
+        };
+        wait();
         return;
       }
       if (params.has('pick'))
-        return pickData(USER, function () { start(USER); });
-      loadStoredData(USER, function () {
+        return pickData(USER, () => start(USER));
+      loadStoredData(USER, () => {
         if (hasGameData(USER))
           start(USER);
         else
-          pickData(USER, function () { start(USER); });
+          pickData(USER, () => start(USER));
       });
     });
   });
 
-  Module['onExit'] = function (status: number) {
-    (document.getElementById('ended') as HTMLElement).hidden = false;
+  Module.onExit = (status) => {
+    element('ended').hidden = false;
     if (status)
-      (document.getElementById('ended-text') as HTMLElement).textContent = 'Afterlife has ended (exit code ' + status + ').';
+      element('ended-text').textContent = `Afterlife has ended (exit code ${status}).`;
   };
-  Module['onAbort'] = function (what: string) {
-    (document.getElementById('ended') as HTMLElement).hidden = false;
-    (document.getElementById('ended-text') as HTMLElement).textContent = 'Afterlife has crashed: ' + what;
+  Module.onAbort = (what) => {
+    element('ended').hidden = false;
+    element('ended-text').textContent = `Afterlife has crashed: ${what}`;
   };
 })();
