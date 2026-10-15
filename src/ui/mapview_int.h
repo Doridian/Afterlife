@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 /*
- * Mapview internals that need the main map view (gfx/map_view.h), kept in
- * mapview_outline.c because game/world.h and gfx/tile_draw.h can't be
- * included together.
+ * Mapview internals that need the main map view (gfx/map_view.h): the
+ * outline of the main view, in mapview_outline.c.
  */
 #ifndef AFTERLIFE_UI_MAPVIEW_INT_H
 #define AFTERLIFE_UI_MAPVIEW_INT_H

@@ -580,7 +580,7 @@ bool build_place(unsigned set, unsigned index, int size, int x, int y, unsigned 
         sim_cell_set_u32(s, 1, 0), sim_cell_set_u32(s, 5, 0);
         s->b[10] = (uint8_t)orig_index;
         vibes_update();
-        g_state.unk_59ceb0++;
+        g_state.karma_stations++;
         tint_if_no_access(x, y, size, 3);
         g_build.karma_dirty = 1;
         snd(orig_index == 0 ? 0x10019 : orig_index == 1 ? 0x1001a : 0x1001b, 2);

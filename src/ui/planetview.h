@@ -89,7 +89,7 @@ typedef struct PlanetviewHooks {
     /* ui_busy_cursor (g_planet_hooks.busy_cursor ends up here). */
     void (*busy_cursor)(bool on);
     /* 0x47f8fe, the Soulview's SOUL name generator (out >= 60 bytes).
-     * NULL: a local copy (see planetview.c). */
+     * NULL: soulview_soul_name (ui/soulview.h). */
     void (*soul_name)(uint32_t seed, char *out);
 } PlanetviewHooks;
 

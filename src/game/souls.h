@@ -104,6 +104,16 @@ void souls_zone_evict(int x, int y, uint32_t n);
  * total only). Returns false if no Gate could take them. */
 bool souls_gate_spawn(uint32_t n, unsigned cat, int j);
 
+/* 0x45ef44: the category a resident of zone kind `kind`, planet belief j,
+ * moves on to when it leaves its zone (the next sin / virtue by rank, a
+ * Karma station 14 or a Gate 15), or -1: back to the planet. Used by the
+ * Soulview trackers (soultrack.c). */
+int souls_zone_exit_cat(uint8_t kind, uint8_t j);
+/* 0x45f074: n residents of belief j of the zone building cell (cx, cy) go
+ * back to the planet through the road at (rx, ry). Returns the last SOUL
+ * group used (0 if none). */
+unsigned souls_reincarnate(uint32_t n, int8_t j, int rx, int ry, uint8_t cx, uint8_t cy);
+
 /* ---- Runtime counters (not saved) -------------------------------------- */
 
 /* 0x630510: SOUL groups created; the scheduler copies and clears it at the

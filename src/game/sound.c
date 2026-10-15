@@ -134,6 +134,8 @@ int snd_start_imuse(const AlConfig *cfg)
     return 0;
 }
 
+int snd_running(void) { return g_snd_running; }
+
 /* 0x4b97e8 */
 void snd_shutdown_imuse(void)
 {

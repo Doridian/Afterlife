@@ -14,6 +14,8 @@
  *   effects.png            one small map per effect (rows: 2x, z0, z1, z2)
  *   synth_*.png            a synthetic map of zones, buildings and roads
  *   <save>_*.png           the three planes of each ALSV savegame
+ *   <save>_objects*.png    the same with trains and boats running (map
+ *                          objects drawn incrementally and repainted)
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,8 +23,18 @@
 #include <sys/stat.h>
 
 #include "formats/tile.h"
+#include "game/build.h"
+#include "game/karma.h"
+#include "game/mapobj.h"
+#include "game/planet.h"
 #include "game/resource.h"
 #include "game/savegame.h"
+#include "game/sim.h"
+#include "game/souls.h"
+#include "game/tables.h"
+#include "game/util.h"
+#include "game/world.h"
+#include "gfx/map_objects.h"
 #include "gfx/map_view.h"
 #include "gfx/palette.h"
 #include "gfx/surface.h"
@@ -514,7 +526,7 @@ static void effects_sheet(void)
                     other++;
                 objs[1] = (MapObject){3, 1, (int8_t)n, 0, 0, (int8_t)n, (uint8_t)es, (uint8_t)(other - 1), 5};
                 for (int i = 0; i < MW * MW; i++) {
-                    if (cell_strip(cells[i]) == 0)
+                    if (cell_word_strip(cells[i]) == 0)
                         cells[i] &= ~CELL_OBJECT;
                     if (cells[i] & CELL_OBJECT)
                         objmap[i] = 1 << 2;
@@ -669,7 +681,7 @@ static void render_save(const char *path)
     int counts[32] = {0};
     for (int pl = 1; pl <= 3; pl += 2)
         for (int i = 0; i < 10000; i++)
-            counts[cell_set(cells[pl][i])]++;
+            counts[cell_word_set(cells[pl][i])]++;
     printf("%s: \"%s\", Hell+Heaven cells by set:", base, title);
     for (int i = 0; i < 32; i++)
         if (counts[i])
@@ -736,6 +748,198 @@ static void render_save(const char *path)
     savegame_free(&gs);
 }
 
+/* --- map objects (game/mapobj.c, gfx/map_objects.c) --------------------------
+ *
+ * Loads the save into the live state, rebuilds the Karma network and runs
+ * trains and boats (karma_trains_tick, karma_year, mapobj_frame) with the
+ * map objects' redraw requests drawn incrementally by
+ * map_view_redraw_object, the way the main view does it. Writes the
+ * incremental picture and a full repaint of the same state, and a 1:1
+ * crop around a train. */
+
+static MapObject g_mobj[MAP_OBJECTS];
+static struct {
+    GfxSurface *s;
+    MapView v;
+    MapPlanes planes;
+    GfxRect b;
+    int requests;
+} g_ov;
+
+static void sync_objects(void)
+{
+    for (int i = 0; i < MAP_OBJECTS; i++) {
+        const MapObjectRec *o = &g_state.objects[i];
+        g_mobj[i] = (MapObject){o->plane, o->x, o->y, o->dx, o->dy, o->size, o->set, o->frame, o->fade};
+    }
+    for (int pl = 1; pl <= 3; pl++)
+        g_ov.planes.plane[pl].flags = g_build.view_flags[pl] | MAPVIEW_F_GRID;
+}
+
+/* g_mapobj_hooks.redraw: what the main view's owner installs */
+static void ov_redraw(const MapObjRedraw *r)
+{
+    MapView *v = &g_ov.v;
+    sync_objects();
+    if (v->plane != r->plane)
+        map_view_select_plane(v, &g_ov.planes, r->plane);
+    if (r->focus >= 1)
+        map_view_set_focus(r->x, r->y, r->size);
+    if (r->focus >= 2) {
+        v->focus_x = r->x, v->focus_y = r->y;
+        v->set_mask = r->set_mask;
+    }
+    map_view_redraw_object(g_ov.s, v, &g_ov.planes, &g_ov.b, NULL, r->x, r->y, r->size, r->slot, r->set, r->frame);
+    v->focus_x = v->focus_y = -1;
+    v->set_mask = 0xffffffffu;
+    map_view_set_focus(-1, -1, 0);
+    g_ov.requests++;
+}
+
+static void ov_select(int plane) { map_view_select_plane(&g_ov.v, &g_ov.planes, plane); }
+
+static uint32_t g_ov_clock;
+static uint32_t ov_clock(void) { return g_ov_clock; }
+
+static int live_objects(int set)
+{
+    int n = 0;
+    for (int i = 1; i < GS_MAP_OBJECTS; i++)
+        if (g_state.objects[i].set == set && g_state.objects[i].plane >= 1 && g_state.objects[i].plane <= 3)
+            n++;
+    return n;
+}
+
+static void ov_paint(GfxSurface *s, MapView *v)
+{
+    sync_objects();
+    GfxRect b = {0, s->width - 1, 0, s->height - 1};
+    map_view_paint(s, v, &g_ov.planes, &b, NULL, 0, 0, s->width, s->height);
+}
+
+/* 1:1 around the first live map object of tile set `set` */
+static void crop_object(const char *stem, int set, const char *what)
+{
+    for (int i = 1; i < GS_MAP_OBJECTS; i++) {
+        const MapObjectRec *o = &g_state.objects[i];
+        if (o->set != set || o->plane < 1 || o->plane > 3 || o->x < 0 || o->x > 99 || o->y < 0 || o->y > 99)
+            continue;
+        GfxSurface *c = gfx_surface_create(640, 400);
+        fill(c, 0x13);
+        MapView v;
+        view_init(&v, c, 0, 0);
+        v.plane = 0;
+        v.objects = g_mobj;
+        int sx = (o->x - o->y + 99) * 16, sy = (o->x + o->y) * 8;
+        g_ov.planes.scroll_y = -g_ov.planes.plane[o->plane].y_offset - sy + 200;
+        map_view_select_plane(&v, &g_ov.planes, o->plane);
+        v.origin_x = -(sx - 320);
+        GfxRect b = {0, 639, 0, 399};
+        sync_objects();
+        map_view_draw(c, &v, &b);
+        char name[128];
+        snprintf(name, sizeof name, "%s_%s_z0.png", stem, what);
+        save(c, name);
+        gfx_surface_destroy(c);
+        printf("  %s: object %d at plane %d (%d, %d), frame %d\n", what, i, o->plane, o->x, o->y, o->frame);
+        return;
+    }
+}
+
+static void render_objects(const char *path)
+{
+    char err[160];
+    if (!world_load(path, err, sizeof err)) {
+        fprintf(stderr, "%s: can't load: %s\n", path, err);
+        g_failures++;
+        return;
+    }
+    const char *base = strrchr(path, '/');
+    base = base ? base + 1 : path;
+    char stem[64];
+    snprintf(stem, sizeof stem, "%.*s", (int)(strcspn(base, ".")), base);
+    tables_init_defaults();
+    souls_reset();
+    sim_reset();
+    karma_reset();
+    mapobj_reset();
+    memset(&g_sim_hooks, 0, sizeof g_sim_hooks);
+    g_sim_hooks.clock = ov_clock;
+    g_ov_clock = 1000000;
+    rng_seed(777);
+
+    int zoom = 1, hw = 16 >> zoom, hh = 8 >> zoom, top = 0x48 * 3 >> zoom;
+    int sw = 200 * hw, sh = (0x708 >> zoom) + 200 * hh + top + 8;
+    memset(&g_ov.planes, 0, sizeof g_ov.planes);
+    map_planes_init(&g_ov.planes);
+    for (int pl = 1; pl <= 3; pl++) {
+        g_ov.planes.plane[pl].cells = g_state.plane[pl].cells;
+        g_ov.planes.plane[pl].objmap = g_state.plane[pl].objmap;
+    }
+    g_ov.planes.scroll_y = top;
+    g_ov.s = gfx_surface_create(sw, sh);
+    view_init(&g_ov.v, g_ov.s, zoom, 0);
+    g_ov.v.plane = 0;
+    g_ov.v.objects = g_mobj;
+    g_ov.b = (GfxRect){0, sw - 1, 0, sh - 1};
+    sync_objects();
+    map_view_select_plane(&g_ov.v, &g_ov.planes, 3);
+    ov_paint(g_ov.s, &g_ov.v);
+    g_ov.requests = 0;
+    memset(&g_mapobj_hooks, 0, sizeof g_mapobj_hooks);
+    g_mapobj_hooks.redraw = ov_redraw;
+    g_mapobj_hooks.select_plane = ov_select;
+
+    world_select_plane(GS_PLANE_MIDDLE);
+    karma_clear();
+    karma_rebuild();
+    int t, cars = 0, boats = 0;
+    for (t = 0; t < 400; t++) {
+        g_ov_clock += 500;
+        world_select_plane(GS_PLANE_MIDDLE);
+        karma_trains_tick();
+        if (t % 4 == 0)
+            for (int pl = 1; pl <= 3; pl += 2) {
+                world_select_plane(pl);
+                karma_year();
+            }
+        for (int k = 0; k < 4; k++)
+            mapobj_frame(1);
+        cars = live_objects(16), boats = live_objects(2);
+        if (t >= 40 && cars >= 3 && (boats >= 2 || t >= 200))
+            break;
+    }
+    printf("%s: after %d ticks %d train cars and %d boats on the map, %d redraw requests\n", base, t, cars, boats,
+           g_ov.requests);
+    memset(&g_mapobj_hooks, 0, sizeof g_mapobj_hooks);
+
+    /* the same state repainted in full */
+    GfxSurface *full = gfx_surface_create(sw, sh);
+    MapView v;
+    view_init(&v, full, zoom, 0);
+    v.plane = 0;
+    v.objects = g_mobj;
+    map_view_select_plane(&v, &g_ov.planes, 3);
+    ov_paint(full, &v);
+    long diff = 0;
+    for (int y = 0; y < sh; y++)
+        for (int x = 0; x < sw; x++)
+            diff += g_ov.s->pixels[(size_t)y * (size_t)g_ov.s->stride + (size_t)x] !=
+                    full->pixels[(size_t)y * (size_t)full->stride + (size_t)x];
+    printf("  incremental vs full repaint: %ld of %ld pixels differ\n", diff, (long)sw * sh);
+    char name[128];
+    snprintf(name, sizeof name, "%s_objects_incr_z%d.png", stem, zoom);
+    save(g_ov.s, name);
+    snprintf(name, sizeof name, "%s_objects_z%d.png", stem, zoom);
+    save(full, name);
+    gfx_surface_destroy(full);
+    gfx_surface_destroy(g_ov.s);
+    g_ov.s = NULL;
+
+    crop_object(stem, 16, "train");
+    crop_object(stem, 2, "boat");
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 3) {
@@ -790,6 +994,10 @@ int main(int argc, char **argv)
     }
     for (int i = 4; i < argc; i++)
         render_save(argv[i]);
+    bool planet = planet_tables_load();
+    for (int i = 4; i < argc && planet; i++)
+        render_objects(argv[i]);
+    world_free();
 
     for (int id = 1; id <= 31; id++)
         free(g_set_data[id]);

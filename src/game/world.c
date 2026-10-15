@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "game/newworld.h"
+#include "game/planet.h"
 #include "game/savegame.h"
 
 GameState g_state;
@@ -74,6 +75,8 @@ void world_apply_loaded(GameState *gs)
      * them runs 0x4506b6(0x19/0x18/0x17, 1) unless the view shows zone
      * detail, and 0x452267(1) after Heaven and Hell (game/newworld.c). */
     build_after_load();
+    /* save_load_game ends with the planet summary (0x499a77, WP5) */
+    planet_summary();
 }
 
 bool world_load(const char *path, char *err, size_t err_len)

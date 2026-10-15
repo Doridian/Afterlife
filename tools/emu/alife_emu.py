@@ -128,6 +128,7 @@ class Emu:
         self.read_log = None        # list of (pos, size, dest or None) while tracing
         self.import_log = []
         self._hooks = {}            # addr -> (fn, stdcall arg bytes or None)
+        self._uc_hooked = set()     # addrs with a unicorn code hook (never removed)
         self._imports = {}          # stub addr -> (dll, name)
         self._import_impl = {}      # name -> (nargs, fn)
         self._err = None
@@ -190,11 +191,13 @@ class Emu:
         """Replace the function at addr: fn(emu, args) runs instead and its
         return value (int or None) goes to eax. args(i) reads the i-th
         argument (0-based, 32-bit). cdecl unless stdcall_args (bytes popped)."""
-        if addr in self._hooks:
-            self._hooks[addr] = (fn, stdcall_args)
-            return
         self._hooks[addr] = (fn, stdcall_args)
-        self.mu.hook_add(UC_HOOK_CODE, self._on_code_hook, begin=addr, end=addr)
+        # One unicorn hook per address, even after unhook(): a second one
+        # would run fn again after the first returned, popping the caller's
+        # frame twice (a stub re-added after unhook returned to garbage).
+        if addr not in self._uc_hooked:
+            self._uc_hooked.add(addr)
+            self.mu.hook_add(UC_HOOK_CODE, self._on_code_hook, begin=addr, end=addr)
 
     def stub(self, addr, ret=0, log=None):
         """Make the function at addr return `ret` without running it.

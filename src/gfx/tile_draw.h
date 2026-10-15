@@ -37,9 +37,9 @@
 #define CELL_SET_SHIFT 27         /* bits 27-31: tile set slot; 0 = part of a bigger */
 #define CELL_SET_MASK 0xf8000000u /* building: bits 16-18 dx, 20-22 dy to its origin */
 
-static inline unsigned cell_set(uint32_t c) { return c >> CELL_SET_SHIFT; }
-static inline unsigned cell_index(uint32_t c) { return ((c & CELL_INDEX_MASK) >> CELL_INDEX_SHIFT) + 1; }
-static inline unsigned cell_strip(uint32_t c) { return (c & CELL_STRIP_MASK) >> CELL_STRIP_SHIFT; }
+static inline unsigned cell_word_set(uint32_t c) { return c >> CELL_SET_SHIFT; }
+static inline unsigned cell_word_index(uint32_t c) { return ((c & CELL_INDEX_MASK) >> CELL_INDEX_SHIFT) + 1; }
+static inline unsigned cell_word_strip(uint32_t c) { return (c & CELL_STRIP_MASK) >> CELL_STRIP_SHIFT; }
 
 /* --- the map view (0x5bb120 for the main map; 0x55+ bytes, packed) ------- */
 

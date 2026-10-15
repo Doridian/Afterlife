@@ -24,16 +24,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* the renderer's cell helpers share names with world.h's accessors */
-#define cell_index tile_cell_index
-#define cell_strip tile_cell_strip
 #include "formats/tile.h"
 #include "gfx/map_view.h"
 #include "gfx/palette.h"
 #include "gfx/surface.h"
 #include "gfx/tile_draw.h"
-#undef cell_index
-#undef cell_strip
 
 #include "game/build.h"
 #include "game/newworld.h"

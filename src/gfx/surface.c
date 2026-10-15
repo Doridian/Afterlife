@@ -37,7 +37,7 @@ static void refresh_screen(void)
 {
     g_screen.width = plat_video_width();
     g_screen.height = plat_video_height();
-    g_screen.stride = g_screen.width;
+    g_screen.stride = plat_video_pitch(); /* the platform row pitch, not the width */
     g_screen.pixels = plat_video_framebuffer();
     g_screen.owns_pixels = false;
 }

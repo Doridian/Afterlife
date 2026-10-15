@@ -16,14 +16,41 @@ static SDL_Palette *g_palette;
 static SDL_AudioStream *g_audio;
 static char g_data_dir[1024] = ".";
 
+/* How the framebuffer is put into the window. The window is sized in
+ * pixels (SDL_WINDOW_HIGH_PIXEL_DENSITY, plat_video_set_mode), so normally
+ * it maps 1:1. When the window is at least as large as the framebuffer it
+ * is scaled by a whole factor and centred (crisp); only a smaller window
+ * (the user shrank it) scales down with letterboxing. */
+static void update_presentation(void)
+{
+    if (!g_renderer || !g_indexed)
+        return;
+    int ow = 0, oh = 0;
+    SDL_GetRenderOutputSize(g_renderer, &ow, &oh); /* pixels */
+    bool fits = ow >= g_indexed->w && oh >= g_indexed->h;
+    SDL_SetRenderLogicalPresentation(g_renderer, g_indexed->w, g_indexed->h,
+                                     fits ? SDL_LOGICAL_PRESENTATION_INTEGER_SCALE
+                                          : SDL_LOGICAL_PRESENTATION_LETTERBOX);
+}
+
+/* The desktop's pixel density (1.5 for 150 % scaling), 1 if unknown. */
+static float desktop_density(void)
+{
+    const SDL_DisplayMode *mode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+    return mode && mode->pixel_density > 0 ? mode->pixel_density : 1.0f;
+}
+
 bool plat_init(const char *title, int width, int height)
 {
+    /* A close request is WM_CLOSE (the game asks); only signals and the
+     * session ending are SDL_EVENT_QUIT. */
+    SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         SDL_Log("SDL_Init: %s", SDL_GetError());
         return false;
     }
     /* Hidden until plat_video_set_mode, like the original's 1x1 window. */
-    if (!SDL_CreateWindowAndRenderer(title ? title : "", width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN,
+    if (!SDL_CreateWindowAndRenderer(title ? title : "", width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY,
                                      &g_window, &g_renderer)) {
         SDL_Log("SDL_CreateWindowAndRenderer: %s", SDL_GetError());
         return false;
@@ -58,6 +85,7 @@ void plat_shutdown(void)
 
 uint8_t *plat_video_framebuffer(void) { return g_indexed->pixels; }
 int plat_video_width(void) { return g_indexed->w; }
+int plat_video_pitch(void) { return g_indexed->pitch; }
 int plat_video_height(void) { return g_indexed->h; }
 
 void plat_video_set_palette(const PlatColor *colors, int first, int count)
@@ -91,20 +119,38 @@ bool plat_video_set_mode(int width, int height, bool fullscreen)
         g_indexed = ind;
         g_palette = pal;
         g_texture = tex;
-        SDL_SetRenderLogicalPresentation(g_renderer, width, height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
     }
-    SDL_SetWindowFullscreen(g_window, fullscreen);
-    if (!fullscreen)
-        SDL_SetWindowSize(g_window, width, height);
+    /* The original makes a popup window covering the desktop when the
+     * resolution fills it (0x4cd73a), else a framed window of that client
+     * size. A desktop-sized framed window doesn't fit next to the title bar
+     * and panels, so the window manager shrank it and the picture came out
+     * letterboxed; the port uses a borderless fullscreen window instead.
+     * Sizes are in pixels: the window size is divided by the density. */
+    int dw = 0, dh = 0;
+    plat_video_desktop_size(&dw, &dh);
+    bool cover = fullscreen || (dw > 0 && width >= dw && height >= dh);
+    if (!cover) {
+        SDL_SetWindowFullscreen(g_window, false);
+        float d = desktop_density();
+        SDL_SetWindowSize(g_window, (int)SDL_ceilf((float)width / d), (int)SDL_ceilf((float)height / d));
+    } else {
+        SDL_SetWindowFullscreenMode(g_window, NULL); /* the desktop's mode */
+        SDL_SetWindowFullscreen(g_window, true);
+    }
     SDL_ShowWindow(g_window);
+    SDL_SyncWindow(g_window);
+    update_presentation();
     return true;
 }
 
 void plat_video_desktop_size(int *width, int *height)
 {
+    /* SDL's mode size is in points; GetClientRect(GetDesktopWindow()) of a
+     * DPI-unaware 1996 program is the whole screen in pixels. */
     const SDL_DisplayMode *mode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
-    *width = mode ? mode->w : 0;
-    *height = mode ? mode->h : 0;
+    float d = desktop_density();
+    *width = mode ? (int)SDL_lroundf((float)mode->w * d) : 0;
+    *height = mode ? (int)SDL_lroundf((float)mode->h * d) : 0;
 }
 
 struct PlatCursor {
@@ -367,6 +413,10 @@ static void translate(SDL_Event *e)
     case SDL_EVENT_WINDOW_EXPOSED:
         push_simple(PLAT_EV_EXPOSE);
         break;
+    case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+        update_presentation();
+        push_simple(PLAT_EV_EXPOSE);
+        break;
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP:
         ev.vk = sdl_to_vk(e->key.key, e->key.scancode);
@@ -506,7 +556,9 @@ static bool find_ci(const char *dir, const char *name, char *out, size_t out_len
     return found;
 }
 
-FILE *plat_fopen_data(const char *name)
+const char *plat_data_dir(void) { return g_data_dir; }
+
+bool plat_data_path(const char *name, char *out, size_t out_len)
 {
     /* Accept DOS paths from the original (e.g. "C:\\ALIFE\\SAVE.SAV") by
      * walking each component case-insensitively under the data dir. */
@@ -522,16 +574,84 @@ FILE *plat_fopen_data(const char *name)
         if (n == 0)
             break;
         if (n >= sizeof(part))
-            return NULL;
+            return false;
         memcpy(part, p, n);
         part[n] = '\0';
         p += n;
         char next[1024];
         if (!find_ci(path, part, next, sizeof(next)))
-            return NULL;
+            return false;
         SDL_strlcpy(path, next, sizeof(path));
     }
-    return fopen(path, "rb");
+    SDL_strlcpy(out, path, out_len);
+    return true;
+}
+
+FILE *plat_fopen_data(const char *name)
+{
+    char path[1024];
+    return plat_data_path(name, path, sizeof(path)) ? fopen(path, "rb") : NULL;
+}
+
+/* --- file dialogs (port: SDL_ShowOpenFileDialog / SDL_ShowSaveFileDialog,
+ * asynchronous; the game polls from its modal loop) --- */
+
+static int g_dialog_state; /* 0 idle, 1 pending, 2 chosen, 3 cancelled / failed */
+static char g_dialog_path[1024];
+
+#ifndef __EMSCRIPTEN__
+static void SDLCALL dialog_done(void *user, const char *const *files, int filter)
+{
+    (void)user, (void)filter;
+    if (files && files[0]) {
+        SDL_strlcpy(g_dialog_path, files[0], sizeof(g_dialog_path));
+        g_dialog_state = 2;
+    } else {
+        g_dialog_state = 3;
+    }
+}
+#endif
+
+bool plat_file_dialog_begin(bool save, const char *default_location, const char *filter_name, const char *pattern)
+{
+#ifdef __EMSCRIPTEN__
+    (void)save, (void)default_location, (void)filter_name, (void)pattern;
+    return false; /* no file dialogs in the browser */
+#else
+    if (g_dialog_state == 1 || !g_window)
+        return false;
+    const char *driver = SDL_GetCurrentVideoDriver();
+    if (!driver || SDL_strcmp(driver, "dummy") == 0 || SDL_strcmp(driver, "offscreen") == 0)
+        return false; /* headless: no dialogs */
+    static SDL_DialogFileFilter filter;
+    static char name[64], pat[64];
+    SDL_strlcpy(name, filter_name ? filter_name : "Files", sizeof(name));
+    SDL_strlcpy(pat, pattern ? pattern : "*", sizeof(pat));
+    filter.name = name;
+    filter.pattern = pat;
+    g_dialog_state = 1;
+    g_dialog_path[0] = '\0';
+    if (save)
+        SDL_ShowSaveFileDialog(dialog_done, NULL, g_window, &filter, 1, default_location);
+    else
+        SDL_ShowOpenFileDialog(dialog_done, NULL, g_window, &filter, 1, default_location, false);
+    return true;
+#endif
+}
+
+int plat_file_dialog_poll(char *out, size_t out_len)
+{
+    switch (g_dialog_state) {
+    case 1:
+        return 0;
+    case 2:
+        SDL_strlcpy(out, g_dialog_path, out_len);
+        g_dialog_state = 0;
+        return 1;
+    default:
+        g_dialog_state = 0;
+        return -1;
+    }
 }
 
 /* PlatFile is a thin wrapper over the CRT stream; keeping it opaque leaves

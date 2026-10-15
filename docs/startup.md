@@ -289,8 +289,4 @@ sys_shutdown.
 Display mode list (any size is accepted with "Force display settings"), the
 system palette save/restore, memory status warnings, the game heap (malloc
 instead), vh_initialize, the controls' pause flag (no game module yet),
-WM_DISPLAYCHANGE, and game_main (main.c runs a smoke test in its place: a
-bundle bitmap in a WM window with a button, music through `snd_play`;
-arrows page through the bitmaps, the button or Escape quits,
-`AFTERLIFE_FRAMES=n` exits after n pumps). The display init asks the platform
-for the desktop size and reports 8 bits per pixel.
+WM_DISPLAYCHANGE. game_main is `src/game/shell.c` (see game-map.md WP7).

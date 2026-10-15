@@ -338,6 +338,10 @@ void build_after_load(void)
     if (!(g_build.view_flags[GS_PLANE_HELL] & 0x40))
         build_zone_blocks(0x17, true);
     realm_tile_costs_update(true);
+    /* save_load_game's last flags: the status bar and the Karma network
+     * (0x5bb1d0, 0x6301f0) are rebuilt on the next sim_update */
+    g_build.status_dirty = 1;
+    g_build.karma_dirty = 1;
 }
 
 /* ---- new world ----------------------------------------------------------------------- */
@@ -346,7 +350,7 @@ void build_after_load(void)
 void game_init_defaults(void)
 {
     build_init_defaults();
-    /* 0x5fa620..0x5fa649: tile chooser layout (UI) */
+    /* 0x5fa620..0x5fa649: the train kinds (constant, k_trains in karma.c) */
     game_reset_world();
 }
 
@@ -457,8 +461,8 @@ void game_reset_world(void)
     g->unk_63048c = 0xffffffffu;
     g->unk_63050d = 0;
     g->unk_630425 = 0;
-    memset(g->unk_5bb1e0, 0, sizeof g->unk_5bb1e0);
-    memset(g->unk_5931d0, 0, sizeof g->unk_5931d0);
+    memset(g->karma_load, 0, sizeof g->karma_load);
+    memset(g->karma_history, 0, sizeof g->karma_history);
     g->unk_5c6678 = 100;
     g->unk_593247 = 0;
     g->bad_things = 1;
@@ -471,11 +475,11 @@ void game_reset_world(void)
     g->unk_5b2f5c = 0;
     g->unk_5fa5f4 = 0;
     g->unk_5f7ed4 = 0;
-    g->unk_6301f2 = 0;
+    g->object_count = 0;
     g_build.karma_dirty = 0;
-    g->unk_6301f4 = 0;
-    g->unk_59ceb0 = 0;
-    g->unk_630508 = 0;
+    g->karma_pending = 0;
+    g->karma_stations = 0;
+    g->karma_busy = 0;
     g->unk_630484 = 0;
     g->view_dir_x = g->view_dir_y = 1;
     g->unk_63042c = 0;
@@ -501,7 +505,7 @@ void game_reset_world(void)
         g_build_hooks.soulview_reset();
     for (int i = 0; i < 8; i++) {
         g->unk_5f7400[i] = (uint8_t)mapobj_spawn(-1, -1, 10, i + 8, 0, 0, 99, 1, 99, 0, 0xffffffffu, 1, 1);
-        g->unk_6301f2++;
+        g->object_count++;
     }
     g_build.obj_5f7408 = (uint8_t)mapobj_spawn(-1, -1, 10, 0x25, 0, 0, 99, 1, 99, 0, 0xffffffffu, 1, 1);
 
@@ -521,7 +525,7 @@ void game_reset_world(void)
     realm_plane_init(GS_PLANE_HELL);
     static const uint8_t dirs[4][3] = {{0xff, 0, 0}, {1, 0, 1}, {0, 0xff, 2}, {0, 1, 3}};
     memcpy(g->unk_5f25b0, dirs, sizeof dirs);
-    memcpy(g->unk_630410, dirs, sizeof dirs);
+    memcpy(g->karma_dirs, dirs, sizeof dirs);
     g->unk_5b2f58 = 0;
     realm_water();
 

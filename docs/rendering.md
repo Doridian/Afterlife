@@ -88,6 +88,27 @@ when the flags are exactly 4, which step 4 never produces (forcing gives
 5). So the game always runs in a window the size of the resolution. The port
 maps "force" to fullscreen.
 
+**Port display** (`platform_sdl.c`): sizes are in pixels.
+`plat_video_desktop_size` is the desktop mode times its pixel density (a
+DPI-unaware Win95 program sees the whole screen in pixels; SDL's mode
+size is in points, 1707x1067 for a 2560x1600 panel at 150 %), and the
+window is `SDL_WINDOW_HIGH_PIXEL_DENSITY` with its size divided by the
+density, so the framebuffer maps 1:1 to screen pixels. When the
+resolution fills the desktop (`MAX`) the window is borderless fullscreen,
+the equivalent of the original's popup window (0x4cd73a): a framed
+desktop-sized window doesn't fit next to the title bar and panels, so the
+window manager used to shrink it and letterboxing drew the game smaller
+with black margins (and blurry, from the compositor's upscaling). The
+presentation is integer-scaled and centred while the window is at least
+the framebuffer's size, letterboxed only when it is smaller.
+
+The title's 640x480 art is never scaled and the display mode never changes
+(`di_change_display_mode` is only reached with flags 4): the menu
+background is centred on black (`blit_centred` 0x42a5f3), the title FLCs
+are centred (`flc_center` 0x40b134), and the 320x200 intro is tiled over
+the whole window, each copy five frames behind the previous one
+(0x4265dc).
+
 Port: `gfx_parse_resolution(ini_value, &w, &h)` (step 5) and
 `gfx_init(w, h, force)` (the rest, minus the INI and memory checks).
 

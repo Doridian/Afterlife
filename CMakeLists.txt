@@ -303,3 +303,97 @@ if(NOT EMSCRIPTEN)
         target_compile_options(sim_test PRIVATE -Wall -Wextra)
     endif()
 endif()
+
+# The game shell (docs/game-map.md WP7): game_main and the main window
+# (src/game/shell*.c), the main map view, control panel and tile chooser,
+# status bar, title and intro, advisors, news pop-up and help balloon,
+# about box and credits.
+target_sources(afterlife_core PRIVATE src/game/shell.c src/ui/title.c src/ui/advisors.c src/ui/news.c
+    src/ui/about.c)
+
+# tests/title_test: the title sequence (intro, animated title, menus)
+# driven by synthetic input from the modal pump; writes PPM screenshots.
+if(NOT EMSCRIPTEN)
+    add_executable(title_test tests/title_test.c)
+    target_link_libraries(title_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(title_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# The advisors' speech tables (src/ui/advisors_text.c, WP7 advisors) and
+# tests/advisors_test: the Jasper and Aria window headless, into a PNG.
+target_sources(afterlife_core PRIVATE src/ui/advisors_text.c)
+if(NOT EMSCRIPTEN)
+    add_executable(advisors_test tests/advisors_test.c)
+    target_link_libraries(advisors_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(advisors_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# The Karma network and map objects (docs/game-map.md WP3): rails, stations,
+# trains and boats (src/game/karma.c), the map object system
+# (src/game/mapobj.c) and its renderer half (src/gfx/map_objects.c).
+target_sources(afterlife_core PRIVATE src/game/karma.c src/game/mapobj.c src/gfx/map_objects.c)
+if(NOT EMSCRIPTEN)
+    # tests/karma_test: rebuilds the Karma network of each save, runs trains
+    # and years of sim_update with the map objects moving, checks the
+    # network, station, train and object map invariants.
+    add_executable(karma_test tests/karma_test.c)
+    target_link_libraries(karma_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(karma_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# tests/news_test: the news pop-up, help balloon, about box and credits
+# (WP7) headless, writing PNGs.
+if(NOT EMSCRIPTEN)
+    add_executable(news_test tests/news_test.c)
+    target_link_libraries(news_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(news_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# The game shell proper (WP7): the main loop and menus (src/game/shell.c),
+# the main map view (shell_view.c), the in-game music, the control panel
+# and tile chooser, the status bar.
+target_sources(afterlife_core PRIVATE src/game/shell_view.c src/game/music.c src/ui/ctrlpanel.c
+    src/ui/statusbar.c)
+if(NOT EMSCRIPTEN)
+    # tests/shell_test: the whole game headless through synthetic input:
+    # title, new game, sim, building, save/load, scenario, quit (PNGs).
+    add_executable(shell_test tests/shell_test.c)
+    target_link_libraries(shell_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(shell_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+
+# Information views, part 2 (docs/game-map.md WP6b): the Microview, the
+# Macromanager and the Soulview, the Soulview trackers' yearly pass
+# (soultrack.c, listed above too) and the hook wiring; texts come from the
+# user's ALIFE.EXE (exe_text.c).
+target_sources(afterlife_core PRIVATE src/ui/exe_text.c src/ui/microview.c src/ui/microview_info.c src/ui/macro.c
+    src/ui/soulview.c src/ui/soulview_text.c src/ui/infoviews.c src/game/soultrack.c)
+if(NOT EMSCRIPTEN)
+    # tests/views2_test: loads each save, opens the three windows headless,
+    # drives them through the synthetic mouse path, checks their drawings
+    # and the state changes against the save, writes PNGs.
+    add_executable(views2_test tests/views2_test.c tests/views_test_gfx.c)
+    target_link_libraries(views2_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(views2_test PRIVATE -Wall -Wextra)
+    endif()
+endif()
+if(NOT EMSCRIPTEN)
+    # tests/stride_test: the screen at an odd width (1707 x 1067) keeps the
+    # platform framebuffer's row pitch end to end (no game data needed).
+    add_executable(stride_test tests/stride_test.c)
+    target_link_libraries(stride_test PRIVATE afterlife_core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(stride_test PRIVATE -Wall -Wextra)
+    endif()
+endif()

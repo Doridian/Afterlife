@@ -491,8 +491,12 @@ bool sys_dispatch_message(void)
 }
 
 /* 0x4c63f0 */
+void (*sys_pump_hook)(void);
+
 void sys_pump(void)
 {
+    if (sys_pump_hook)
+        sys_pump_hook(); /* port: tests feed synthetic input here */
     tm_poll(); /* port: the timeSetEvent thread's due ticks */
     sys_dispatch_message();
     for (int i = 0; i < SYS_MAX_TASKS; i++)

@@ -399,7 +399,7 @@ static void s_globals(Ser *s, GameState *g)
     }
     for (int i = 0; i < 4; i++) {
         s_bytes(s, g->unk_5f25b0[i], 3);
-        s_bytes(s, g->unk_630410[i], 3);
+        s_bytes(s, g->karma_dirs[i], 3);
         s_u32(s, &g->unk_5fa660[i]);
     }
     for (int i = 0, n = v < 7130 ? 18 : 30; i < n; i++)
@@ -423,15 +423,15 @@ static void s_globals(Ser *s, GameState *g)
     s_i8(s, &g->view_dir_x), s_i8(s, &g->view_dir_y);
     s_u32(s, &g->unk_63042c), s_u32(s, &g->unk_638668), s_u32(s, &g->unk_626594);
     s_u32(s, &g->unk_57e1ac), s_u32(s, &g->unk_5bb10c);
-    s_u8(s, &g->unk_63041c), s_u8(s, &g->unk_630424), s_u8(s, &g->unk_63050e), s_u8(s, &g->sim_phase);
+    s_u8(s, &g->unk_63041c), s_u8(s, &g->unk_630424), s_u8(s, &g->boat_count), s_u8(s, &g->sim_phase);
     s_u32(s, &g->planet_deaths_last);
     if (v > 7100)
         s_u32(s, &g->planet_deaths);
-    s_u8(s, &g->unk_6301f4), s_u8(s, &g->unk_59ceb0);
-    s_u32(s, &g->unk_630508);
+    s_u8(s, &g->karma_pending), s_u8(s, &g->karma_stations);
+    s_u32(s, &g->karma_busy);
     s_u8(s, &g->unk_5b2f61);
     s_u32(s, &g->unk_5f746c), s_u32(s, &g->unk_5b2f5c);
-    s_u8(s, &g->unk_6301f2);
+    s_u8(s, &g->object_count);
     for (int i = 0; i < 20; i++) {
         if (v > 7149)
             s_u8(s, &g->unk_5bb0b0[i][0]);
@@ -449,8 +449,8 @@ static void s_globals(Ser *s, GameState *g)
     if (v > 6999)
         s_u8(s, &g->unk_593247);
     if (v > 7009) {
-        s_u16s(s, g->unk_5bb1e0, 16);
-        s_u16s(s, g->unk_5931d0, 16);
+        s_u16s(s, g->karma_load, 16);
+        s_u16s(s, g->karma_history, 16);
         s_u16(s, &g->unk_5c6678);
         s_u8(s, &g->unk_630425);
     }

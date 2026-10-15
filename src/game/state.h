@@ -324,7 +324,7 @@ typedef struct GameState {
 
     /* Four entries each, interleaved. */
     uint8_t unk_5f25b0[4][3];
-    uint8_t unk_630410[4][3];
+    uint8_t karma_dirs[4][3];       /* 0x630410: {dx, dy, n} Karma flood/route directions, shuffled by karma_clear */
     uint32_t unk_5fa660[4];
 
     Rec72 rec_5c4eb0[30];
@@ -344,15 +344,17 @@ typedef struct GameState {
     uint32_t year;                      /* 0x630268 game_year */
     int8_t view_dir_x, view_dir_y;      /* 0x5fa5f8, 0x5bb118: map rotation, copied to MapView +0x39/+0x3a */
     uint32_t unk_63042c, unk_638668, unk_626594, unk_57e1ac, unk_5bb10c;
-    uint8_t unk_63041c, unk_630424, unk_63050e;
+    uint8_t unk_63041c, unk_630424;
+    uint8_t boat_count;                 /* 0x63050e: boats sailing (karma_year) */
     uint8_t sim_phase;                  /* 0x5bb104: sim_update scheduler phase (0, 10, 15, 20, 30, 40..100) */
     uint32_t planet_deaths_last;        /* 0x630488: EMBO deaths (SOULs) last year */
     uint32_t planet_deaths;             /* 0x638694: EMBO deaths this year, ver > 7100 */
-    uint8_t unk_6301f4, unk_59ceb0;
-    uint32_t unk_630508;
+    uint8_t karma_pending;              /* 0x6301f4: trains dispatched and not yet arrived */
+    uint8_t karma_stations;             /* 0x59ceb0: Karma stations built */
+    uint32_t karma_busy;                /* 0x630508: bit n: a train runs on Karma network n */
     uint8_t unk_5b2f61;
     uint32_t unk_5f746c, unk_5b2f5c;
-    uint8_t unk_6301f2;
+    uint8_t object_count;               /* 0x6301f2: map objects alive (trains, boats, parked ones) */
     uint8_t unk_5bb0b0[20][3];          /* [i][0] ver > 7149 */
     uint8_t unk_593200[20][3];          /* [i][0] ver > 7149 */
     uint8_t unk_57e098, unk_57e09a, unk_5bb110, unk_638653, unk_638654, unk_63050c,
@@ -361,9 +363,9 @@ typedef struct GameState {
     uint32_t unk_638670[8];
     uint8_t unk_5f4cd0[4][6];
     uint8_t unk_593247;                 /* ver > 6999 */
-    uint16_t unk_5bb1e0[16];            /* ver > 7009 */
-    uint16_t unk_5931d0[16];            /* ver > 7009 */
-    uint16_t unk_5c6678;                /* ver > 7009 */
+    uint16_t karma_load[16];            /* 0x5bb1e0: cells the train on network n has run so far, ver > 7009 */
+    uint16_t karma_history[16];         /* 0x5931d0: recent train trips (karma.c), ver > 7009 */
+    uint16_t unk_5c6678;                /* ver > 7009; the average of karma_history (planet belief drift) */
     uint8_t unk_630425;                 /* ver > 7009 */
     uint32_t unk_626598;                /* ver > 7099 */
     uint32_t lost_souls;                /* 0x5c5c10, ver > 7169: status bar "Lost: %s" */

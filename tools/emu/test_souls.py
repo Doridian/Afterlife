@@ -16,8 +16,9 @@ of sim_update for some years, in its order and with its plane selects:
 After every call: return values, RNG state, all saved state plus the raw
 grids and tile tables (difftest.Harness.check) and the module's runtime
 counters must be identical. The original's timeGetTime is frozen so its
-flow never yields; the port runs with no budget. Map object marks
-(0x4ee5d8 / 0x4ed550) are stubbed on both sides (WP3).
+flow never yields; the port runs with no budget. The map object marks
+(0x4ee5d8) and redraws (0x4ed550) run on both sides (WP3;
+tools/emu/mapobj_env.py sets the original up for them).
 
     tools/emu/test_souls.py [--years N] [save ...]
 """
@@ -29,6 +30,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import bridge  # noqa: E402
+import mapobj_env  # noqa: E402
 from difftest import Harness, orig_path, SAVES  # noqa: E402
 
 MAIN_WINDOW = 0x5f7460
@@ -41,8 +43,9 @@ RUNTIME = [('souls_to_heaven', 0x65fe54, 4), ('souls_to_hell', 0x65fe58, 4), ('s
            ('souls_gate_arrived', 0x57e01c, 4), ('next_free_group', 0x65fe50, 4), ('scan_x', 0x65fe48, 1),
            ('scan_y', 0x65fe4c, 1), ('flow_x', 0x65fe40, 1), ('flow_y', 0x65fe44, 1)]
 # map objects (WP3) and the Soulview's drawing (WP6b): not simulation
-STUBS = {0x4ee5d8: 'map_object_mark_cells', 0x4ed550: 'map_object_redraw', 0x47f259: 'soulview draw',
-         0x47e875: 'soulview walker', 0x4c63f0: 'sys_pump', 0x407282: 'game_frame_update',
+# (the Soulview's walker 0x47e875 runs on both sides: game/soultrack.c, WP6b)
+STUBS = {0x47f259: 'soulview draw',
+         0x4c63f0: 'sys_pump', 0x407282: 'game_frame_update',
          # UI reached through a siphon burst (0x42c09b destroy)
          0x4751af: 'snd_play', 0x475428: 'snd_preload', 0x4c2830: 'wm_send', 0x4bfc69: 'ctl_message_box',
          0x408ca4: 'ui_busy_cursor', 0x408c4d: 'views_refresh_all'}
@@ -79,6 +82,7 @@ class Pair:
         for a in STUBS:
             h.emu.stub(a)
         h.emu.import_stub('timeGetTime', 0, frozen_time)
+        mapobj_env.install(h)
 
     def load(self, path, synthetic=False):
         h = self.h

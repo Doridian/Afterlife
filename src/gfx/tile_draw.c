@@ -570,23 +570,23 @@ TileDrawResult tile_draw(GfxSurface *dst, MapView *v, int map_x, int map_y, int 
         }
         if (!(cc & CELL_ALT)) {
             if (strip == 0) {
-                strip = cell_strip(cc);
+                strip = cell_word_strip(cc);
                 if (strip != 0) {
                     cc = follow_origin(v, cell, cc, &org_x, &org_y);
-                    index = cell_index(cc);
-                    set = cell_set(cc);
+                    index = cell_word_index(cc);
+                    set = cell_word_set(cc);
                 }
             } else {
-                index = cell_index(cc);
-                set = cell_set(cc);
+                index = cell_word_index(cc);
+                set = cell_word_set(cc);
                 force = 1;
             }
         } else if (v->plane == 2) {
             set = 1, index = 2, strip = 1;
         } else {
-            strip = cell_strip(cc);
+            strip = cell_word_strip(cc);
             cc = follow_origin(v, cell, cc, &org_x, &org_y);
-            unsigned i0 = (cc & CELL_INDEX_MASK) >> CELL_INDEX_SHIFT, s = cell_set(cc);
+            unsigned i0 = (cc & CELL_INDEX_MASK) >> CELL_INDEX_SHIFT, s = cell_word_set(cc);
             if (s == SLOT_HELL_ZONES || s == SLOT_HEAVEN_ZONES) {
                 TileEntry z;
                 unsigned zsize = get_entry(s, i0 + 1, &z) ? z.size : 0;
@@ -755,8 +755,8 @@ void tile_draw_preview(GfxSurface *dst, MapView *v, unsigned set, unsigned index
     TileEntry e;
     unsigned es = set, ei = index;
     if (cell) {
-        es = cell_set(*cell);
-        ei = cell_index(*cell);
+        es = cell_word_set(*cell);
+        ei = cell_word_index(*cell);
     }
     if (get_entry(es, ei, &e)) {
         int size = e.size;

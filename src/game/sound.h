@@ -39,6 +39,9 @@ int snd_alloc_buffers(const AlConfig *cfg);
 int snd_start_imuse(const AlConfig *cfg);
 
 void snd_shutdown_imuse(void); /* body of snd_shutdown 0x4b97e8 */
+/* Port-only: true once snd_start_imuse succeeded (until shutdown). The
+ * shell's hooks skip snd_play without it (headless runs, Sound=NONE). */
+int snd_running(void);
 void snd_suspend_imuse(void);  /* snd_suspend 0x4b9875: imuse_pause */
 void snd_resume_imuse(void);   /* snd_resume 0x4b98a0: imuse_resume */
 /* snd_idle 0x4b9d7c: registers the 60 Hz iMUSE timer service on first use,

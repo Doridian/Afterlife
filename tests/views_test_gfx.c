@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 /*
  * views_test's renderer half: the main map view as the shell (WP7) will own
- * it (tile sets, MapView, planes, painting). Separate from views_test.c
- * because game/world.h and gfx/tile_draw.h can't be included together.
+ * it (tile sets, MapView, planes, painting).
  */
 #include <stdlib.h>
 #include <string.h>

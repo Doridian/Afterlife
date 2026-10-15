@@ -111,6 +111,11 @@ GfxRect map_view_redraw_cells(GfxSurface *dst, MapView *v, MapPlanes *p, const G
 void map_view_paint(GfxSurface *dst, MapView *v, MapPlanes *p, const GfxRect *bounds, const GfxSurface *backdrop,
                     int x, int y, int w, int h);
 
+/* The moving map object's area (0x64e4f0 / 0x64e4f4 / 0x64eba0): while
+ * set, deferred buildings inside it are left to the object. -1, -1, 0 =
+ * none (the default). */
+void map_view_set_focus(int x, int y, int size);
+
 /* Called every 300 cells while drawing (the original runs snd_idle and
  * another idle task there so audio keeps streaming). */
 void map_view_set_idle(void (*fn)(void));

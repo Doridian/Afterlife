@@ -11,11 +11,18 @@ static void (*g_idle)(void);
 static int g_idle_count; /* 0x4ea0b6's local counter */
 
 /* The object being moved/redrawn (0x64e4f0 x, 0x64e4f4 y, 0x64eba0 size; -1,
- * -1, 0 when none). Set by the object code (FUN_004eedc1), which isn't
- * ported. */
+ * -1, 0 when none). Set around redraws by the object code (map_objects_step
+ * 0x4eedc1, game/mapobj.c) through map_view_set_focus. */
 static int32_t g_focus_x = -1, g_focus_y = -1, g_focus_size = 0;
 
 void map_view_set_idle(void (*fn)(void)) { g_idle = fn; }
+
+void map_view_set_focus(int x, int y, int size)
+{
+    g_focus_x = x;
+    g_focus_y = y;
+    g_focus_size = size;
+}
 
 /* --- coordinates ----------------------------------------------------------- */
 

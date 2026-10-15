@@ -114,7 +114,8 @@ extern SimHooks g_sim_hooks;
 /* The sim clock in ms: g_sim_hooks.clock, or tm_get_time (timeGetTime). */
 uint32_t sim_clock_ms(void);
 
-/* Resets g_sim and the economy's pass state (process start / new game)
+/* Resets g_sim, the economy's pass state and karma.c's runtime state
+ * (process start / new game)
  * and hooks the WP1 entry points into the other packages
  * (g_planet_hooks.souls) if still unset. */
 void sim_reset(void);

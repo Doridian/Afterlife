@@ -28,6 +28,7 @@ void sim_reset(void)
 {
     memset(&g_sim, 0, sizeof g_sim);
     economy_reset();
+    karma_reset(); /* the train dispatcher's cursor and whistle timer */
     if (!g_planet_hooks.souls)
         g_planet_hooks.souls = realm_souls_from_planet;
 }

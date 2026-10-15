@@ -27,5 +27,10 @@ static inline bool badthings_spread(void) { return false; }
 static inline bool badthings_recover(void) { return false; }
 /* 0x444d23: the bankruptcy ending (pennies negative for 51 years) */
 static inline void badthings_bankruptcy(void) {}
+/* map_object_think 0x437184, the cases of the Bad Things' map objects
+ * (sets 3, 6 (0x4366ab), 0x14/0x15 (Birds of Paradise / Bats out of Hell),
+ * 0x18-0x1b (0x1a uses 0x436521)): one behaviour step of object `slot`
+ * after it moved (game/mapobj.c calls it from mapobj_think). */
+static inline void badthings_object_think(int slot) { (void)slot; }
 
 #endif

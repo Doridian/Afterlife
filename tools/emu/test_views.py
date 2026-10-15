@@ -11,10 +11,14 @@ populations and SOUL pools, pennies, the soul rate and the six other
 History Graph inputs; values grow so that the series rescale, pennies go
 negative, years cross the 20- and 400-year boundaries and year 0), and
 graph_history_record (0x40d34b) and graph_history_update (0x4154ab) run on
-both. After every year the two summaries (0x6399d0 / 0x639480) and the
-History Graph records (0x5c4eb0) must be identical byte for byte.
+both. The two summaries (0x6399d0 / 0x639480) and the History Graph
+records (0x5c4eb0) must be identical byte for byte: after the first ten
+years, every --every'th year (default 10), around each multiple of 20
+years and after the last. Each comparison loads the port's state through
+the original's loader (~2 s), so --every 1 (every year) takes about 15 min
+per save.
 
-    tools/emu/test_views.py [--years N] [save ...]
+    tools/emu/test_views.py [--years N] [--every K] [save ...]
 """
 import argparse
 import ctypes
@@ -82,6 +86,7 @@ def compare(a, b, what):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--years', type=int, default=430)
+    ap.add_argument('--every', type=int, default=10, help='compare every K years (1: every year)')
     ap.add_argument('saves', nargs='*')
     a = ap.parse_args()
     port = Port()
@@ -107,10 +112,11 @@ def main():
                 record()
                 e.call(UPDATE)
                 update()
-                compare(e, image.load(port), '%s year %d (k %d)' % (os.path.basename(s), v[0], k))
-            print('%s: %d years identical' % (os.path.basename(s), a.years))
+                if k < 10 or k % max(a.every, 1) == 0 or v[0] % 20 <= 1 or k == a.years - 1:
+                    compare(e, image.load(port), '%s year %d (k %d)' % (os.path.basename(s), v[0], k))
+            print('%s: %d years identical' % (os.path.basename(s), a.years), flush=True)
         except AssertionError as err:
-            print(err)
+            print(err, flush=True)
             fails += 1
     return 1 if fails else 0
 

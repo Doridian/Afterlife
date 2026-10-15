@@ -63,14 +63,22 @@ planet sprites.
 
 Per cell: `object slot << 2 | counter`. There are 63 map objects (0x64e5f0,
 0x17-byte records: +0 plane (0 = free), +1/+2 origin x/y, +3/+4 step,
-+5 size, +6 set, +7 frame (entry - 1), +8 first frame, +9/+0xa frame delay,
-+0xb set mask, +0xf fade, +0x12 priority, +0x13 flag). These are the
-sprites that move over the map. `map_objects_step` (0x4eedc1) moves and
-animates them. Around each step it sets the focus (0x64e4f0/4 = origin,
-0x64eba0 = size, -1/-1/0 otherwise) and calls `map_object_redraw` (0x4ed550)
-to redraw just the area they cover. `map_object_mark_cells` (0x4ee5d8)
-maintains the object map and `CELL_OBJECT`. None of that is ported. The
-renderer only reads the records.
++5 size, +6 set, +7 frame (entry - 1), +8 next frame, +9 frame delay,
++0xa its countdown, +0xb set mask, +0xf fade (or the object kind's state),
++0x12 priority, +0x13 flags). These are the sprites that move over the
+map. `map_objects_step` (0x4eedc1) moves and animates them. Around each
+step it sets the focus (0x64e4f0/4 = origin, 0x64eba0 = size, -1/-1/0
+otherwise) and calls `map_object_redraw` (0x4ed550) to redraw just the area
+they cover. `map_object_mark_cells` (0x4ee5d8) maintains the object map
+and `CELL_OBJECT`: the counter is how many objects cover the cell's
+building (whole buildings are claimed, with the footprint from the tile
+entry), the slot goes only to the cells on the area's two front edges
+(unless an object of higher priority holds them). The simulation half is
+`src/game/mapobj.c` (see game/mapobj.h); the drawing of 0x4ed550 is
+`map_view_redraw_object` (`src/gfx/map_objects.c`): the area's screen box,
+tall enough for the tallest sprite involved, cleared when an object left
+it, then planes 1, 2, 3 redrawn there (the view's own and those behind it
+with the object's set mask, the ones in front with all sets).
 
 ### Savegames (ALSV)
 
@@ -172,6 +180,11 @@ sheets per set and zoom, a sheet of every effect, a synthetic Hell (zones,
 buildings, roads, four rotations, blocks vs detail), and the three planes
 of each savegame (stacked at 1:4 and 1:2, single planes, a 1:1 crop).
 
-Not ported yet: the object system (0x4eedc1 and friends), the plane-select
-side effects on simulation tables, the set-30 meter source (simulation), and
-`map_rotate_cells`.
+With game data and saves it also runs trains and boats on each save
+(game/karma.c, game/mapobj.c) with the redraw requests drawn incrementally
+through `map_view_redraw_object`, and writes that picture, a full repaint of
+the same state (they differ in a few hundred pixels at most) and 1:1 crops
+around a train and a boat.
+
+Not ported yet: the plane-select side effects on simulation tables, the
+set-30 meter source (simulation), and `map_rotate_cells`.

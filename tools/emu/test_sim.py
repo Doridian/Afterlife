@@ -15,8 +15,10 @@ runtime globals the test names.
 
     tools/emu/test_sim.py [--only NAME[,NAME]] [--keep-going] [save ...]
 
-UI calls (redraws, message boxes, sounds, news, views) are stubbed in the
-original; the port's hooks are unset. Calls into other packages run as they
+UI calls (message boxes, sounds, news, views) are stubbed in the
+original; the port's hooks are unset. The map object code runs on both
+sides (WP3; tools/emu/mapobj_env.py gives the original the tile entries
+and a main window without a surface, so its redraws draw nothing). Calls into other packages run as they
 are on both sides (the original's code against the port's WP1b/WP2/WP5).
 """
 import argparse
@@ -29,6 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from difftest import Harness, SAVES, orig_path  # noqa: E402
 import bridge  # noqa: E402
+import mapobj_env  # noqa: E402
 from names import TILE_INFO  # noqa: E402
 
 SELECT_PLANE = 0x42b102
@@ -42,11 +45,11 @@ LEVELS = [(0x639250, 26), (0x6390f0, 42)]
 SOUL_RATE = 0x6391d0
 
 UI_STUBS = {
-    0x4ed550: 'map_object_redraw', 0x46f414: 'microview_refresh', 0x4c59a2: 'wm_is_visible',
+    0x46f414: 'microview_refresh', 0x4c59a2: 'wm_is_visible',
     0x46313b: 'macro_refresh', 0x4bfc69: 'ctl_message_box', 0x4751af: 'snd_play', 0x476582: 'news_popup_show',
     0x4753f2: 'snd_fade_out_music', 0x4754a1: 'snd_unload', 0x447243: 'statusbar_draw',
     0x446904: 'statusbar_draw_date', 0x446dc5: 'statusbar 0x446dc5', 0x4c2830: 'wm_send',
-    0x43dc3c: 'bad_thing_start (WP4, a stub in the port)', 0x4edf31: 'map object place',
+    0x43dc3c: 'bad_thing_start (WP4, a stub in the port)',
 }
 
 # Runtime globals (not saved) compared after the calls that use them.
@@ -81,6 +84,7 @@ class SimPair:
             raise SystemExit('port: planet_tables_load failed (ALIFE.EXE in %s?)' % ORIG)
         self.time = 1000000
         h.emu.import_stub('timeGetTime', 0, lambda e, a: self.time)
+        mapobj_env.install(h)
 
     def tables(self, which):
         n = self.L.shim_sim_tables(which, None)
@@ -324,13 +328,8 @@ SIM_UPDATE_STUBS = {
     0x4159ba: 'graphview_draw', 0x4640c9: 'mapview_refresh', 0x40d34b: 'graph_history_record',
     0x4154ab: 'graph summary', 0x418a39: 'advisor_update', 0x4486bd: 'cd_spin_up',
     0x47d6fb: 'Soulview trackers age (a hook in the port)',
-    0x434c38: 'karma_clear', 0x433106: 'karma_rebuild', 0x434dc4: 'karma_trains_tick',
-    0x42fddf: 'karma_rail_check', 0x435f3d: 'karma_year', 0x434d2d: 'karma_pending_scan',
     0x4442dd: 'badthings_step', 0x443c9e: 'badthings_step2', 0x442122: 'badthings_spread',
     0x442287: 'badthings_recover', 0x444d23: 'badthings_bankruptcy',
-    # WP3, a no-op stub in the port (game/mapobj.h); the original faults in
-    # the emulator on renderer state it reads (ASCEN003, SOUL flow)
-    0x4ee5d8: 'map_object_mark_cells',
 }
 SIM_TIMERS = [0x65ee64, 0x65ee68, 0x65ee6c, 0x65ee70, 0x65ee74, 0x65ee78, 0x65ee7c, 0x65ee80, 0x65ee84,
               0x65ee88, 0x4f3120, 0x4f3144]

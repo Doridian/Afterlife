@@ -170,11 +170,11 @@ unsigned soul_group_add(uint32_t n, unsigned cat, int x, int y)
 /* ---- Leaving zones ---------------------------------------------------------------- */
 
 /* 0x45ef44: where a resident of zone kind `kind`, belief j, goes when it
- * leaves: Hell moves it to the next worse sin (by rank), Heaven to the
+ * leaves (souls.h): Hell moves it to the next worse sin (by rank), Heaven to the
  * next better virtue; at the end of the line (or j >= 12) a Karma station
  * (14) or Gate (15); -1 = back to the planet (reincarnation, 0x45f074);
  * j 8..11 give 0 (never asked). */
-static int zone_exit_cat(uint8_t kind, uint8_t j)
+int souls_zone_exit_cat(uint8_t kind, uint8_t j)
 {
     if (j >= 12)
         return 0xe;
@@ -226,7 +226,7 @@ static uint32_t planet_weight(int j, int k)
  * (j 0: 0x6303d0[14], categories 0-6 counted in 0x638670[] and sent to
  * Gates (15), 7-13 as they are; else 0x5bb210 tables, categories 7-13),
  * put on the road at (rx, ry). Returns the last group used. */
-static unsigned souls_reincarnate(uint32_t n, int8_t j, int rx, int ry, uint8_t cx, uint8_t cy)
+unsigned souls_reincarnate(uint32_t n, int8_t j, int rx, int ry, uint8_t cx, uint8_t cy)
 {
     PlaneStats *r = realm_cur();
     unsigned last = 0;
@@ -418,7 +418,7 @@ static void zone_cell_update(uint8_t x, uint8_t y)
                     else
                         souls_stats.departed += moved;
                     if (!noroad) {
-                        int c = zone_exit_cat(k, (uint8_t)j);
+                        int c = souls_zone_exit_cat(k, (uint8_t)j);
                         if ((int8_t)c == -1) {
                             souls_reincarnate(moved, (int8_t)j, rx, ry, cx, cy);
                         } else {

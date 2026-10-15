@@ -34,7 +34,7 @@ source file. The module boundaries below follow that rule plus the call graph.
 | 0x4d3e49-0x4e5d90 | iMUSE, VHUMOR runtime, compbun | imuse.md, compbun.md |
 | 0x4e6210-0x4e6690 | LZSS core | compbun.md |
 | 0x4e66b0-0x4ed0f4 | TILE sets, `tile_draw`, `map_view_draw`, transforms, highlight | map.md, formats/tile.md |
-| 0x4ed550-0x4ef4fb | map object system (`map_objects_step` etc.): **not ported** | map.md, see WP3 |
+| 0x4ed550-0x4ef4fb | map object system (`map_objects_step` etc.) | map.md, WP3: `src/game/mapobj.c`, `src/gfx/map_objects.c` |
 | WP0 (see below) | world core: live state, plane switch, cell/sim-cell accessors, RNG, bignum, `mul_div_*`, number formatting | "State model" below, `src/game/world.*`, `src/game/util.*` |
 
 In flight elsewhere: the ALSV loader (`src/game/savegame.*`), AKOS
@@ -183,7 +183,7 @@ the savegame agent is naming these. What's known:
 | 0x66c7e4 / 0x66c7e8 | ptr / size | extra planet buffer and the planet tech/event state (0x66c8cc-0x66c8e0, tables at 0x4f4030, 0x5068b8, 0x518d50); read/written by 0x495f7c / 0x495300 | yes |
 | `soul_groups` 0x59cf10 | 8192 x 11 B | SOUL groups {u32 count, u16 sin/virtue mask, u32, u8}; cells refer to them by index; `0x4609c7` adds SOULs to one | yes |
 | 0x593240, 0x57e060, 0x593260, 0x5fa600, 0x6303d0, 0x5bb210/22c/248 | 7 entries each | the seven sin/virtue pairs: weights (randomised by difficulty in `game_reset_world`), the "relative WEIGHTS" diagram | yes |
-| 0x64e500 | 25 x 9 B | ? (loaded right before the map objects) | yes |
+| `map_anim_cells` 0x64e500 | 25 x 9 B | animated map cells (`mapobj_place`, `mapobj_animate_cells`, game/mapobj.h) | yes |
 | `map_objects` 0x64e5f0 | 63 x 0x17 B | map objects (map.md); Bad Things, trains, walkers are these | yes |
 | 0x4f33f8 | 10 records | Soulview's tracked SOULs (type 2 walking, 6/7 finished, plane at +0x10, year at +0x1c); read by 0x47951c | yes |
 | `graph_history` 0x6399d0 | 2 x record | yearly history for the graphs (copied from realm +0x77e0, +0x79c4, +0x7f3c..+0x7fcc); `graph_history_write` 0x40b1c0 / `_read` 0x40c106 | yes |
@@ -361,7 +361,7 @@ the original address in a comment to the *owner's* header, never its own copy.
   / `souls_to_heaven` / `souls_to_hell`. Differential test against the
   original: `tools/emu/test_souls.py` (scenarios as shipped, and
   `--synthetic` with Omnibolges, siphons and Soulview trackers added).
-  Map object marks (0x4ee5d8/0x4ed550) are WP3 stubs in `game/mapobj.h`.
+  Map object marks (0x4ee5d8/0x4ed550) are in `game/mapobj.h` (WP3).
 
 ### WP2: build tools, structures, world setup (priority 2)
 
@@ -383,6 +383,34 @@ the original address in a comment to the *owner's* header, never its own copy.
   only through its existing object-record interface).
 - Provides: `karma_rebuild()`, `karma_trains_tick()`, `mapobj_step(plane)`,
   `mapobj_spawn()`/`mapobj_remove()`.
+- **Done** (all of the ranges but the Bad Things' parts of
+  `map_object_think`). How it works: the top of `src/game/karma.h` (rails,
+  networks, stations, trains, the realm boats of 0x435f3d) and of
+  `src/game/mapobj.h` (records, object map, the per-frame step). As built:
+  `game/karma.h`: `karma_clear/rebuild/trains_tick/rail_check/year/
+  pending_scan()` for sim_update, `karma_rail_remove()` (0x42f129, called
+  by `structure_destroy`; the `karma_rail_removed` build hook is gone),
+  `karma_car_step()` / `karma_boat_step()` for the object behaviour, hooks
+  `g_karma_hooks` (sound, Microview refresh), `karma_reset()` (sim_reset
+  calls it). `game/mapobj.h`: `mapobj_mark_cells/redraw/spawn/place/
+  free_count/animate_cells/step/think()`, `mapobj_frame(animate)` (the
+  object block of game_frame_update 0x407282, for WP7), hooks
+  `g_mapobj_hooks` (redraw requests as `MapObjRedraw`, sound,
+  wm_update, renderer plane select). The footprint 0x4ee5d8 reads from
+  the tile entry is derived from the map (`mapobj_footprint`; equal to the
+  TILE data on every structure of the four saves). `gfx/map_objects.h`:
+  `map_view_redraw_object()` (0x4ed550's drawing) and
+  `map_view_set_focus()` in map_view.h; the glue a main view installs is
+  `ov_redraw` in `tests/map_render.c`. `map_object_think`'s Bad Things
+  kinds (sets 3, 6, 0x14/0x15, 0x18-0x1b; helpers 0x4366ab, 0x436521) go
+  to WP4's `badthings_object_think()` stub. g_state fields renamed:
+  `karma_dirs`, `karma_busy`, `karma_pending`, `karma_stations`,
+  `karma_load`, `karma_history`, `object_count`, `boat_count`. Tests:
+  `tests/karma_test` (network, trains, object map, years; footprints
+  against MEDIUM.000), `tests/map_render` (trains and boats drawn
+  incrementally, `<save>_objects*.png`, `_train_z0`, `_boat_z0`),
+  `tools/emu/test_karma.py` (differential); test_sim/test_souls/test_build
+  run the real map object code on both sides (`tools/emu/mapobj_env.py`).
 
 ### WP4: Bad Things and disasters (priority 3)
 
@@ -441,6 +469,40 @@ the original address in a comment to the *owner's* header, never its own copy.
   UI 0x478d50-0x47fca6 (minus what WP1b takes). Files `src/ui/microview.c`,
   `src/ui/macro.c`, `src/ui/soulview.c`. Bank/loan/upgrade/funding actions call
   WP1/WP2.
+  **Done** (all three ranges; the news pop-up and help balloon 0x4761a0 are
+  WP7's). Files: `src/ui/microview.c` (+ `microview_info.c`, THINGS TO
+  KNOW), `macro.c`, `soulview.c` (+ `soulview_text.c`: the name generator
+  0x47f8fe and the life-story template expander 0x47af6f), `exe_text.c`
+  (texts read from ALIFE.EXE by address), `infoviews.c` (hook wiring); the
+  trackers' sim side grew in `src/game/soultrack.c` (yearly pass 0x47d6fb,
+  start 0x47e7cc with seed/belief 0x47f7be/0x47ef9f, walker 0x47e875,
+  remove/reset/rotated, years left). Interface for sim_update:
+  `g_sim_hooks.views_changed = infoviews_changed` (microview_refresh, and
+  macro_refresh if shown), `g_sim_hooks.soulview_age = soulview_age`; for
+  WP2: `g_build_hooks.soulview_reset / soulview_rotated`; all set by
+  `infoviews_install_hooks()` (ui/views.h), which also fills
+  `planetview_hooks.soul_name`. For the shell: `microview_create/open(x,
+  y)/refresh/key_slide`, `macro_create/open/refresh` (Window menu 0x17),
+  `soulview_create/open/refresh/track_cell(x, y)` (tool message 0x83e8),
+  hooks for sounds, message boxes, news and the secret building's talking
+  head (`microview_hooks`, `macro_hooks`). Note: realm_score_mix /
+  realm_score_neighbours (which the Microview calls) count into realm
+  +0x8105 / +0x8109, in the original too. Tests: `tests/views2_test`
+  (headless, all pages through the mouse path, pixels and state changes
+  against the save), `tools/emu/test_wp6b.py` (names, stories, trackers,
+  Macromanager, Microview actions against the original).
+  **Wired into the shell**: game_main creates the three windows at the
+  original's loading steps (Soulview, Macromanager, Microview) and
+  `ctrlpanel_place_windows` stacks them like 0x402695; `install_hooks`
+  calls `infoviews_install_hooks()` and sets `shell_hooks` (microview_cell
+  = microview_open, soulview_cell = soulview_track_cell, the show hooks,
+  views_changed = infoviews_changed), `macro_hooks.refresh_all =
+  views_refresh_all`, sounds through snd_play (skipped while iMUSE isn't
+  running), message boxes, the artist's rendering through
+  `news_popup_show(id, 0, 0)`. The secret building's talking head
+  (0x46fc14) uses talker 4, which akos_talk_open rejects (n must be 1..3),
+  so the original shows nothing; the port makes the same calls and frees
+  the costume. `tests/shell_test` opens all three in a running game.
 - Depends on the UI agent's scrollbars, list boxes and message box.
 
 ### WP7: game shell, title, advisors, news (priority 4)
@@ -456,6 +518,30 @@ the original address in a comment to the *owner's* header, never its own copy.
   `src/ui/news.c`, `src/ui/statusbar.c`, `src/ui/about.c`.
 - Provides: `views_refresh_all()`, `statusbar_draw()`, `news_popup_show(id)`,
   `help_balloon_show()` (used by every view's help function).
+- **Done** (playable end to end). Files: `src/game/shell.c` (game_main,
+  main loop and game_command flows, menu bar and the menu-command switch,
+  game_frame_update and its 125 ms clock, loading window, all hook wiring),
+  `shell_view.c` (main map view: tile sets, paint, scroll, zoom, rotation,
+  tool drag and highlight, the rest of game_view_proc), `shell.h` (shared
+  globals, `shell_hooks` for WP6b/WP8: Microview/Soulview/Macromanager,
+  audio dialog, tutorial), `src/game/music.c` (0x4752c2-0x475607),
+  `src/ui/ctrlpanel.c` (control panel, tile chooser 0x455ed7-0x456402),
+  `statusbar.c`, `title.c`, `advisors.c`/`advisors_text.c`, `news.c`,
+  `about.c`. Load/save use a native file picker
+  (`plat_file_dialog_*`, SDL3) or the game's text prompt where there is
+  none; the original's slot dialogs (0x480ea4, 0x489e90, 0x4946bd,
+  0x494112) are not ported. `world_apply_loaded` now ends with
+  `planet_summary()`. Test: `tests/shell_test <data dir> <out dir>` boots
+  through the title, starts a new game, runs the sim, zones, builds roads
+  and a gate through the control panel and tile chooser, saves, loads,
+  loads ASCEN001.ASC and quits, all through synthetic input, and opens
+  the Microview (tool on the gate, all pages), the Soulview and the
+  Macromanager. Quit: a window close request is WM_CLOSE (the game's
+  "Do You Really Want To Quit?"); SDL_EVENT_QUIT (SIGTERM / SIGINT) and a
+  second close request while that dialog is open exit at once
+  (`main_wnd_proc`, game/input.c). Not done:
+  the debug window (0x457b01), Bad Things menu effects (WP4 stubs), the
+  tutorial (WP8), scenario-editor extras of the tile chooser.
 
 ### WP8: tutorial and attract mode (priority 5)
 

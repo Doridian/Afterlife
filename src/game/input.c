@@ -4,6 +4,8 @@
  */
 #include "game/input.h"
 
+#include <stdlib.h>
+
 #include "game/startup.h"
 #include "gfx/mouse.h"
 #include "gfx/palette.h"
@@ -176,6 +178,16 @@ bool main_wnd_proc(const PlatEvent *ev)
         return true;
     case PLAT_EV_CLOSE:
     case PLAT_EV_QUIT:
+        /* Port: SDL_EVENT_QUIT (SIGTERM / SIGINT, the session ending) has
+         * no window message in the original; it ends the game at once
+         * from whatever loop is running, as does a second close request
+         * while the quit dialog of the first is still open (the original
+         * ignores that one). Without the window manager (tests) only the
+         * close flag is raised. */
+        if (wm_root() && (ev->type == PLAT_EV_QUIT || g_app_closing)) {
+            plat_shutdown();
+            exit(0);
+        }
         if (!g_app_closing) {
             g_app_closing = 1;
             /* The original also ShowWindow(SW_SHOWNORMAL)s first. Before

@@ -855,7 +855,7 @@ void realm_building_upgrade(int x, int y, unsigned n, unsigned level, unsigned e
         if ((int8_t)slot < 0) {
             realm_building_replace(x, y, set, ne, n);
         } else {
-            g_state.unk_6301f2++;
+            g_state.object_count++;
             for (int i = 0; i < (int)n; i++)
                 for (int j = 0; j < (int)n; j++)
                     mc_or(x + i, y - j, 0x20);

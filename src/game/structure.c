@@ -7,6 +7,7 @@
 #include <stdlib.h>
 
 #include "game/build.h"
+#include "game/karma.h"
 #include "game/mapobj.h"
 #include "game/realm.h"
 #include "game/souls.h"
@@ -512,12 +513,11 @@ bool structure_destroy(int x, int y, unsigned sound, unsigned flags)
         break;
     case 16:
         structure_clear_area(ox, oy, size, flags);
-        if (g_build_hooks.karma_rail_removed)
-            g_build_hooks.karma_rail_removed(ox, oy);
+        karma_rail_remove(ox, oy, true); /* 0x42f129(wnd, view, x, y, 1) */
         g_build.karma_dirty = 1;
         break;
     case 17:
-        g_state.unk_59ceb0--;
+        g_state.karma_stations--;
         structure_clear_area(ox, oy, size, flags);
         world_select_plane(GS_PLANE_MIDDLE);
         structure_clear_area(ox, oy, size, flags);
@@ -597,7 +597,7 @@ bool structure_destroy(int x, int y, unsigned sound, unsigned flags)
         for (int k = 0; k < corners; k++) {
             int cx = (k & 1) ? ox + size - 1 : ox, cy = (k & 2) ? oy - size + 1 : oy;
             if (mapobj_spawn(cx, cy, 1, dust, 0, 0, 0, 1, (uint8_t)plane, 3, 0xffffffffu, 2, 1) > 0)
-                g_state.unk_6301f2++;
+                g_state.object_count++;
         }
     }
     hook_redraw_fade(ox, oy, size, 0, (int)set, (int)idx + 1, (sound & 4) ? 0 : 1);

@@ -94,8 +94,9 @@ typedef struct BuildHooks {
     void (*great_disturbance)(void);         /* 0x450aba: the cheat's message box */
     /* packages that aren't ported yet (WP2 calls souls.h, realm.h, planet.h
      * and graphview.h directly) */
-    void (*karma_rail_removed)(int x, int y); /* 0x42f129(wnd, view, x, y, 1) (WP3) */
-    unsigned (*road_ornament_slot)(void);    /* 0x6390e0: map object slot set-6 road ornaments use (WP3) */
+    /* 0x6390e0: map object slot set-6 road ornaments use. Nothing in
+     * ALIFE.EXE writes 0x6390e0, so it is always 0 (NULL = 0). */
+    unsigned (*road_ornament_slot)(void);
     void (*soulview_reset)(void);            /* 0x47e5bc (WP6b), new world: SOUL trackers */
     void (*soulview_rotated)(void);          /* 0x47e229 (WP6b), per plane after map_rotate_cells */
     void (*views_refresh)(void);             /* views_refresh_all 0x408c4d (WP7), new world */

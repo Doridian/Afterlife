@@ -11,9 +11,6 @@
  * view is dragged). The shell hands these over once with
  * views_set_context(). Calls into the shell's own modules go through
  * views_hooks; any hook may be NULL.
- *
- * (This header stays free of gfx/map_view.h: game/world.h and
- * gfx/tile_draw.h can't be included together.)
  */
 #ifndef AFTERLIFE_UI_VIEWS_H
 #define AFTERLIFE_UI_VIEWS_H
@@ -63,5 +60,25 @@ void views_draw_title(WmWindow *w);
 /* Help balloon for a control: centred on it, 120 px wide, as every
  * "This button ..." function of the views does. */
 void views_control_help(WmWindow *control, const char *text);
+
+/* WP6b (Microview, Macromanager, Soulview; src/ui/infoviews.c): connects
+ * the simulation's hooks to those windows where they are still NULL:
+ * g_sim_hooks.views_changed (microview_refresh, and macro_refresh if the
+ * Macromanager is shown) and soulview_age, g_build_hooks.soulview_reset /
+ * soulview_rotated, soultrack_hooks (the Soulview's redraws),
+ * planetview_hooks.soul_name, macro_hooks.microview_refresh. The shell
+ * may set its own afterwards (views_refresh_all for
+ * macro_hooks.refresh_all, news for microview_hooks). */
+void infoviews_install_hooks(void);
+/* g_sim_hooks.views_changed: microview_refresh() and, if the Macromanager
+ * is visible, macro_refresh() (sim_update phase 80). */
+void infoviews_changed(void);
+/* The Window menu's show / hide of the WP6b windows, in the form of
+ * shell_hooks (game/shell.h): microview_show / soulview_show /
+ * macro_show. (Showing the Macromanager resets it, as 0x4620aa does;
+ * microview_cell = microview_open, soulview_cell = soulview_track_cell.) */
+void infoviews_microview_show(bool on);
+void infoviews_soulview_show(bool on);
+void infoviews_macro_show(bool on);
 
 #endif

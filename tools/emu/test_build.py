@@ -15,8 +15,10 @@ global, the grids, the tile type tables and the RNG must be identical:
     (0x44d34f), road lines (0x44fc9b), destroying them again (0x42c09b);
   - --gen K: game_reset_world (0x4535db) for K seeds per difficulty.
 
-UI calls (sounds, redraws, dialogs, the Soulview trackers) are stubbed in
-the original; the port's hooks are NULL. The other packages' functions the
+UI calls (sounds, dialogs, the Soulview trackers) are stubbed in the
+original; the port's hooks are NULL. The map object code (marks, redraws
+through a window without a surface, Karma rail removal) runs on both sides
+(tools/emu/mapobj_env.py). The other packages' functions the
 build code calls (area search, SOUL eviction, vibes, planet generation,
 graph history) run for real on both sides.
 
@@ -33,6 +35,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from difftest import Harness, orig_path, SAVES  # noqa: E402
 from alife_emu import ORIG  # noqa: E402
+import mapobj_env  # noqa: E402
 
 MAP_VIEW = 0x5bb120
 SELECT_PLANE = 0x42b102
@@ -42,11 +45,10 @@ VIEW_DIR = (0x5fa5f8, 0x5bb118)     # view_dir_x / view_dir_y
 
 UI_STUBS = {
     0x4751af: 'snd_play', 0x475428: 'snd_preload', 0x4754a1: 'snd_unload', 0x475569: 'snd_stop (music)',
-    0x4ed550: 'map_object_redraw', 0x4ee5d8: 'map_object_mark_cells', 0x46f414: 'microview_refresh',
+    0x46f414: 'microview_refresh',
     0x4c59a2: 'wm_is_visible', 0x46313b: 'macro_refresh', 0x4bfc69: 'ctl_message_box', 0x403bfd: 'after message box',
     0x4c2733: 'wm_update', 0x4c2830: 'wm_send', 0x4ebfbc: 'map_hilite_area', 0x4ebd8a: 'map_redraw_cells',
     0x47e229: 'Soulview trackers after rotating', 0x47e5bc: 'Soulview trackers reset',
-    0x42f129: 'Karma rail removal (WP3; the port calls g_build_hooks.karma_rail_removed)',
     0x4ba7e9: 'ctl_button_set_pressed', 0x4c8393: 'menu_set_checked', 0x408c4d: 'views_refresh_all',
     # what the planet generator calls (as tools/emu/test_planet.py)
     0x4c63f0: 'sys_pump', 0x407282: 'game_frame_update', 0x4c8355: 'menu_is_checked', 0x408ca4: 'ui_busy_cursor',
@@ -77,6 +79,7 @@ class Test:
             e.w8(a, 0xc0)
         e.w8(MAP_VIEW + 0x48, 0xc0)
         self.h.fresh = e.snapshot()
+        mapobj_env.install(self.h)
         self.failures = 0
         self.checks = 0
         self.verbose = False
@@ -173,12 +176,12 @@ class Test:
         return self.free_spot(size, 12)
 
     def place(self, set_, idx, size, x, y, raw=0):
-        r1 = self.h.orig(0x44b4fb, 0, MAP_VIEW, set_, idx, size, x, y, 0, raw) & 0xff
+        r1 = self.h.orig(0x44b4fb, mapobj_env.window(self.h), MAP_VIEW, set_, idx, size, x, y, 0, raw) & 0xff
         r2 = self.h.port('build_place', set_, idx, size, x, y, 2 if raw else 0) & 0xff
         return r1, r2
 
     def destroy(self, x, y, flags=4):
-        self.h.orig(0x42c09b, 0, MAP_VIEW, x, y, 0, flags)
+        self.h.orig(0x42c09b, mapobj_env.window(self.h), MAP_VIEW, x, y, 0, flags)
         self.h.port('structure_destroy', x, y, 0, flags)
 
     def test_building(self, name, plane):
@@ -203,7 +206,7 @@ class Test:
             x, y = s
             h.orig(0x450aba, MAP_VIEW, 2)
             h.port('build_select_tool', 2)
-            h.orig(0x44d34f, 0, MAP_VIEW, x, y - 3, x + 3, y, 2, 2)
+            h.orig(0x44d34f, mapobj_env.window(h), MAP_VIEW, x, y - 3, x + 3, y, 2, 2)
             h.port('build_zone_rect', x, y - 3, x + 3, y, 2)
             self.check('%s plane %d: zone rectangle at %d,%d' % (name, plane, x, y))
             spots.append((x + 1, y - 1))
@@ -218,7 +221,7 @@ class Test:
         s = self.free_spot(6, 10)
         if s:
             x, y = s
-            h.orig(0x44fc9b, 0, MAP_VIEW, x, y, x + 5, y - 2, 2, 100)
+            h.orig(0x44fc9b, mapobj_env.window(h), MAP_VIEW, x, y, x + 5, y - 2, 2, 100)
             h.port('build_road_line', x, y, x + 5, y - 2, 1)
             self.check('%s plane %d: road from %d,%d' % (name, plane, x, y))
             spots.append((x + 3, y - 2))
@@ -243,7 +246,7 @@ class Test:
         s = self.free_spot(8, 20)
         if s:
             x, y = s
-            r1 = h.orig(0x45011d, 0, MAP_VIEW, x, y, x + 7, y - 4, plane)
+            r1 = h.orig(0x45011d, mapobj_env.window(h), MAP_VIEW, x, y, x + 7, y - 4, plane)
             r2 = h.port('build_rail_line', x, y, x + 7, y - 4)
             self.check('%s plane %d: rail from %d,%d -> %s' % (name, plane, x, y, (r1, r2)))
             spots.append((x, y))

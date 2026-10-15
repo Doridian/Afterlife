@@ -25,7 +25,7 @@ typedef struct {
  * procedure (main_wnd_proc 0x4cb7ad) got them as Win32 messages. */
 typedef enum {
     PLAT_EV_NONE,
-    PLAT_EV_QUIT,       /* the application is being told to quit (no window message in the original; treat as CLOSE) */
+    PLAT_EV_QUIT,       /* the application is being told to quit (SIGTERM/SIGINT; no window message in the original): main_wnd_proc exits at once */
     PLAT_EV_KEY_DOWN,   /* WM_KEYDOWN / WM_SYSKEYDOWN (auto-repeat included): vk */
     PLAT_EV_KEY_UP,     /* WM_KEYUP / WM_SYSKEYUP: vk */
     PLAT_EV_MOUSE_MOVE, /* WM_MOUSEMOVE: x, y */
@@ -75,9 +75,12 @@ void plat_shutdown(void);
 /* The main window's caption (INI "Window name"). */
 void plat_video_set_title(const char *title);
 
-/* 8-bit indexed framebuffer, width * height bytes, rows top to bottom. */
+/* 8-bit indexed framebuffer, plat_video_pitch() * height bytes, rows top to
+ * bottom. */
 uint8_t *plat_video_framebuffer(void);
 int plat_video_width(void);
+/* Bytes per framebuffer row (>= width; SDL aligns INDEX8 rows to 4). */
+int plat_video_pitch(void);
 int plat_video_height(void);
 void plat_video_set_palette(const PlatColor *colors, int first, int count);
 void plat_video_present(void);
@@ -127,6 +130,18 @@ void plat_audio_pause(bool paused);
  * the data directory. Returns NULL if not found. */
 void plat_set_data_dir(const char *dir);
 FILE *plat_fopen_data(const char *name);
+/* The data directory, and the real path of a data file (same lookup as
+ * plat_fopen_data). False if it doesn't exist. */
+const char *plat_data_dir(void);
+bool plat_data_path(const char *name, char *out, size_t out_len);
+
+/* A native file picker (port: the original has its own slot dialogs).
+ * Asynchronous: begin opens it (false if there is none, e.g. headless or
+ * the web build), then poll from a modal loop: 0 still open, 1 chosen
+ * (path in out), -1 cancelled. `pattern` is a ';'-separated list of
+ * extensions without dots ("alf;asc"). */
+bool plat_file_dialog_begin(bool save, const char *default_location, const char *filter_name, const char *pattern);
+int plat_file_dialog_poll(char *out, size_t out_len);
 
 /* Read-only data files (KERNEL32/CRT file I/O). Same name lookup as
  * plat_fopen_data. seek/tell use the CRT whence values 0 = set, 1 = current,

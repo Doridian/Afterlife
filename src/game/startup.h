@@ -52,6 +52,9 @@ int sys_unregister_task(SysInitFn owner); /* 0x4c67f6 */
  * tick runs first (tm_poll), and the screen is presented at the end (the
  * original drew straight to the window). */
 void sys_pump(void);
+/* Port-only: called at the start of every sys_pump (tests use it to feed
+ * synthetic input into the modal loops). NULL by default. */
+extern void (*sys_pump_hook)(void);
 /* Port: the PeekMessage / TranslateMessage / DispatchMessage part of
  * sys_pump (also used by kb_wait_key). False if there was no event. */
 bool sys_dispatch_message(void);

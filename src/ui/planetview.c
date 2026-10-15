@@ -16,6 +16,7 @@
  * repo. Window-local state (0x66c7a8-0x66c914) is in `pv` below.
  */
 #include "ui/planetview.h"
+#include "ui/soulview.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1377,32 +1378,13 @@ static void tenet_button(WmWindow *b)
         wm_send(w, w, PV_MSG_REFRESH, 0, 1);
 }
 
-/* 0x47f8fe, the Soulview's SOUL name generator, which belongs to a package
- * not ported yet. TODO: call the Soulview port once it exists; this local
- * copy (same syllable tables, no RNG) is only the fallback. */
-static void soul_name_fallback(uint32_t seed, char *out)
-{
-    if (seed == 0) {
-        strcpy(out, xs(0x66ac40)); /* "No Soul" */
-        return;
-    }
-    out[0] = 0;
-    strncat(out, xsp(0x66a960 + (seed & 0xf) % 5 * 4u), 8);
-    unsigned n = ((seed >> 0x1d) & 1) + 3;
-    for (unsigned i = 1; i < n; i++) {
-        unsigned nib = (seed >> (i * 4)) & 0xf;
-        strncat(out, (i & 1) == 0 ? xsp(0x66a960 + nib % 5 * 4u) : xsp(0x66a998 + (nib & 3) * 4u), 8);
-    }
-    if (out[0] >= 'a' && out[0] <= 'z')
-        out[0] = (char)(out[0] - 0x20);
-}
-
+/* 0x47f8fe, the Soulview's SOUL name generator (ui/soulview.h). */
 static void soul_name(uint32_t seed, char *out)
 {
     if (planetview_hooks.soul_name)
         planetview_hooks.soul_name(seed, out);
     else
-        soul_name_fallback(seed, out);
+        soulview_soul_name(seed, out);
 }
 
 static void msgbox(uint32_t title, const char *msg, uint32_t buttons, uint32_t timeout)
