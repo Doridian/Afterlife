@@ -23,6 +23,7 @@ declare const FS: {
   readdir(path: string): string[];
   writeFile(path: string, data: Uint8Array): void;
   open(path: string, flags: string): object;
+  truncate(path: string, len: number): void;
   write(stream: object, buffer: Uint8Array, offset: number, length: number, position: number): number;
   close(stream: object): void;
   syncfs(populate: boolean, callback: (err: unknown) => void): void;

@@ -20,6 +20,11 @@ Module.preRun ??= [];
   const PREF = '/libsdl', USER = '/userdata', BUILTIN = '/orig';
   const DATA_DB = 'afterlife-game-data', DATA_STORE = 'files';
   const params = new URLSearchParams(location.search);
+  const started = performance.now();
+  // the startup's timing, in the console (for checking a change to the loading)
+  function mark(what: string): void {
+    console.info(`Afterlife startup: ${what} at ${Math.round(performance.now() - started)} ms`);
+  }
 
   // An element of web/shell.html, which must be there.
   function element<T extends HTMLElement>(id: string): T {
@@ -65,8 +70,11 @@ Module.preRun ??= [];
   // Writes the parts, in order, into the file at path, one part at a time, so
   // the file grows with the copy. onBytes(n) is called per part written.
   async function copyParts(parts: Blob[], path: string, onBytes: (n: number) => void): Promise<void> {
+    const total = parts.reduce((sum, p) => sum + p.size, 0);
     const stream = FS.open(path, 'w');
     try {
+      // size the file first: MEMFS grows in small steps, copying the file each time
+      FS.truncate(path, total);
       let at = 0;
       for (const part of parts) {
         const bytes = new Uint8Array(await part.arrayBuffer());
@@ -249,8 +257,10 @@ Module.preRun ??= [];
       params.getAll('arg').forEach((a) => Module.arguments.push(a));
       Module.setStatus('');
       removeRunDependency('afterlife-storage');
+      mark('game starting');
     };
     FS.syncfs(true, (err) => {
+      mark('browser storage read');
       if (err)
         console.warn('Afterlife: reading browser storage failed', err);
       if (Module.expectedDataFileDownloads) {
@@ -268,6 +278,7 @@ Module.preRun ??= [];
       if (params.has('pick'))
         return pickData(USER, () => start(USER));
       loadStoredData(USER, () => {
+        mark('stored game data copied');
         if (hasGameData(USER))
           start(USER);
         else
