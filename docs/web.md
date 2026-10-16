@@ -27,7 +27,8 @@ The page must come from a web server (not `file://`). The output is
   the CD: a CD image (`.bin` or `.iso`, read by `web/iso9660.ts`), a `.zip`
   of either (read by `web/zip.ts`, the archive.org download as it is), the
   CD's files, or its folder. The files are kept as blobs in an IndexedDB store of
-  its own (`afterlife-game-data`), so this happens once per browser. They are
+  its own (`afterlife-game-data`), in 8 MB records (`NAME#000000`, ...) so the
+  store's progress bar moves in steps, so this happens once per browser. They are
   copied into `/userdata` at every start. IDBFS can't hold them: browsers cap
   one stored value below ALIFE.000's size. `?pick` in the URL asks again.
   The picker links to the CD on archive.org (`AfterlifeUSA`, zip with the

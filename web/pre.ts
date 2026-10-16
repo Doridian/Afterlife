@@ -50,33 +50,36 @@ Module.preRun ??= [];
     Module.setProgress(share);
   }
 
-  // Copies a Blob into the file at path as its chunks arrive, so the file grows
-  // with the copy (no whole-file buffer, and no long synchronous write at the end).
-  // onBytes(n) is called per chunk written.
-  async function copyBlob(blob: Blob, path: string, onBytes: (n: number) => void): Promise<void> {
-    if (!blob.stream) {
-      const buf = await blob.arrayBuffer();
-      FS.writeFile(path, new Uint8Array(buf));
-      onBytes(buf.byteLength);
-      return;
-    }
-    const stream = FS.open(path, 'w'), reader = blob.stream().getReader();
+  // A file's bytes go to IndexedDB in records of this size: one record per
+  // file would be a single write that the progress bar can't follow.
+  const RECORD = 8 << 20;
+
+  // The parts of a Blob, RECORD bytes each (one empty part for an empty file).
+  function partsOf(blob: Blob): Blob[] {
+    const parts: Blob[] = [];
+    for (let at = 0; at < blob.size || parts.length === 0; at += RECORD)
+      parts.push(blob.slice(at, at + RECORD));
+    return parts;
+  }
+
+  // Writes the parts, in order, into the file at path, one part at a time, so
+  // the file grows with the copy. onBytes(n) is called per part written.
+  async function copyParts(parts: Blob[], path: string, onBytes: (n: number) => void): Promise<void> {
+    const stream = FS.open(path, 'w');
     try {
       let at = 0;
-      for (;;) {
-        const r = await reader.read();
-        if (r.done)
-          break;
-        FS.write(stream, r.value, 0, r.value.byteLength, at);
-        at += r.value.byteLength;
-        onBytes(r.value.byteLength);
+      for (const part of parts) {
+        const bytes = new Uint8Array(await part.arrayBuffer());
+        FS.write(stream, bytes, 0, bytes.byteLength, at);
+        at += bytes.byteLength;
+        onBytes(bytes.byteLength);
       }
     } finally {
       FS.close(stream);
     }
   }
 
-  // --- the picked files' store: name -> Blob ---------------------------
+  // --- the picked files' store: NAME#chunk -> Blob ---------------------
   function openDataDb(cb: (db: IDBDatabase | null) => void): void {
     let req: IDBOpenDBRequest;
     try {
@@ -93,6 +96,8 @@ Module.preRun ??= [];
   }
 
   // Copies the stored files into dir; cb() when done (also on failure).
+  // A file's records are named NAME#000000, NAME#000001, ...; a record without
+  // a '#' (from before they were split) is the whole file.
   function loadStoredData(dir: string, cb: () => void): void {
     openDataDb((db) => {
       if (!db)
@@ -100,23 +105,31 @@ Module.preRun ??= [];
       const store = db.transaction(DATA_STORE, 'readonly').objectStore(DATA_STORE);
       const keys = store.getAllKeys(), vals = store.getAll();
       vals.onsuccess = () => {
-        const names = keys.result, blobs: Blob[] = vals.result;
         db.close();
-        if (!blobs.length)
+        const files = new Map<string, Blob[]>();
+        keys.result.forEach((key, i) => {
+          const k = String(key), hash = k.lastIndexOf('#');
+          const name = hash < 0 ? k : k.slice(0, hash);
+          const parts = files.get(name) ?? [];
+          parts.push(vals.result[i]);
+          files.set(name, parts);
+        });
+        const names = [...files.keys()];
+        if (!names.length)
           return cb();
-        const total = blobs.reduce((sum, b) => sum + b.size, 0);
+        const total = vals.result.reduce((sum: number, b: Blob) => sum + b.size, 0);
         let done = 0, i = 0;
         progress('Loading game data...', 0, total);
         // one file at a time, so the bar shows the copy into /userdata
         const next = (): void => {
-          if (i === blobs.length)
+          if (i === names.length)
             return cb();
-          const k = i++;
-          copyBlob(blobs[k], `${dir}/${names[k]}`, (n) => {
+          const name = names[i++];
+          copyParts(files.get(name)!, `${dir}/${name}`, (n) => {
             done += n;
             progress('Loading game data...', done, total);
           }).catch((e) => {
-            console.warn(`Afterlife: reading stored ${names[k]} failed`, e);
+            console.warn(`Afterlife: reading stored ${name} failed`, e);
           }).then(next);
         };
         next();
@@ -138,10 +151,12 @@ Module.preRun ??= [];
       store.clear();
       progress('Storing game data...', 0, total);
       files.forEach((f) => {
-        store.put(f, f.name).onsuccess = () => {
-          done += f.size;
-          progress('Storing game data...', done, total);
-        };
+        partsOf(f).forEach((part, n) => {
+          store.put(part, `${f.name}#${String(n).padStart(6, '0')}`).onsuccess = () => {
+            done += part.size;
+            progress('Storing game data...', done, total);
+          };
+        });
       });
       tx.oncomplete = () => {
         db.close();
@@ -196,7 +211,7 @@ Module.preRun ??= [];
         if (i === files.length)
           return storeData(files, total, done);
         const f = files[i++];
-        copyBlob(f, `${dir}/${f.name}`, (n) => {
+        copyParts(partsOf(f), `${dir}/${f.name}`, (n) => {
           copied += n;
           progress('Reading the game files...', copied, total);
         }).then(next, (e) => {
