@@ -50,25 +50,30 @@ Module.preRun ??= [];
     Module.setProgress(share);
   }
 
-  // The bytes of a Blob, as Uint8Array; onBytes(n) is called as chunks arrive.
-  function readBlob(blob: Blob, onBytes: (n: number) => void): Promise<Uint8Array> {
+  // Copies a Blob into the file at path as its chunks arrive, so the file grows
+  // with the copy (no whole-file buffer, and no long synchronous write at the end).
+  // onBytes(n) is called per chunk written.
+  async function copyBlob(blob: Blob, path: string, onBytes: (n: number) => void): Promise<void> {
     if (!blob.stream) {
-      return blob.arrayBuffer().then((buf) => {
-        onBytes(buf.byteLength);
-        return new Uint8Array(buf);
-      });
+      const buf = await blob.arrayBuffer();
+      FS.writeFile(path, new Uint8Array(buf));
+      onBytes(buf.byteLength);
+      return;
     }
-    const out = new Uint8Array(blob.size), reader = blob.stream().getReader();
-    let at = 0;
-    const pump = (): Promise<Uint8Array> => reader.read().then((r) => {
-      if (r.done)
-        return out;
-      out.set(r.value, at);
-      at += r.value.byteLength;
-      onBytes(r.value.byteLength);
-      return pump();
-    });
-    return pump();
+    const stream = FS.open(path, 'w'), reader = blob.stream().getReader();
+    try {
+      let at = 0;
+      for (;;) {
+        const r = await reader.read();
+        if (r.done)
+          break;
+        FS.write(stream, r.value, 0, r.value.byteLength, at);
+        at += r.value.byteLength;
+        onBytes(r.value.byteLength);
+      }
+    } finally {
+      FS.close(stream);
+    }
   }
 
   // --- the picked files' store: name -> Blob ---------------------------
@@ -96,26 +101,25 @@ Module.preRun ??= [];
       const keys = store.getAllKeys(), vals = store.getAll();
       vals.onsuccess = () => {
         const names = keys.result, blobs: Blob[] = vals.result;
-        let left = blobs.length;
         db.close();
-        if (!left)
+        if (!blobs.length)
           return cb();
         const total = blobs.reduce((sum, b) => sum + b.size, 0);
-        let done = 0;
+        let done = 0, i = 0;
         progress('Loading game data...', 0, total);
-        blobs.forEach((blob, i) => {
-          readBlob(blob, (n) => {
+        // one file at a time, so the bar shows the copy into /userdata
+        const next = (): void => {
+          if (i === blobs.length)
+            return cb();
+          const k = i++;
+          copyBlob(blobs[k], `${dir}/${names[k]}`, (n) => {
             done += n;
             progress('Loading game data...', done, total);
-          }).then((bytes) => {
-            FS.writeFile(`${dir}/${names[i]}`, bytes);
-          }, (e) => {
-            console.warn(`Afterlife: reading stored ${names[i]} failed`, e);
-          }).then(() => {
-            if (--left === 0)
-              cb();
-          });
-        });
+          }).catch((e) => {
+            console.warn(`Afterlife: reading stored ${names[k]} failed`, e);
+          }).then(next);
+        };
+        next();
       };
       vals.onerror = () => {
         db.close();
@@ -186,18 +190,22 @@ Module.preRun ??= [];
       }
       panel.hidden = true;
       const total = files.reduce((sum, f) => sum + f.size, 0);
-      let copied = 0, left = files.length;
+      let copied = 0, i = 0;
       progress('Reading the game files...', 0, total);
-      files.forEach((f) => {
-        readBlob(f, (n) => {
+      const next = (): void => {
+        if (i === files.length)
+          return storeData(files, total, done);
+        const f = files[i++];
+        copyBlob(f, `${dir}/${f.name}`, (n) => {
           copied += n;
           progress('Reading the game files...', copied, total);
-        }).then((bytes) => {
-          FS.writeFile(`${dir}/${f.name}`, bytes);
-          if (--left === 0)
-            storeData(files, total, done);
+        }).then(next, (e) => {
+          Module.setStatus('');
+          panel.hidden = false;
+          error.textContent = `Reading ${f.name} failed: ${e.message}`;
         });
-      });
+      };
+      next();
     }
     // the picker's inputs: the files, a folder, or a CD image
     for (const id of ['pick-files', 'pick-dir', 'pick-image']) {

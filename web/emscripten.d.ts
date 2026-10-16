@@ -22,6 +22,9 @@ declare const FS: {
   mount(type: object, options: { autoPersist?: boolean }, mountpoint: string): void;
   readdir(path: string): string[];
   writeFile(path: string, data: Uint8Array): void;
+  open(path: string, flags: string): object;
+  write(stream: object, buffer: Uint8Array, offset: number, length: number, position: number): number;
+  close(stream: object): void;
   syncfs(populate: boolean, callback: (err: unknown) => void): void;
 };
 
