@@ -19,6 +19,7 @@
 #include "game/config.h"
 #include "game/display.h"
 #include "game/enhance.h"
+#include "game/karma.h"
 #include "game/mapobj.h"
 #include "game/music.h"
 #include "game/newworld.h"
@@ -27,6 +28,7 @@
 #include "game/savegame.h"
 #include "game/shell_int.h"
 #include "game/sim.h"
+#include "game/soultrack.h"
 #include "game/sound.h"
 #include "game/startup.h"
 #include "game/timer.h"
@@ -1474,6 +1476,15 @@ static void hook_voice_hold(bool hold)
         advisor_unsilence();
 }
 static void hook_window_update(void) { wm_update(g_main_window); }
+/* soultrack_step 0x47e3be: 100 ms of frames after moving a walker */
+static void hook_soultrack_wait(void)
+{
+    uint32_t start = tm_get_time();
+    do {
+        sys_pump();
+        shell_frame_update();
+    } while (tm_get_time() - start < 100);
+}
 static void hook_repaint(void) { g_shell_repaint = 1; }
 static void hook_sound_stop(uint32_t id)
 {
@@ -1646,6 +1657,8 @@ static void install_hooks(void)
     g_mapobj_hooks.sound = hook_sound;
     g_mapobj_hooks.window_update = hook_window_update;
     g_mapobj_hooks.select_plane = hook_mapobj_plane;
+    /* the Karma trains (WP1) */
+    g_karma_hooks.sound = hook_sound;
     /* the Bad Things (WP4) */
     g_badthings_hooks.message = hook_message;
     g_badthings_hooks.news = news_popup;
@@ -1670,6 +1683,7 @@ static void install_hooks(void)
     macro_hooks.sound = hook_sound;
     macro_hooks.message = hook_macro_message;
     macro_hooks.refresh_all = views_refresh_all;
+    soultrack_hooks.step_wait = hook_soultrack_wait;
     shell_hooks.microview_cell = microview_open;
     shell_hooks.soulview_cell = soulview_track_cell;
     shell_hooks.microview_show = infoviews_microview_show;

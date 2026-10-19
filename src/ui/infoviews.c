@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 /* The WP6b views' hook wiring: see infoviews_install_hooks in ui/views.h. */
 #include "game/build.h"
+#include "game/karma.h"
 #include "game/sim.h"
 #include "game/soultrack.h"
 #include "ui/macro.h"
@@ -32,6 +33,8 @@ void infoviews_install_hooks(void)
         soultrack_hooks.refresh = soulview_refresh;
     if (!planetview_hooks.soul_name)
         planetview_hooks.soul_name = soulview_soul_name;
+    if (!g_karma_hooks.views_changed)
+        g_karma_hooks.views_changed = microview_refresh;
     if (!macro_hooks.microview_refresh)
         macro_hooks.microview_refresh = microview_refresh;
 }
