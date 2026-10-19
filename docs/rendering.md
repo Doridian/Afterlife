@@ -262,7 +262,9 @@ Screen-only GDI helpers, none of which the game calls: `di_screen_fill_rect`
 not ported.
 
 `di_save_screenshot` (0x4ccf6e) copies the screen into a surface and writes
-a BMP chosen with `GetSaveFileNameA`. Not ported yet.
+a BMP chosen with `GetSaveFileNameA`. Nothing in ALIFE.EXE calls it (no code
+or data reference), so it isn't ported; only its INI part (`cfg_savepath`)
+is. The save slots' thumbnails are a separate path (`src/ui/slotdlg.c`).
 
 ### Dirty rectangles
 

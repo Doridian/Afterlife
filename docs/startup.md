@@ -300,6 +300,6 @@ sys_shutdown.
 
 Display mode list (any size is accepted with "Force display settings"), the
 system palette save/restore, memory status warnings, the game heap (malloc
-instead), vh_initialize, the controls' pause flag (no game module yet),
+instead), vh_initialize,
 WM_DISPLAYCHANGE (the port window's live relayout covers the same ground,
 see [rendering.md](rendering.md#port-window)). game_main is `src/game/shell.c` (see game-map.md WP7).

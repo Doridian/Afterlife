@@ -340,9 +340,8 @@ the original address in a comment to the *owner's* header, never its own copy.
   `sim_cell()`/`sim_zone_kind()`/`sim_perm()`/`sim_temp()`/`sim_pop()`,
   `soul_group_get/set()`, `realm_cur()`, `world_realm()`; `util.h`:
   `crt_rand()`, `rand_range()`, `rng_*()`, `bignum_*()`, `mul_div_clamp/round()`,
-  `fmt_thousands(_k)()`. Not done: `RealmTileInfo` is declared but filled by
-  WP2 (0x452581), and `world_load` doesn't run the post-load recompute yet
-  (0x4506b6, 0x452267, WP2).
+  `fmt_thousands(_k)()`. WP2 fills `RealmTileInfo` (0x452581) and the
+  post-load recompute (0x4506b6, 0x452267) in `game/newworld.c`.
 
 ### WP1: simulation scheduler and realm economy (priority 2)
 
@@ -362,8 +361,8 @@ the original address in a comment to the *owner's* header, never its own copy.
   `unk_7ff0[]`, `economy_score` 0x43eb7c, `economy_random_bad_things`),
   `game/realm.h` (everything else in the ranges), `game/tables.h` (the
   constant tables of `game_init_defaults` / `game_reset_world`). The Bad
-  Thing timers stayed in `sim_update` and call WP4's stubs
-  (`game/badthings.h`); Karma calls are stubs in `game/karma.h`. Tests:
+  Thing timers stayed in `sim_update` and call WP4 (`game/badthings.h`);
+  Karma calls go to `game/karma.h` (WP3). Tests:
   `tests/sim_test` (invariants), `tools/emu/test_sim.py` (differential:
   every function and whole years of `sim_update` against the original).
 
@@ -594,12 +593,15 @@ the original address in a comment to the *owner's* header, never its own copy.
   through the title, starts a new game, runs the sim, zones, builds roads
   and a gate through the control panel and tile chooser, saves, loads,
   loads ASCEN001.ASC and quits, all through synthetic input, and opens
-  the Microview (tool on the gate, all pages), the Soulview and the
-  Macromanager. Quit: a window close request is WM_CLOSE (the game's
+  the Microview (tool on the gate, all pages), the Soulview, the
+  Macromanager and the Audio Settings window (toggles, sliders, group
+  volumes). Quit: a window close request is WM_CLOSE (the game's
   "Do You Really Want To Quit?"); SDL_EVENT_QUIT (SIGTERM / SIGINT) and a
   second close request while that dialog is open exit at once
-  (`main_wnd_proc`, game/input.c). Not done:
-  scenario-editor extras of the tile chooser.
+  (`main_wnd_proc`, game/input.c). The scenario editor's branches (tile
+  chooser, `shell_editor_key` 0x45129a) are ported, but nothing in
+  ALIFE.EXE sets `build_editor_mode` (0x630514; only cleared), so they're
+  unreachable.
 - **Debug window** (`src/ui/debugwin.c`, 0x457b01-0x45848f, "Mikey's
   debug window"): a tile browser, set ("genus") and index ("species")
   arrows, a left click steps by 1, a right click by 10, each step draws

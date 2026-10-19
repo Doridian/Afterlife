@@ -182,7 +182,8 @@ handlers: input is polled by `wm_idle` (0x4c178f), a system task:
   (0x674330).
 - While `wm_input_live` (0x672750) is 0 (attract mode), a click or Esc
   calls 0x4ac69c(0), which stops it and sets the flag. Note that the flag
-  starts at 0.
+  starts at 0. `music_pick` (0x4752c2) starts no track while it's 0
+  (`wm_input_live()` in the port).
 - One posted message is dispatched.
 
 The mouse handler (0x4c523a, also `wm_mouse_event` 0x4c617a) hit-tests

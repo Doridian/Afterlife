@@ -146,8 +146,9 @@ plane's `origin_y`. All three planes share one scroll position.
    (`object_strip`, from its size and the cell's offset). If the building has
    the object's set, the two cross-fade: the building at fade f, the object
    at 10 - f.
-6. Every 300 cells it calls the idle tasks (`snd_idle`) so audio keeps
-   streaming.
+6. Every 300 cells it calls `snd_idle` and `akos_talk_idle` so audio and
+   the talking heads keep going. In the port that's `map_view_set_idle`,
+   installed by `game/startup.c`.
 7. If any visible cell has `CELL_MARKER` (and flag 0x10 is clear), the
    marker pass (0x4eaf9d / 0x4ecd16) draws a diamond of every other pixel in
    colour `0xd0 + (2y + x) % 5` (`0xd5 + (2y + x) % 6` for cells 49-50,
