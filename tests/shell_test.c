@@ -18,6 +18,8 @@
  *   3d. opens the WP6b windows: the Microview (tool M on the gate, then
  *      its pages), the Soulview (its control panel button, then the tool
  *      on the zone) and the Macromanager (Window menu), and closes them;
+ *   3e. the Audio Settings window (F9): the Music and Sound FX toggles,
+ *      a slider click with its toggle off and on, the close box;
  *   4. saves through the File menu (F5) and checks the file, runs on,
  *      loads it back (F2) and checks the state round-tripped;
  *   5. loads orig/ASCEN001.ASC (F3) and runs it;
@@ -35,10 +37,13 @@
 #include "game/shell.h"
 #include "game/shell_int.h"
 #include "game/sim.h"
+#include "game/sound.h"
 #include "game/startup.h"
 #include "game/world.h"
 #include "gfx/palette.h"
 #include "gfx/surface.h"
+#include "imuse/imuse.h"
+#include "ui/audiodlg.h"
 #include "ui/controls.h"
 #include "ui/ctrlpanel.h"
 #include "ui/macro.h"
@@ -344,6 +349,32 @@ static void click_child(WmWindow *w, int id)
     }
 }
 
+/* clicks the track of `w`'s scrollbar `id` a quarter of the way along */
+static void click_slider(WmWindow *w, int id)
+{
+    WmWindow *c = w ? ctl_find_by_id(w->children, id) : NULL;
+    while (c && wm_get_data(c, CTL_SCROLL_KIND) != CTL_SCROLL_TRACK)
+        c = c->parent;
+    CHECK(c != NULL);
+    if (!c)
+        return;
+    GfxRect r = c->rect;
+    wm_parent_to_screen(c, &r);
+    int x = r.left + (r.right - r.left) / 4, y = (r.top + r.bottom) / 2;
+    push_move(x, y);
+    push_button(x, y, true);
+    push_button(x, y, false);
+    steps(10);
+}
+
+static int slider_pos(WmWindow *w, int id)
+{
+    WmWindow *c = w ? ctl_find_by_id(w->children, id) : NULL;
+    while (c && wm_get_data(c, CTL_SCROLL_KIND) != CTL_SCROLL_TRACK)
+        c = c->parent;
+    return c ? ctl_scroll_get_pos(c) : -1;
+}
+
 static int count_set(int plane, unsigned set)
 {
     int n = 0;
@@ -537,6 +568,41 @@ int main(int argc, char **argv)
     steps(5);
     CHECK(!wm_is_visible(mm));
     CHECK(!shell_menu_checked(MENU_MACRO));
+
+    /* 3e. the Audio Settings window: F9 shows it */
+    push_key(SDLK_F9, SDL_SCANCODE_F9);
+    steps(10);
+    WmWindow *ad = audiodlg_window();
+    CHECK(ad && wm_is_visible(ad));
+    CHECK(shell_menu_checked(MENU_AUDIO));
+    CHECK(slider_pos(ad, AUDIODLG_MASTER_VOL) == 0x7f);
+    write_png("shell_audio.png", gfx_screen());
+    click_child(ad, AUDIODLG_MUSIC);
+    CHECK(!snd_music_enabled);
+    click_child(ad, AUDIODLG_SFX);
+    CHECK(!snd_sfx_enabled);
+    if (snd_running()) {
+        CHECK(imuse_set_group_vol(4, -1) == 0);
+        CHECK(imuse_set_group_vol(1, -1) == 0);
+    }
+    /* a slider stays put while its toggle is off, and moves when it's on */
+    click_slider(ad, AUDIODLG_MUSIC_VOL);
+    CHECK(slider_pos(ad, AUDIODLG_MUSIC_VOL) == 0x7f);
+    click_slider(ad, AUDIODLG_MASTER_VOL);
+    int master = slider_pos(ad, AUDIODLG_MASTER_VOL);
+    CHECK(master >= 0 && master < 0x7f);
+    if (snd_running())
+        CHECK(imuse_set_group_vol(0, -1) == master);
+    write_png("shell_audio_off.png", gfx_screen());
+    click_child(ad, AUDIODLG_MUSIC);
+    click_child(ad, AUDIODLG_SFX);
+    CHECK(snd_music_enabled && snd_sfx_enabled);
+    if (snd_running())
+        CHECK(imuse_set_group_vol(1, -1) == 0x7f);
+    /* the close box hides it and clears the menu's check mark */
+    click_child(ad, AUDIODLG_CLOSE);
+    CHECK(ad && !wm_is_visible(ad));
+    CHECK(!shell_menu_checked(MENU_AUDIO));
     /* the tool back to zoning so nothing below inspects by accident */
     if (zone)
         click_window(zone);

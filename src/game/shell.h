@@ -164,8 +164,9 @@ typedef struct ShellHooks {
     void (*microview_cell)(int x, int y);
     bool (*soulview_cell)(int x, int y);
     /* views WP6b owns: Microview 0x5c6670, Soulview 0x5b2f50, Macromanager
-     * 0x5f7468 (show / hide), audio dialog (0x5fa5f0 is the unused
-     * tutorial text window, ui/tutorialwin.h) */
+     * 0x5f7468 (show / hide), the Audio Settings window 0x638ea0
+     * (ui/audiodlg.h; 0x5fa5f0 is the unused tutorial text window,
+     * ui/tutorialwin.h) */
     void (*microview_show)(bool on);
     void (*soulview_show)(bool on);
     void (*macro_show)(bool on);

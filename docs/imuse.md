@@ -51,7 +51,7 @@ All symbols are in `symbols/ALIFE.EXE.txt`. The prefixes are `imuse_` (core),
 | streamer.c | 0x4e0d90..0x4e17c0 | `streams[3]`, plus list/string/BE helpers | decompiled |
 | mixer.c | 0x4e36a0..0x4e5d90 | tables, 12 mix routines, output | decompiled |
 | so (game) | 0x4b9470..0x4ba0f0 | `snd_initialize`, slots, callbacks | decompiled (src/game/sound.c) |
-| game sound API | 0x4750f0..0x475bd9 | `snd_play`, `snd_stop`, preload, the audio settings dialog | play/stop/preload ported |
+| game sound API | 0x4750f0..0x4761a0 | `snd_play`, `snd_stop`, preload, the music, the audio settings dialog | ported (src/game/sound.c, music.c, src/ui/audiodlg.c) |
 
 0x4de0f0..0x4de170 are a host query hook and a printf-style message hook
 (`wave_set_msg_callback`, `wave_printf`) that nothing in Afterlife installs.
@@ -143,6 +143,18 @@ hooks the C File Layer (resources by ID), runs `vh_initialize`,
 - **Timer.** `snd_idle` registers `init.timer_handler` with
   `tm_add_service(.., 60)` the first time it runs, and calls opcode 27
   (stream refill) every 100 ms.
+- **Audio Settings** (0x4756f4 create, 0x475bd9 window proc;
+  `src/ui/audiodlg.c`): the Global menu's "Audio Settings" (F9) window,
+  created hidden by game_main, which first sets groups 0, 1, 2 and 4 to
+  127. Four toggles (bitmap 0xfa1) and four sliders (0..127): Master
+  (group 0; turning it back on also pauses and resumes iMUSE), Music
+  (groups 3 and 4; off also stops the track and clears
+  `snd_music_enabled`, 0x47558c, and on picks a new one, 0x4755b9), Voice
+  (group 2, through `imuse_set_voice_vol` 0x4d4110) and Sound FX (group
+  1 and `snd_sfx_enabled`, 0x4755dd / 0x4755f2). Switching off remembers
+  the group's volume for switching back on; a slider ignores input while
+  its toggle is off. Nothing is saved: every start is at full volume
+  with everything on.
 
 ## Data formats
 
@@ -221,7 +233,7 @@ The offsets are file offsets. ALIFE.000 holds 757 iMUS resources, all
   function gets `marker = NULL` (the original passed `args[0]` there).
 - **Not ported:** save/restore (ops 5/6 and the VHUMOR save hook: raw
   struct dumps with pointers), the VHUMOR module records and dumps, the
-  audio settings dialog (0x4756f4/0x475bd9), the stream-refill skip flag
+  stream-refill skip flag
   0x64cdb0 in snd_idle, and 0x4b9470 (game_main's four timed channels,
   0x4d29b0/0x4d2c50).
 

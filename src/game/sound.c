@@ -1,6 +1,6 @@
 /*
  * The game's sound module (0x4b9470..0x4ba0f0) and game-level sound calls
- * (0x4750f0..0x4754a1). See sound.h.
+ * (0x4750f0..0x4754a1, 0x4755dd/0x4755f2). See sound.h.
  */
 #include "game/sound.h"
 
@@ -387,3 +387,6 @@ void snd_unload(uint32_t res_id) /* 0x4754a1 */
     if (is_sound_id(res_id))
         snd_slot_free((int)(res_id - SND_RES_BASE));
 }
+
+void snd_sfx_off(void) { snd_sfx_enabled = 0; } /* 0x4755dd */
+void snd_sfx_on(void) { snd_sfx_enabled = 1; }  /* 0x4755f2 */

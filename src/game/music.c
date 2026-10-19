@@ -78,6 +78,20 @@ void music_stop(void)
     g_current = 0;
 }
 
+/* 0x47558c */
+void music_off(void)
+{
+    snd_music_enabled = 0;
+    music_stop();
+}
+
+/* 0x4755b9 */
+void music_on(void)
+{
+    snd_music_enabled = 1;
+    g_current = music_pick(0);
+}
+
 /* 0x4753f2 snd_fade_out_music */
 void music_fade_out(int ms)
 {

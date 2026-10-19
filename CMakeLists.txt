@@ -389,9 +389,10 @@ endif()
 # The game shell (docs/game-map.md WP7): game_main and the main window
 # (src/game/shell*.c), the main map view, control panel and tile chooser,
 # status bar, title and intro, advisors, news pop-up and help balloon,
-# about box and credits, the debug window (--debug-window).
+# about box and credits, the Audio Settings window, the debug window
+# (--debug-window).
 target_sources(afterlife_core PRIVATE src/game/shell.c src/ui/title.c src/ui/advisors.c src/ui/news.c
-    src/ui/about.c src/ui/about_credits.c src/ui/debugwin.c)
+    src/ui/about.c src/ui/about_credits.c src/ui/audiodlg.c src/ui/debugwin.c)
 
 # tests/title_test: the title sequence (intro, animated title, menus)
 # driven by synthetic input from the modal pump; writes PPM screenshots.

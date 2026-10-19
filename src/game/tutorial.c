@@ -30,6 +30,7 @@
 #include "ui/about.h"
 #include "ui/advisors.h"
 #include "ui/advisors_int.h"
+#include "ui/audiodlg.h"
 #include "ui/controls.h"
 #include "ui/ctrlpanel.h"
 #include "ui/graphview.h"
@@ -48,8 +49,8 @@
 TutorialHooks tutorial_hooks;
 
 /* The game's windows as game_main lists them (0x646390, 0x12 entries of
- * {flags, window, x, y}; the port has no debug window (0x5f7470) or
- * 0x638ea0 here). */
+ * {flags, window, x, y}; the port has no debug window (0x5f7470) here;
+ * the last is the Audio Settings window 0x638ea0). */
 #define TUT_WINDOWS 15
 enum { WF_VISIBLE = 1, WF_MINIMIZED = 2, WF_PLACED = 4 };
 
@@ -388,7 +389,7 @@ static void fill_window_table(void)
     WmWindow *const w[TUT_WINDOWS] = {
         graphview_window(), microview_window(), g_tilechooser_window, soulview_window(), g_ctrlpanel_window,
         advisor_window(),   NULL,               mapview_window(),     news_window(),     planetview_window(),
-        macro_window(),     tutorialwin_window(),               about_window(),       planetview_disaster_window(), NULL,
+        macro_window(),     tutorialwin_window(),               about_window(),       planetview_disaster_window(), audiodlg_window(),
     };
     for (int i = 0; i < TUT_WINDOWS; i++)
         tut.win[i].w = w[i];

@@ -23,7 +23,7 @@ source file. The module boundaries below follow that rule plus the call graph.
 | 0x408eb0-0x409baf | `tile_load_all` / `tile_unload_all` (named; loads tile sets with the progress bar) | map.md (port loads sets directly) |
 | 0x42b102 | `map_view_select_plane` (renderer half; the sim side effects aren't ported) | map.md |
 | 0x4514a4 | `map_rotate_cells` (named, **not** ported) | map.md |
-| 0x4750f0-0x47619f | game sound API (`snd_play`, `snd_stop`, preload, audio dialog) | imuse.md, `src/game/sound.c` (play/stop/preload) |
+| 0x4750f0-0x47619f | game sound API (`snd_play`, `snd_stop`, preload, audio dialog) | imuse.md, `src/game/sound.c` (play/stop/preload), `src/game/music.c`, `src/ui/audiodlg.c` (Audio Settings) |
 | 0x4b8cd0-0x4b9470 | mouse | `src/gfx/mouse.c` |
 | 0x4b9470-0x4ba0f0 | sound slots / iMUSE host | `src/game/sound.c` |
 | 0x4ba100-0x4c1568 | controls (button ported; scrollbar, text, list, message box: **UI agent**) | ui.md |
@@ -583,6 +583,7 @@ the original address in a comment to the *owner's* header, never its own copy.
   tool drag and highlight, the rest of game_view_proc), `shell.h` (shared
   globals, `shell_hooks` for WP6b/WP8: Microview/Soulview/Macromanager,
   audio dialog, tutorial), `src/game/music.c` (0x4752c2-0x475607),
+  `src/ui/audiodlg.c` (Audio Settings, 0x4756f4-0x4761a0),
   `src/ui/ctrlpanel.c` (control panel, tile chooser 0x455ed7-0x456402),
   `statusbar.c`, `title.c`, `advisors.c`/`advisors_text.c`, `news.c`,
   `about.c`. Load/save use a native file picker

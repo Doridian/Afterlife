@@ -46,6 +46,7 @@
 #include "platform/platform.h"
 #include "ui/about.h"
 #include "ui/advisors.h"
+#include "ui/audiodlg.h"
 #include "ui/controls.h"
 #include "ui/ctrlpanel.h"
 #include "ui/debugwin.h"
@@ -1697,6 +1698,7 @@ static void install_hooks(void)
     shell_hooks.soulview_show = infoviews_soulview_show;
     shell_hooks.macro_show = infoviews_macro_show;
     shell_hooks.views_changed = infoviews_changed;
+    shell_hooks.audio_dialog = audiodlg_show;
     /* the tutorial (WP8) */
     shell_hooks.tutorial = tutorial_run;
     wm_hooks.attract_stop = tutorial_attract_stop;
@@ -1812,7 +1814,8 @@ int game_main_init(int argc, char **argv)
     macro_create();
     load_step();
     load_step();
-    load_step(); /* the audio dialog (snd_audio_dialog_create) */
+    audiodlg_create(g_main_window); /* 0x4756f4 snd_audio_dialog_create */
+    load_step();
     graphview_create();
     load_step();
     microview_create();
@@ -1905,6 +1908,7 @@ void game_main_shutdown(void)
     akos_talk_shutdown(); /* 0x4b94b0 */
     akos_shutdown();
     about_destroy();
+    audiodlg_destroy();
     debugwin_destroy();
     microview_destroy();
     macro_destroy();

@@ -67,6 +67,10 @@ void snd_stop(uint32_t res_id);              /* 0x4750f0 */
 void snd_preload(uint32_t res_id);           /* 0x475428 */
 void snd_preload_locked(uint32_t res_id);    /* 0x475467 */
 void snd_unload(uint32_t res_id);            /* 0x4754a1 */
+/* 0x4755dd / 0x4755f2: snd_sfx_enabled 0 / 1 (the Audio Settings' Sound
+ * FX toggle; the Music toggle is music_off / music_on, game/music.h). */
+void snd_sfx_off(void);
+void snd_sfx_on(void);
 extern int snd_music_enabled; /* 0x6643a8 */
 extern int snd_sfx_enabled;   /* 0x6643ac */
 

@@ -470,6 +470,10 @@
 0x004754a1 func snd_unload
 0x004754d7 func snd_music_play
 0x00475569 func music_stop
+0x0047558c func music_off  # Audio Settings Music toggle off: snd_music_enabled 0, snd_stop(snd_current_music)
+0x004755b9 func music_on  # snd_music_enabled 1, snd_current_music = music_pick(0)
+0x004755dd func snd_sfx_off  # snd_sfx_enabled = 0
+0x004755f2 func snd_sfx_on  # snd_sfx_enabled = 1
 0x00475607 func music_tick
 0x004756f4 func snd_audio_dialog_create
 0x00475bd9 func snd_audio_dialog_proc
@@ -1587,6 +1591,20 @@
 0x004f3104 data economy_variety
 0x004f3134 data economy_training
 0x004f31c8 data mapview_buttons
+0x004f3230 data audio_dlg_grab_x
+0x004f3234 data audio_dlg_music_vol  # group 4 volume while the Music toggle is off
+0x004f3238 data audio_dlg_master_btn
+0x004f323c data audio_dlg_voice_btn
+0x004f3240 data audio_dlg_grab_y
+0x004f3244 data audio_dlg_master_slider
+0x004f3248 data audio_dlg_music_slider
+0x004f324c data audio_dlg_voice_slider
+0x004f3250 data audio_dlg_sfx_slider
+0x004f33c8 data audio_dlg_master_vol  # group 0 volume while the Master toggle is off
+0x004f33cc data audio_dlg_music_btn
+0x004f33d0 data audio_dlg_voice_vol
+0x004f33d4 data audio_dlg_sfx_vol
+0x004f33d8 data audio_dlg_sfx_btn
 0x004f3f88 data planet_sin_min
 0x004f3f90 data planet_sin_sum
 0x004f4028 data planet_sin_avg
@@ -1769,6 +1787,7 @@
 0x00638660 data advisor_window
 0x00638694 data planet_deaths
 0x0063869c data tut_active
+0x00638ea0 data audio_dlg_window
 0x00638f14 data microview_page
 0x00639040 data macro_kinds
 0x00639048 data macro_focus
@@ -1881,6 +1900,9 @@
 0x006607b8 data mapview_x0
 0x006607bc data mapview_y0
 0x0066439c data snd_current_music
+0x006643a8 data snd_music_enabled
+0x006643ac data snd_sfx_enabled
+0x006643b8 data audio_dlg_dragging
 0x0066445c data news_popup_up
 0x00664824 data soulview_picture_mode
 0x0066aee4 data save_version

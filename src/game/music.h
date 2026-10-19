@@ -22,6 +22,11 @@ int music_tick(int countdown);
 void music_switch(uint32_t id);
 /* 0x475569: stops the current track. */
 void music_stop(void);
+/* 0x47558c: the Audio Settings' Music toggle off: snd_music_enabled 0,
+ * the current track stops. */
+void music_off(void);
+/* 0x4755b9: on again: snd_music_enabled 1 and a new track. */
+void music_on(void);
 /* 0x4753f2 snd_fade_out_music: fades the current track out over `ms`. */
 void music_fade_out(int ms);
 /* The current track (0x66439c), 0 = none. */
