@@ -173,6 +173,7 @@ WmWindow *wm_last_activated(void); /* 0x67270c */
 /* 0x672750: 0 while the attract mode runs; the original starts at 0 and
  * the first input calls hooks.attract_stop (0x4ac69c), which sets it. */
 void wm_set_input_live(bool live);
+bool wm_input_live(void);
 bool wm_shift_down(void);  /* 0x674330 */
 
 /* --- creation ---------------------------------------------------------------- */

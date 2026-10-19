@@ -6,6 +6,7 @@
 #include "game/util.h"
 #include "game/world.h"
 #include "imuse/imuse.h"
+#include "ui/wm.h"
 
 static uint32_t g_current;  /* 0x66439c */
 static uint32_t g_previous; /* 0x6643a0 */
@@ -37,9 +38,8 @@ uint32_t music_pick(uint32_t previous)
             track = (uint32_t)rand_range(0x10039, 0x1003f);
         while (track == previous);
     }
-    /* the original also requires wm_input_live (no music in the attract
-     * mode, which isn't ported) */
-    if (snd_music_enabled) {
+    /* no music in the attract mode */
+    if (snd_music_enabled && wm_input_live()) {
         g_current = track;
         snd_play(track, 4);
     }

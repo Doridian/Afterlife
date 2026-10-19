@@ -508,6 +508,7 @@ WmWindow *wm_focus(void) { return g_focus; }               /* 0x4c5eb9 */
 void wm_set_focus(WmWindow *w) { g_focus = w; }            /* 0x4c62cc */
 WmWindow *wm_last_activated(void) { return g_last_active; }
 void wm_set_input_live(bool live) { g_input_live = live; }
+bool wm_input_live(void) { return g_input_live; }
 bool wm_shift_down(void) { return g_shift; }
 void wm_set_open_menu(WmWindow *menu) { g_open_menu = menu; }
 WmWindow *wm_open_menu(void) { return g_open_menu; }
