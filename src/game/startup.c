@@ -20,8 +20,10 @@
 #include "game/resource.h"
 #include "game/sound.h"
 #include "game/timer.h"
+#include "gfx/akos_talk.h"
 #include "gfx/exe_res.h"
 #include "gfx/font.h"
+#include "gfx/map_view.h"
 #include "gfx/mouse.h"
 #include "gfx/palette.h"
 #include "gfx/surface.h"
@@ -397,6 +399,13 @@ static bool wm_key_poll(int *type, int *key, int *ch)
 }
 
 static void wm_task_shutdown(void) { wm_shutdown(); } /* 0x4c1722 */
+/* map_view_draw (0x4ea0b6) every 300 cells */
+static void map_draw_idle(void)
+{
+    snd_idle_imuse();
+    akos_talk_idle();
+}
+
 static void wm_task_suspend(void) { wm_suspend(); }   /* 0x4c176b */
 static void wm_task_resume(void) { wm_resume(); }     /* 0x4c177d */
 
@@ -408,6 +417,7 @@ static int wm_init_step(void)
 {
     wm_hooks.key_poll = wm_key_poll;
     wm_hooks.sound_idle = snd_idle_imuse;
+    map_view_set_idle(map_draw_idle);
     sys_register_task(wm_initialize, wm_task_shutdown, wm_task_suspend, wm_task_resume, wm_idle);
     if (wm_initialize() != 0) {
         sys_unregister_task(wm_initialize);
