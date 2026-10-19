@@ -160,7 +160,6 @@ static void redraw(WmWindow *w, int left, int right, int top, int bottom)
 
 static void help(int x, int y, const char *s)
 {
-    /* TODO(WP7): help_balloon_show 0x478a14 isn't ported; no-op without a hook. */
     if (planetview_hooks.help_balloon)
         planetview_hooks.help_balloon(x, y, 0x78, s);
 }
@@ -394,6 +393,14 @@ static bool point_to_sector(int x, int y, int *sx, int *sy)
 }
 
 /* 0x4a7c4a: outside the globe area (a click there drags the window). */
+/* 0x41135b graph_in_circle: (px, py) is within r of (cx, cy) along both
+ * axes' chords (as in graphview.c) */
+static bool in_circle(int cx, int cy, int r, int px, int py)
+{
+    int dx = px - cx, dy = py - cy;
+    return !(r * r - dy * dy < dx * dx || r * r - dx * dx < dy * dy);
+}
+
 static bool outside_globe(int x, int y)
 {
     const GfxRect r = {0xc, 0x187, 0x1a, 0xcd};
@@ -1827,8 +1834,10 @@ static intptr_t planetview_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t 
     case WM_MSG_MOUSEMOVE:
         if (pv.dragging)
             drag_window(w, (int)a, (int)b, pv.grab_x, pv.grab_y);
-        /* TODO(WP7): with influence on, the cursor (0x6464cc, 0x64653c over
-         * the globe when there's a price) comes from the game shell. */
+        else if (pv.influence && planetview_hooks.cursor)
+            planetview_hooks.cursor(
+                (in_circle(0x66, 0x74, 0x55, (int)a, (int)b) || in_circle(0x12e, 0x74, 0x55, (int)a, (int)b)) &&
+                pv.cost != 0);
         break;
     case WM_MSG_LBUTTONDOWN:
         wm_raise(w);
@@ -1886,7 +1895,8 @@ static intptr_t planetview_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t 
     case WM_MSG_KEYUP:
         return wm_send(w->parent, w->parent, msg, a, b);
     case WM_MSG_SHOW:
-        /* TODO(WP7): hidden: back to the normal cursor (0x6464cc). */
+        if (!a && planetview_hooks.cursor)
+            planetview_hooks.cursor(false); /* hidden: back to the arrow */
         break;
     case WM_MSG_CTL_RELEASE:
         influence_close();
@@ -2387,7 +2397,6 @@ static void hook_view_reset(void)
 
 static void hook_busy_cursor(bool on)
 {
-    /* TODO(WP7): ui_busy_cursor isn't ported; no-op without a hook. */
     if (planetview_hooks.busy_cursor)
         planetview_hooks.busy_cursor(on);
 }

@@ -1572,8 +1572,8 @@ int wm_initialize(void)
 {
     wm_queue_clear();
     g_prev_mouse = gfx_mouse_set_handler(mouse_handler);
-    /* kb_set_handler(wm_key_event): the keyboard module isn't ported; its
-     * owner can call wm_key_event or set wm_hooks.key_poll */
+    /* kb_set_handler(wm_key_event): the port polls through wm_hooks.key_poll
+     * instead (game/startup.c) */
     g_prev_paint = gfx_set_paint_handler(paint_handler);
     rgn_pool_init();
     GfxRect r = {0, gfx_screen_width() - 1, 0, gfx_screen_height() - 1};

@@ -28,7 +28,6 @@ static int g_drag_dx, g_drag_dy;          /* 0x4f3038 / 0x4f3018 */
 static bool g_chooser_active;             /* 0x650078 */
 static int g_chooser_w, g_chooser_h;      /* 0x6464d0 / 0x646544: its full size */
 static PlatCursor *g_cursor_rocks;        /* 0x646538 (0x7c) */
-static PlatCursor *g_cursor_83;           /* 0x64653c (0x83) */
 
 /* The chooser's items (0x639120..: 0x639126 + 0x10 * i) */
 typedef struct ChooserItem {
@@ -163,7 +162,7 @@ bool ctrlpanel_create(void)
             gfx_surface_destroy(b);
     }
     g_cursor_rocks = gfx_cursor_load(0x7c);
-    g_cursor_83 = gfx_cursor_load(0x83);
+    g_shell_cursor_83 = gfx_cursor_load(0x83);
     g_shell_busy_cursor = gfx_cursor_load(0x84);
 
     /* the Choose Tile Window: 5 x 2 copies of bitmap 800 */
@@ -215,9 +214,9 @@ void ctrlpanel_destroy(void)
         g_shell_tool_cursors[i] = NULL;
     }
     gfx_cursor_destroy(g_cursor_rocks);
-    gfx_cursor_destroy(g_cursor_83);
+    gfx_cursor_destroy(g_shell_cursor_83);
     gfx_cursor_destroy(g_shell_busy_cursor);
-    g_cursor_rocks = g_cursor_83 = g_shell_busy_cursor = NULL;
+    g_cursor_rocks = g_shell_cursor_83 = g_shell_busy_cursor = NULL;
 }
 
 /* 0x402695 */
@@ -572,7 +571,7 @@ intptr_t tilechooser_proc(WmWindow *w, unsigned msg, intptr_t a, intptr_t b)
                 if (g_prev_tool)
                     wm_send(g_ctrlpanel_window, g_ctrlpanel_window, WM_MSG_CTL_CLICK, g_prev_tool, 0);
             } else if (g_shell_tool == 0x10) {
-                g_shell_cursor = sel < 2 ? g_cursor_83 : g_cursor_rocks;
+                g_shell_cursor = sel < 2 ? g_shell_cursor_83 : g_cursor_rocks;
             } else {
                 g_shell_cursor = g_shell_tool_cursors[g_shell_tool];
             }

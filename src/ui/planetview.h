@@ -22,10 +22,9 @@
  * The disaster window ("Disaster Strikes the Planet!", bitmap 0x14c)
  * reports a disaster and plays its FLC (resource 0x1450 + kind).
  *
- * The game shell (WP7: main window, cursors, help balloons, the menu
- * bar's checks, status bar) isn't ported yet; what this module needs from
- * it comes through planetview_hooks and the setters below. Any hook may
- * be NULL.
+ * What this module needs from the game shell (main window, cursors, help
+ * balloons, the menu bar's checks, status bar) comes through
+ * planetview_hooks and the setters below. Any hook may be NULL.
  */
 #ifndef AFTERLIFE_UI_PLANETVIEW_H
 #define AFTERLIFE_UI_PLANETVIEW_H
@@ -88,6 +87,9 @@ typedef struct PlanetviewHooks {
     void (*pump)(void);
     /* ui_busy_cursor (g_planet_hooks.busy_cursor ends up here). */
     void (*busy_cursor)(bool on);
+    /* ms_set_cursor with influence on: the arrow (0x6464cc), or with a
+     * price over the globe 0x64653c. */
+    void (*cursor)(bool price);
     /* 0x47f8fe, the Soulview's SOUL name generator (out >= 60 bytes).
      * NULL: soulview_soul_name (ui/soulview.h). */
     void (*soul_name)(uint32_t seed, char *out);

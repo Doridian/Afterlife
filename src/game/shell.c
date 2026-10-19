@@ -67,7 +67,7 @@ int g_game_paused;
 uint8_t g_game_speed, g_game_in_progress, g_game_command, g_game_next_command, g_shell_repaint;
 int g_game_running;
 int g_shell_tool;
-PlatCursor *g_shell_arrow, *g_shell_cursor, *g_shell_tool_cursors[0x17], *g_shell_busy_cursor;
+PlatCursor *g_shell_arrow, *g_shell_cursor, *g_shell_tool_cursors[0x17], *g_shell_busy_cursor, *g_shell_cursor_83;
 ShellPickFn shell_pick_file_hook;
 ShellHooks shell_hooks;
 
@@ -1454,6 +1454,12 @@ static void hook_pv_hidden(void)
         ctl_button_set_pressed(shell_ctrl_button(0x1e), false, true);
 }
 static void hook_pump(void) { sys_pump(); }
+static void hook_pv_cursor(bool price)
+{
+    PlatCursor *c = price ? g_shell_cursor_83 : g_shell_arrow;
+    if (c)
+        gfx_cursor_set(c);
+}
 static void hook_planet_pump(bool frame)
 {
     sys_pump();
@@ -1644,6 +1650,7 @@ static void install_hooks(void)
     planetview_hooks.status_redraw = statusbar_draw;
     planetview_hooks.pump = hook_pump;
     planetview_hooks.busy_cursor = shell_busy_cursor;
+    planetview_hooks.cursor = hook_pv_cursor;
     planetview_install_hooks();
     g_planet_hooks.pump = hook_planet_pump;
     g_planet_hooks.sound = hook_sound;

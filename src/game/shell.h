@@ -37,6 +37,7 @@ extern PlatCursor *g_shell_arrow;      /* 0x6464cc: the game's arrow cursor (0x7
 extern PlatCursor *g_shell_cursor;     /* 0x6462d0: cursor over the main view (by tool) */
 extern PlatCursor *g_shell_tool_cursors[0x17]; /* 0x6464dc[1..0x16]: cursors 0x66.. per tool */
 extern PlatCursor *g_shell_busy_cursor;        /* 0x646540 (0x84) */
+extern PlatCursor *g_shell_cursor_83;          /* 0x64653c (0x83) */
 
 /* game_command values (game_main's switch) */
 enum {
