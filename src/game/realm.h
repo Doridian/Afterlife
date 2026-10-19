@@ -174,6 +174,23 @@ void realm_ports_year(void);
 void realm_ports_animate(void);
 /* 0x42dd50: hands the realm's siphon pool (unk_7f38) to the set-30 cells */
 void realm_siphons_fill(void);
+/* 0x42dcdf siphon_gauge_fill / 0x42dc42 siphon_gauge_total: the two gauges
+ * of the siphon with origin (x, y) and set-30 entry e on the sim grid `sim`
+ * (the original reads the current realm's): `fill` 246..255 from the
+ * year's intake (+5) against the entry's capacity, `total` 1..9 from the
+ * store (+9) against 42 x capacity. The map renderer draws them as the
+ * set-30 meter (gfx/tile_draw.h TileMeterFn). False if e is past the
+ * table (the original reads whatever follows it). */
+bool realm_siphon_gauges(const SimCell *sim, int x, int y, unsigned e, uint8_t *fill, uint8_t *total);
+/* The set-30 meter of the map renderer (a gfx/tile_draw.h TileMeterFn;
+ * tile_draw 0x4e6a6a calls the two gauges): lo = total, hi = fill, read
+ * from the sim cells of the plane the view draws, the way
+ * map_view_select_plane (0x42b102) moves sim_cells_current along with the
+ * view. ctx is the GameState (NULL: g_state; the middle plane then uses
+ * g_world's current realm like the original, other states draw no meter
+ * there). */
+struct MapView;
+bool realm_siphon_meter(void *ctx, const struct MapView *v, int x, int y, int index0, uint8_t *lo, uint8_t *hi);
 /* 0x448077: recomputes hist_a[].unk_00 as the sum of its buckets */
 void realm_hist_totals(void);
 

@@ -17,6 +17,7 @@
 #include "formats/tile.h"
 #include "game/build.h"
 #include "game/planet.h"
+#include "game/realm.h"
 #include "game/resource.h"
 #include "game/rotate.h"
 #include "game/shell_int.h"
@@ -102,6 +103,7 @@ bool shell_view_init(const uint8_t *rgbx)
     g_map_view.focus_x = g_map_view.focus_y = -1;
     g_map_view.set_mask = 0xffffffffu;
     g_map_view.objects = g_objects;
+    g_map_view.meter = realm_siphon_meter; /* tile_draw's set-30 gauges */
     map_planes_init(&g_map_planes);
     shell_view_attach();
     return loaded > 0;

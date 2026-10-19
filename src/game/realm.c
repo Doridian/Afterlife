@@ -12,6 +12,7 @@
 #include "game/souls.h"
 #include "game/structure.h"
 #include "game/tables.h"
+#include "gfx/tile_draw.h"
 
 /* ---- Raw access ---------------------------------------------------------------
  *
@@ -1477,19 +1478,44 @@ void realm_ports_animate(void)
     }
 }
 
-/* 0x42dcdf / 0x42dc42: the two fill gauges of a siphon (redraw test) */
-static int8_t siphon_gauge1(int x, int y, unsigned e)
+/* 0x42dcdf siphon_gauge_fill: 255 - 9 * (+5 / capacity), 246..255 */
+static uint8_t gauge_fill(const SimCell *c, unsigned e)
 {
-    return (int8_t)(-1 - (int8_t)mul_div_clamp(sc_u32(x, y, 5), g_tables.set30[e % 3].capacity, 9));
+    return (uint8_t)(0xff - (uint8_t)mul_div_clamp(sim_cell_u32(c, 5), g_tables.set30[e].capacity, 9));
 }
-static uint8_t siphon_gauge2(int x, int y, unsigned e)
+/* 0x42dc42 siphon_gauge_total: 10 - 9 * (room left in +9 / 42 x capacity),
+ * 1..9 */
+static uint8_t gauge_total(const SimCell *c, unsigned e)
 {
-    uint32_t full = g_tables.set30[e % 3].capacity * 0x2a;
-    uint32_t v = sc_u32(x, y, 9);
+    uint32_t full = g_tables.set30[e].capacity * 0x2a;
+    uint32_t v = sim_cell_u32(c, 9);
     if (full <= v)
         v = full;
     uint8_t b = (uint8_t)(10 - (uint8_t)mul_div_clamp(full - v, full, 9));
     return b > 8 ? 9 : b;
+}
+
+bool realm_siphon_gauges(const SimCell *sim, int x, int y, unsigned e, uint8_t *fill, uint8_t *total)
+{
+    if (!sim || x < 0 || x >= GS_MAP_W || y < 0 || y >= GS_MAP_H || e >= 3)
+        return false; /* past the table (the original reads other globals) */
+    const SimCell *c = &sim[y * GS_MAP_W + x];
+    *fill = gauge_fill(c, e);
+    *total = gauge_total(c, e);
+    return true;
+}
+
+bool realm_siphon_meter(void *ctx, const MapView *v, int x, int y, int index0, uint8_t *lo, uint8_t *hi)
+{
+    GameState *gs = ctx ? ctx : &g_state;
+    const SimCell *sim;
+    if (v->plane == GS_PLANE_HELL || v->plane == GS_PLANE_HEAVEN)
+        sim = gs->plane[v->plane].sim; /* where 0x42b102 points sim_cells_current */
+    else if (gs == &g_state)
+        sim = g_world.sim; /* the middle plane leaves it on the last realm */
+    else
+        return false;
+    return index0 >= 0 && realm_siphon_gauges(sim, x, y, (unsigned)index0, hi, lo);
 }
 
 /* 0x42dd50 */
@@ -1503,8 +1529,8 @@ void realm_siphons_fill(void)
             unsigned e = mc_entry(x, y);
             if (e >= 3)
                 continue; /* past the table (the original reads other globals) */
-            int8_t g1 = siphon_gauge1(x, y, e);
-            uint8_t g2 = siphon_gauge2(x, y, e);
+            uint8_t g1, g2, n1, n2;
+            realm_siphon_gauges(g_world.sim, x, y, e, &g1, &g2);
             uint32_t take = g_tables.set30[e].capacity;
             if (pool <= take)
                 take = pool;
@@ -1512,7 +1538,8 @@ void realm_siphons_fill(void)
             sc_set_u32(x, y, 5, take);
             sc_set_u32(x, y, 9, sc_u32(x, y, 9) + take);
             pool -= take;
-            if (siphon_gauge1(x, y, e) != g1 || siphon_gauge2(x, y, e) != g2)
+            realm_siphon_gauges(g_world.sim, x, y, e, &n1, &n2);
+            if (n1 != g1 || n2 != g2)
                 redraw(x, y, g_tables.set30[e].size, 0, 0, 0, 1);
         }
 }

@@ -687,7 +687,7 @@ TileDrawResult tile_draw(GfxSurface *dst, MapView *v, int map_x, int map_y, int 
                 f.ov1 = get_entry(SLOT_OVERLAY, 30 + size, &oe) && strip_open(&oe, strip, &o1);
         }
         if (set == SLOT_METER && org_x > 0 && v->meter)
-            f.meter = v->meter(v->meter_ctx, org_x, org_y, (int)index - 1, &f.meter_lo, &f.meter_hi);
+            f.meter = v->meter(v->meter_ctx, v, org_x, org_y, (int)index - 1, &f.meter_lo, &f.meter_hi);
         f.fade = fade;
         f.fade_thr = (uint32_t)fade * 0x19999999u;
         f.fx = f.ov1 || f.ov2 || f.shade0 || f.tint || f.shade4 || f.noise || fade != 0 || f.meter;

@@ -13,6 +13,8 @@
  *   sets/<res>_z<zoom>.png  every entry of every set at 2x (z-1), 1:1, 1:2, 1:4
  *   effects.png            one small map per effect (rows: 2x, z0, z1, z2)
  *   synth_*.png            a synthetic map of zones, buildings and roads
+ *   siphons_z0.png         set-30 siphons at four fill levels (meter gauges;
+ *                          the gauge values are self-checked too)
  *   <save>_*.png           the three planes of each ALSV savegame
  *   <save>_objects*.png    the same with trains and boats running (map
  *                          objects drawn incrementally and repainted)
@@ -27,6 +29,7 @@
 #include "game/karma.h"
 #include "game/mapobj.h"
 #include "game/planet.h"
+#include "game/realm.h"
 #include "game/resource.h"
 #include "game/savegame.h"
 #include "game/sim.h"
@@ -176,9 +179,14 @@ static void check(int ok, const char *what)
     }
 }
 
+/* the state the set-30 meter reads (realm_siphon_meter; NULL: g_state) */
+static GameState *g_meter_state;
+
 static void view_init(MapView *v, GfxSurface *s, int zoom, int mag)
 {
     memset(v, 0, sizeof *v);
+    v->meter = realm_siphon_meter;
+    v->meter_ctx = g_meter_state;
     v->width = v->height = 100;
     v->cell_w = 32;
     v->cell_h = 16;
@@ -667,6 +675,7 @@ static void render_save(const char *path)
         g_failures++;
         return;
     }
+    g_meter_state = &gs;
     uint32_t *cells[4] = {0};
     uint8_t *objmap[4] = {0};
     for (int pl = 1; pl <= 3; pl++) {
@@ -745,7 +754,66 @@ static void render_save(const char *path)
         save(s, name);
         gfx_surface_destroy(s);
     }
+    g_meter_state = NULL;
     savegame_free(&gs);
+}
+
+/* --- set-30 meters (game/realm.c realm_siphon_meter) ------------------------
+ *
+ * The shipped saves have no siphons, so this stamps each siphon entry into
+ * an empty Heaven at four fill levels (sim +5 intake against the capacity,
+ * +9 store against 42 x capacity: none, a third, two thirds, full) plus one
+ * with its origin in column 0, which the renderer draws without a meter
+ * (tile_draw only asks for one when the origin x is > 0). */
+static void siphon_sheet(void)
+{
+    static GameState gs;
+    memset(&gs, 0, sizeof gs);
+    tables_init_defaults();
+    uint32_t *cells = gs.plane[3].cells;
+    terrain(cells, GS_MAP_CELLS);
+    GfxSurface *s = gfx_surface_create(1600, 1000);
+    fill(s, 0x13); /* the game's backdrop: a gauge's empty part is see-through */
+    MapView v;
+    g_meter_state = &gs;
+    view_init(&v, s, 0, 0);
+    g_meter_state = NULL;
+    v.cells = cells;
+    v.objmap = gs.plane[3].objmap;
+    v.plane = 3;
+    int placed = 0;
+    for (unsigned e = 0; e < 3; e++)
+        for (int k = 0; k < 4; k++) {
+            int x0 = 3 + k * 7, y0 = 6 + (int)e * 9;
+            if (!stamp(&v, cells, x0, y0, 30, e + 1, 0))
+                continue;
+            SimCell *c = &gs.plane[3].sim[y0 * GS_MAP_W + x0];
+            uint32_t cap = g_tables.set30[e].capacity;
+            sim_cell_set_u32(c, 5, (uint32_t)((uint64_t)cap * (uint32_t)k / 3));
+            sim_cell_set_u32(c, 9, (uint32_t)((uint64_t)cap * 42 * (uint32_t)k / 3));
+            uint8_t lo = 0, hi = 0;
+            bool m = realm_siphon_meter(&gs, &v, x0, y0, (int)e, &lo, &hi);
+            if (!m || lo != (k == 3 ? 9 : 1 + 3 * k) || hi != 0xff - 3 * k) {
+                fprintf(stderr, "siphon %u level %d: meter %d lo %u hi %u\n", e, k, m, lo, hi);
+                g_failures++;
+            }
+            placed++;
+        }
+    stamp(&v, cells, 0, 3, 30, 1, 0); /* origin in column 0: no meter */
+    printf("siphons: %d stamped (+1 in column 0)\n", placed);
+    int mx = 13, my = 13, sx = (mx - my + 99) * 16, sy = (mx + my) * 8;
+    v.origin_x = -(sx - 800);
+    v.origin_y = -sy + 600;
+    GfxRect b = {0, 1599, 0, 999};
+    map_view_draw(s, &v, &b);
+    save(s, "siphons_z0.png");
+    if (getenv("NOMETER")) {
+        fill(s, 0x13); /* the game's backdrop: a gauge's empty part is see-through */
+        v.meter = NULL;
+        map_view_draw(s, &v, &b);
+        save(s, "siphons_nometer_z0.png");
+    }
+    gfx_surface_destroy(s);
 }
 
 /* --- map objects (game/mapobj.c, gfx/map_objects.c) --------------------------
@@ -992,6 +1060,7 @@ int main(int argc, char **argv)
         effects_sheet();
         synthetic_map();
     }
+    siphon_sheet();
     for (int i = 4; i < argc; i++)
         render_save(argv[i]);
     bool planet = planet_tables_load();

@@ -186,5 +186,22 @@ through `map_view_redraw_object`, and writes that picture, a full repaint of
 the same state (they differ in a few hundred pixels at most) and 1:1 crops
 around a train and a boat.
 
-Not ported yet: the plane-select side effects on simulation tables, the
-set-30 meter source (simulation), and `map_rotate_cells`.
+The siphon sheet (`siphons_z0.png`) stamps each set-30 entry into an empty
+Heaven at four fill levels and checks the gauge values; one more siphon has
+its origin in column 0 and is drawn without a meter.
+
+The set-30 meter: whenever tile_draw (0x4e6a6a) draws a set-30 strip from
+a map cell whose building origin has x > 0, it calls `siphon_gauge_fill`
+(0x42dcdf) and `siphon_gauge_total` (0x42dc42) with the origin and the
+entry (index - 1). Both read `sim_cells_current`, which
+`map_view_select_plane` moves with the view (Hell and Heaven; the middle
+plane leaves it on the last realm). `fill` = 255 - 9 x (+5 / capacity) is
+the `hi` threshold: tube colours 246..255 at or above it become 0x48
+(yellow), the rest 0 (see-through), so the left tube fills from the bottom
+with the year's intake. `total` = 10 - 9 x (room left in +9 / 42 x
+capacity), at most 9, is `lo`: colours 1..10 at or above it become 0x30,
+the rest 0, so the right tube empties as the store fills. Previews
+(`tile_draw_preview` 0x4eb585 passes map cell 0, 0) never get a meter, nor
+does a siphon whose origin is in column 0 (quirk). In the port the hook is
+`MapView.meter` (gfx/tile_draw.h); the game installs `realm_siphon_meter`
+(game/realm.c), which picks the sim grid from the view's plane.

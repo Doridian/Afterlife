@@ -21,8 +21,8 @@ source file. The module boundaries below follow that rule plus the call graph.
 |---|---|---|
 | 0x409dc0-0x40b1bf | FLI/FLC player (`flc_*`) | rendering.md, `src/formats/flc.c` |
 | 0x408eb0-0x409baf | `tile_load_all` / `tile_unload_all` (named; loads tile sets with the progress bar) | map.md (port loads sets directly) |
-| 0x42b102 | `map_view_select_plane` (renderer half; the sim side effects aren't ported) | map.md |
-| 0x4514a4 | `map_rotate_cells` (named, **not** ported) | map.md |
+| 0x42b102 | `map_view_select_plane` (renderer half `gfx/map_view.c`, sim half `world_select_plane` in `game/world.c`; `shell_select_plane` does both) | map.md |
+| 0x4514a4 | `map_rotate_cells` | map.md, `src/game/rotate.c` |
 | 0x4750f0-0x47619f | game sound API (`snd_play`, `snd_stop`, preload, audio dialog) | imuse.md, `src/game/sound.c` (play/stop/preload), `src/game/music.c`, `src/ui/audiodlg.c` (Audio Settings) |
 | 0x4b8cd0-0x4b9470 | mouse | `src/gfx/mouse.c` |
 | 0x4b9470-0x4ba0f0 | sound slots / iMUSE host | `src/game/sound.c` |

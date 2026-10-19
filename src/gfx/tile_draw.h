@@ -51,12 +51,19 @@ static inline unsigned cell_word_strip(uint32_t c) { return (c & CELL_STRIP_MASK
                                         otherwise drawn as entry 2, plain colour 0 */
 
 struct MapObject;
+struct MapView;
 
-/* Callback for set 30's level meter (FUN_0042dc42 / FUN_0042dcdf read the
- * simulation cell): colours < 11 become 0 below `lo` and 0x30 from it,
- * colours > 245 become 0 below `hi` and 0x48 from it. Return false for no
- * meter. */
-typedef bool (*TileMeterFn)(void *ctx, int map_x, int map_y, int index0, uint8_t *lo, uint8_t *hi);
+/* Callback for set 30's level meter. tile_draw (0x4e6a6a) calls
+ * siphon_gauge_fill (0x42dcdf) and siphon_gauge_total (0x42dc42) on the
+ * current plane's simulation cell of the building's origin, with the cell's
+ * entry (index - 1), whenever it draws a set-30 strip from a map cell whose
+ * origin x is > 0 (previews pass 0, 0 and get no meter; so does a siphon in
+ * column 0). Colours < 11 become 0 below `lo` (the total gauge) and 0x30
+ * from it, colours > 245 become 0 below `hi` (the fill gauge) and 0x48 from
+ * it. `v` is the view being drawn (its plane says which realm). Return false
+ * for no meter. */
+typedef bool (*TileMeterFn)(void *ctx, const struct MapView *v, int map_x, int map_y, int index0, uint8_t *lo,
+                            uint8_t *hi);
 
 typedef struct MapView {
     uint32_t *cells;          /* +0x00: width x height cells, row-major */
