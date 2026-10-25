@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Afterlife
+Comment=The native port of Afterlife (needs the game's CD)
+Exec=afterlife
+Icon=afterlife
+Categories=Game;Simulation;
+Terminal=false

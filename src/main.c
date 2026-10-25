@@ -10,7 +10,8 @@
  *                  [--window-test=DIR] [--debug-window]
  *   DATA_DIR stands in for the original's install folder (default: the
  *   folder of FILE.INI if one is given, else "orig", in the current folder
- *   or next to the executable). FILE.INI is resolved
+ *   or next to the executable, else the folder or CD image the player
+ *   picked, platform/datafind.c). FILE.INI is resolved
  *   in it (default ALIFE.ini, matched case-insensitively). --quit exits right
  *   after initialisation (for testing). The rest are port settings
  *   (game/enhance.h, docs/enhancements.md), overriding ALIFEPORT.INI.
@@ -47,6 +48,7 @@
 #include "gfx/palette.h"
 #include "gfx/surface.h"
 #include "imuse/imuse.h"
+#include "platform/datafind.h"
 #include "platform/platform.h"
 #include "ui/controls.h"
 #include "ui/wm.h"
@@ -244,13 +246,29 @@ int main(int argc, char **argv)
         dir = n ? ini_dir : "/";
         ini_name = slash + 1;
     }
-    plat_set_data_dir(dir ? dir : default_data_dir());
     ini_set_path(ini_name);
 
     /* app_register_class (0x4cd892): the window class and a hidden 1x1
      * window, before any subsystem. The display init sizes and shows it. */
     if (!plat_init(NULL, 1, 1))
         return 1;
+
+#ifdef __EMSCRIPTEN__
+    plat_set_data_dir(dir ? dir : default_data_dir());
+#else
+    /* No DATA_DIR and no game data in the default place: the player picks
+     * the CD or an image of it (platform/datafind.c), unless headless. */
+    if (!dir) {
+        const char *driver = SDL_GetCurrentVideoDriver();
+        bool ask = !quit_after_init && driver && strcmp(driver, "dummy") != 0 && strcmp(driver, "offscreen") != 0;
+        dir = datafind_data_dir(default_data_dir(), ask);
+        if (!dir) {
+            plat_shutdown();
+            return 1;
+        }
+    }
+    plat_set_data_dir(dir);
+#endif
 
     /* Port settings (ALIFEPORT.INI and the switches above); the UI scale
      * must be known before the display init reads the desktop size. */

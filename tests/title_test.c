@@ -16,6 +16,7 @@
  * TITLE_TEST_FULL set, the animated title plays to the end (about a
  * minute) with a screenshot every 8 s (<prefix>_title_NN.ppm).
  */
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -275,7 +276,7 @@ int main(int argc, char **argv)
 #ifdef _WIN32
         _putenv_s("SDL_VIDEODRIVER", "dummy");
 #else
-        setenv("SDL_VIDEODRIVER", "dummy", 1);
+        SDL_setenv_unsafe("SDL_VIDEODRIVER", "dummy", 1);
 #endif
     }
     g_prefix = argv[4];

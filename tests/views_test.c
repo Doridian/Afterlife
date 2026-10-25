@@ -18,6 +18,7 @@
  * Also checks graph_history_record / graph_history_update on synthetic
  * years and that the views leave the save's state byte-identical.
  */
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -621,7 +622,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "usage: %s <data dir> <bundle> <out dir> <save> ...\n", argv[0]);
         return 2;
     }
-    setenv("SDL_VIDEODRIVER", "dummy", 1);
+    SDL_setenv_unsafe("SDL_VIDEODRIVER", "dummy", 1);
     g_out = argv[3];
     crc_init();
     plat_set_data_dir(argv[1]);

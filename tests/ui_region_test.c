@@ -4,6 +4,7 @@
  *
  *   ui_region_test
  */
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -269,7 +270,7 @@ int main(void)
 #ifdef _WIN32
     _putenv_s("SDL_VIDEODRIVER", "dummy");
 #else
-    setenv("SDL_VIDEODRIVER", "dummy", 1);
+    SDL_setenv_unsafe("SDL_VIDEODRIVER", "dummy", 1);
 #endif
     test_intersect();
     test_split();

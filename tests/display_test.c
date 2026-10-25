@@ -637,8 +637,8 @@ int main(int argc, char **argv)
     g_out = argv[2];
     setvbuf(stdout, NULL, _IONBF, 0);
     crc_init();
-    setenv("SDL_VIDEODRIVER", "dummy", 1);
-    setenv("SDL_AUDIODRIVER", "dummy", 1);
+    SDL_setenv_unsafe("SDL_VIDEODRIVER", "dummy", 1);
+    SDL_setenv_unsafe("SDL_AUDIODRIVER", "dummy", 1);
     plat_set_data_dir(argv[1]);
     ini_set_path("ALIFE.ini");
     char ini[1100];

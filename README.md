@@ -1,7 +1,7 @@
 # Afterlife
 
 A decompilation and native port of **Afterlife** (LucasArts, 1996) to portable
-C11 and SDL3, for Linux, macOS and WebAssembly.
+C11 and SDL3, for Linux, Windows, macOS and WebAssembly.
 
 Status: **playable.** All of `ALIFE.EXE`'s game code is ported:
 - the simulation, economy and SOUL flow
@@ -12,8 +12,9 @@ Status: **playable.** All of `ALIFE.EXE`'s game code is ported:
 The differential emulator tests check the simulation against the original.
 It's a non-matching decompilation: the code behaves like the original but
 doesn't compile to the same bytes. Linux is the main platform. The
-WebAssembly build runs the full game in a browser. macOS builds and passes
-the data-less tests in CI, but nobody has played it on a Mac yet.
+WebAssembly build runs the full game in a browser. Windows and macOS build
+and pass the data-less tests in CI (Windows passes the data tests under
+Wine too), but nobody has played them on real Windows or a Mac yet.
 
 **Play it in your browser:** <https://doridian.github.io/Afterlife/> (the page
 asks for your CD once; see [WebAssembly](#building) below).
@@ -24,6 +25,28 @@ This repository contains **no game data files or original code** (only the
 texts and number tables from `ALIFE.EXE` the port needs, as C data in the
 modules that use them). The game data comes from the original CD, which a
 script can download for you from the Internet Archive.
+
+## Downloads
+
+Each [release](https://github.com/Doridian/Afterlife/releases) has the port
+as one file per system, with no game data:
+
+| System | File |
+|---|---|
+| Linux (x86-64, arm64) | `afterlife-linux-x86_64.AppImage`, `afterlife-linux-arm64.AppImage` |
+| Windows (x86-64) | `afterlife-windows-x86_64.exe` |
+| macOS 11+ (Apple silicon and Intel) | `afterlife-macos.dmg` (the app; it isn't notarized: right-click → Open the first time) |
+| Browser | `afterlife-web.zip` (the page, as published on GitHub Pages) |
+
+Started from its icon, the port asks for the game files once: choose the
+CD (or a folder with its files, such as an installed Afterlife), or an
+image of the CD (`.iso`, `.bin` or `.cue`; unzip the
+[archive.org download](https://archive.org/details/AfterlifeUSA) first).
+An image's game files are copied into the port's settings folder, so the
+image isn't needed afterwards. The choice is kept there for the next start
+(`data-path.txt`; delete it to choose again). A `DATA_DIR` argument or an
+`orig/` folder in the current folder or next to the executable still comes
+first.
 
 ## Quick start
 
@@ -90,10 +113,20 @@ There's also a `debug` preset with ASan/UBSan.
 
 **macOS**: `brew install cmake ninja sdl3`, then the same commands. Without
 a `DATA_DIR` argument the port looks for `orig/` in the current folder, then
-next to the executable. Ctrl+Cmd+F toggles fullscreen and Cmd+Q asks before
+next to the executable, then asks (see [Downloads](#downloads)). Ctrl+Cmd+F toggles fullscreen and Cmd+Q asks before
 quitting. On a Retina screen the automatic UI scale (an enhancement) keeps
 the game readable; with the enhancements off it draws at native pixels and
 looks small.
+
+**Windows**: in [MSYS2](https://www.msys2.org/)'s CLANG64 shell,
+`pacman -S mingw-w64-clang-x86_64-clang mingw-w64-clang-x86_64-cmake mingw-w64-clang-x86_64-ninja git`,
+then the same commands; the build fetches SDL3 and links it in, so
+`build/native/afterlife.exe` runs on its own. Cross-building from Linux with
+[llvm-mingw](https://github.com/mstorsjo/llvm-mingw) works too, and `ctest`
+runs the tests under Wine with `-DCMAKE_CROSSCOMPILING_EMULATOR=wine`.
+
+`-DAFTERLIFE_STATIC_SDL=ON` fetches SDL3 and links it in even when one is
+installed (the release packages are built that way).
 
 **WebAssembly** (Emscripten, [docs/web.md](docs/web.md)):
 
@@ -115,8 +148,10 @@ File > Save to Download / Download Saved Game save to your computer. The
 canvas follows the browser window. Alt+Enter or F11 toggles
 fullscreen. `?arg=...` in the URL passes command-line options.
 
-CI (`.github/workflows/build.yml`) builds on Linux and macOS, runs the tests
-that need no game data, and builds the WebAssembly target.
+CI (`.github/workflows/build.yml`) builds on Linux, macOS and Windows, runs
+the tests that need no game data, builds the WebAssembly target and the
+packages of [Downloads](#downloads). A `v*` tag publishes the packages on
+the tag's release.
 
 ## Running
 
@@ -147,6 +182,7 @@ behaves like the original, bugs included.
 
 The port keeps its own settings in `ALIFEPORT.INI` in the SDL preferences
 folder (`~/.local/share/Afterlife/Afterlife/` on Linux,
+`%APPDATA%\Afterlife\Afterlife\` on Windows,
 `~/Library/Application Support/Afterlife/Afterlife/` on macOS, IndexedDB in
 the browser), so the original's `ALIFE.INI` stays untouched.
 

@@ -19,10 +19,10 @@
  *   <save>_objects*.png    the same with trains and boats running (map
  *                          objects drawn incrementally and repainted)
  */
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 
 #include "formats/tile.h"
 #include "game/build.h"
@@ -1022,7 +1022,7 @@ int main(int argc, char **argv)
     if (g_out) {
         char path[4096];
         snprintf(path, sizeof path, "%s/sets", g_out);
-        mkdir(path, 0777);
+        SDL_CreateDirectory(path);
     }
 
     size_t plen = 0;

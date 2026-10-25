@@ -392,8 +392,8 @@ int main(int argc, char **argv)
     }
     g_out = argv[2];
     crc_init();
-    setenv("SDL_VIDEODRIVER", "dummy", 1);
-    setenv("SDL_AUDIODRIVER", "dummy", 1);
+    SDL_setenv_unsafe("SDL_VIDEODRIVER", "dummy", 1);
+    SDL_setenv_unsafe("SDL_AUDIODRIVER", "dummy", 1);
     snprintf(g_save_path, sizeof g_save_path, "%s/shell_test.alf", g_out);
     plat_set_data_dir(argv[1]);
     if (!plat_data_path("ASCEN001.ASC", g_scenario_path, sizeof g_scenario_path)) {

@@ -11,9 +11,14 @@ if(EMSCRIPTEN)
     target_compile_options(SDL3::SDL3 INTERFACE --use-port=sdl3)
     target_link_options(SDL3::SDL3 INTERFACE --use-port=sdl3)
 else()
-    find_package(SDL3 CONFIG QUIET)
+    # AFTERLIFE_STATIC_SDL: SDL3 always fetched and linked in, so that the
+    # executable is the one file (the release packages)
+    option(AFTERLIFE_STATIC_SDL "Fetch SDL3 and link it statically, even if one is installed" OFF)
+    if(NOT AFTERLIFE_STATIC_SDL)
+        find_package(SDL3 CONFIG QUIET)
+    endif()
     if(NOT SDL3_FOUND)
-        message(STATUS "System SDL3 not found, fetching it")
+        message(STATUS "System SDL3 not found or not wanted, fetching it")
         include(FetchContent)
         FetchContent_Declare(SDL3
             GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
@@ -47,6 +52,22 @@ target_link_libraries(afterlife_core PUBLIC SDL3::SDL3)
 
 add_executable(afterlife src/main.c)
 target_link_libraries(afterlife PRIVATE afterlife_core)
+if(NOT EMSCRIPTEN)
+    # the game data when none is given or found: the player picks the CD or
+    # an image of it (src/platform/datafind.c)
+    target_sources(afterlife PRIVATE src/platform/datafind.c)
+endif()
+if(WIN32)
+    # a GUI program with the packages' icon (res/), one file: SDL3 is
+    # linked in (fetched, static) and so is MinGW's runtime
+    enable_language(RC)
+    target_sources(afterlife PRIVATE res/afterlife.rc)
+    set_property(SOURCE res/afterlife.rc APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/res/icon.ico)
+    set_target_properties(afterlife PROPERTIES WIN32_EXECUTABLE ON)
+    if(MINGW)
+        target_link_options(afterlife PRIVATE -static)
+    endif()
+endif()
 
 if(NOT EMSCRIPTEN)
     # tests/compbun_dump: dumps every resource of a bundle through the compbun

@@ -24,8 +24,8 @@
 
 int main(void)
 {
-    setenv("SDL_VIDEODRIVER", "dummy", 1);
-    setenv("SDL_RENDER_DRIVER", "software", 1);
+    SDL_setenv_unsafe("SDL_VIDEODRIVER", "dummy", 1);
+    SDL_setenv_unsafe("SDL_RENDER_DRIVER", "software", 1);
     int failures = 0;
     if (!plat_init("stride_test", W, H) || !gfx_init(W, H, false)) {
         fprintf(stderr, "init failed\n");

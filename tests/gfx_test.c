@@ -11,6 +11,7 @@
  * primitives. Headless (SDL dummy video driver) unless --window is given,
  * in which case it also shows the result until a key or click.
  */
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -135,7 +136,7 @@ int main(int argc, char **argv)
 #ifdef _WIN32
         _putenv_s("SDL_VIDEODRIVER", "dummy");
 #else
-        setenv("SDL_VIDEODRIVER", "dummy", 1);
+        SDL_setenv_unsafe("SDL_VIDEODRIVER", "dummy", 1);
 #endif
     }
     uint32_t bmp_id = argc > 4 ? (uint32_t)strtoul(argv[4], NULL, 0) : 1210;

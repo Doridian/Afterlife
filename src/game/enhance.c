@@ -5,6 +5,7 @@
  */
 #include "game/enhance.h"
 
+#include <SDL3/SDL.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -166,7 +167,7 @@ const char *port_settings_path(void)
 
 void enhance_init_env(void)
 {
-    const char *e = getenv("AFTERLIFE_ENHANCEMENTS");
+    const char *e = SDL_getenv("AFTERLIFE_ENHANCEMENTS");
     bool on;
     if (e && parse_bool(e, &on)) {
         g_port_settings.enhancements = on;

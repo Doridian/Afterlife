@@ -29,6 +29,7 @@
  *   <save>_micro_<page>.png, <save>_macro.png, <save>_soul_<page>.png,
  *   <save>_screen2.png
  */
+#include <SDL3/SDL.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -757,7 +758,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "usage: %s <data dir> <bundle>[,<CD bundle>] <out dir> <save> ...\n", argv[0]);
         return 2;
     }
-    setenv("SDL_VIDEODRIVER", "dummy", 1);
+    SDL_setenv_unsafe("SDL_VIDEODRIVER", "dummy", 1);
     g_out = argv[3];
     crc_init();
     plat_set_data_dir(argv[1]);

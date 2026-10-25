@@ -466,8 +466,8 @@ int main(int argc, char **argv)
     g_out = argv[2];
     setvbuf(stdout, NULL, _IONBF, 0);
     crc_init();
-    setenv("SDL_VIDEODRIVER", "dummy", 1);
-    setenv("SDL_AUDIODRIVER", "dummy", 1);
+    SDL_setenv_unsafe("SDL_VIDEODRIVER", "dummy", 1);
+    SDL_setenv_unsafe("SDL_AUDIODRIVER", "dummy", 1);
 
     char *no[] = {"afterlife", "--debug", "--debug-windows", NULL};
     char *yes[] = {"afterlife", "x.ASC", "--debug-window", NULL};

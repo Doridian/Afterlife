@@ -18,6 +18,7 @@
  * close button, the close button's menu command). Writes
  * <out dir>/news_*.png along the way.
  */
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -271,7 +272,7 @@ int main(int argc, char **argv)
 #ifdef _WIN32
         _putenv_s("SDL_VIDEODRIVER", "dummy");
 #else
-        setenv("SDL_VIDEODRIVER", "dummy", 1);
+        SDL_setenv_unsafe("SDL_VIDEODRIVER", "dummy", 1);
 #endif
     }
     crc_init();

@@ -1,12 +1,20 @@
 # Builds the port and runs the tests that need no game data (the repository
-# has none) on Linux and macOS, and builds the WebAssembly target without
-# data (the page then asks the player for their files).
+# has none) on Linux, macOS and Windows, and builds the WebAssembly target
+# without data (the page then asks the player for their files). It also
+# packages the port as one file per system: an AppImage (x86-64, arm64),
+# an .exe (x86-64) and the app in a .dmg (macOS, universal), SDL3 linked
+# into each. None carries game data: started without, the port asks for the
+# CD or an image of it (src/platform/datafind.c). A tag v* publishes the
+# packages and the web build on the tag's release.
 name: build
 
 on:
   push:
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   native:
@@ -78,3 +86,201 @@ jobs:
             build/wasm/afterlife.html
             build/wasm/afterlife.js
             build/wasm/afterlife.wasm
+
+      - name: Package (the page, for the release)
+        run: |
+          d=afterlife-web
+          mkdir $d
+          cp web/index.html build/wasm/afterlife.html build/wasm/afterlife.js build/wasm/afterlife.wasm LICENSE $d/
+          zip -r $d.zip $d
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: afterlife-web
+          path: afterlife-web.zip
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    env:
+      SDL_VIDEO_DRIVER: dummy
+      SDL_AUDIO_DRIVER: dummy
+    steps:
+      - uses: actions/checkout@v7
+
+      # CLANG64 (UCRT); no SDL3 package: AFTERLIFE_STATIC_SDL builds it in
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+          install: >-
+            mingw-w64-clang-x86_64-clang
+            mingw-w64-clang-x86_64-cmake
+            mingw-w64-clang-x86_64-ninja
+            git
+            zip
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAFTERLIFE_STATIC_SDL=ON
+
+      - name: Build
+        run: |
+          cmake --build build 2>&1 | tee build.log
+          if grep -E '(^|/)(src|tests)/[^ ]*: warning:' build.log | grep -v '_deps/'; then exit 1; fi
+
+      - name: Test (no game data)
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: |
+          # one file: SDL3 and the runtime are linked in, only Windows' DLLs are needed
+          cp build/afterlife.exe afterlife-windows-x86_64.exe
+          if ldd afterlife-windows-x86_64.exe | grep -i /clang64/; then exit 1; fi
+          # the licenses, for the release (the AppImage and the app carry theirs)
+          d=afterlife-licenses
+          mkdir $d
+          cp LICENSE $d/
+          cp build/_deps/sdl3-src/LICENSE.txt $d/SDL3-LICENSE.txt
+          zip -r $d.zip $d
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: afterlife-windows-x86_64
+          path: afterlife-windows-x86_64.exe
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: afterlife-licenses
+          path: afterlife-licenses.zip
+
+  appimage:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+            appimage_arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            appimage_arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    env:
+      APPIMAGE_EXTRACT_AND_RUN: 1
+    steps:
+      - uses: actions/checkout@v7
+
+      # SDL's build dependencies; it loads the libraries themselves at run
+      # time from the system. D-Bus: the file dialogs through the portal.
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxi-dev libxss-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl-dev \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev libdecor-0-dev libdbus-1-dev libudev-dev
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAFTERLIFE_STATIC_SDL=ON
+
+      - name: Build
+        run: cmake --build build --target afterlife
+
+      - name: Package (AppImage)
+        timeout-minutes: 10
+        run: |
+          out=afterlife-linux-${{ matrix.arch }}.AppImage
+          curl -sSLfo linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${{ matrix.appimage_arch }}.AppImage
+          chmod +x linuxdeploy
+          doc=AppDir/usr/share/doc/afterlife
+          mkdir -p $doc
+          cp LICENSE $doc/
+          cp build/_deps/sdl3-src/LICENSE.txt $doc/SDL3-LICENSE.txt
+          cp res/icon.png afterlife.png
+          LDAI_OUTPUT=$out ./linuxdeploy --appdir AppDir -e build/afterlife \
+              -d res/afterlife.desktop -i afterlife.png --output appimage
+          # (it starts, and without game data says so)
+          { SDL_VIDEO_DRIVER=offscreen SDL_AUDIO_DRIVER=dummy ./$out --quit 2>&1 || true; } | grep "RcInitialize"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: afterlife-linux-${{ matrix.arch }}
+          path: afterlife-linux-${{ matrix.arch }}.AppImage
+
+  macos-app:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      # (no Homebrew SDL3: AFTERLIFE_STATIC_SDL builds it in, for both architectures)
+      - name: Install dependencies
+        run: brew install ninja
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAFTERLIFE_STATIC_SDL=ON \
+              "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build
+        run: cmake --build build --target afterlife
+
+      - name: Package (app in a dmg)
+        timeout-minutes: 10
+        run: |
+          app=dmg/Afterlife.app
+          c=$app/Contents
+          mkdir -p $c/MacOS $c/Resources/licenses
+          cp build/afterlife $c/MacOS/
+          v=0.0.0
+          case "$GITHUB_REF" in refs/tags/v*) v=${GITHUB_REF_NAME#v} ;; esac
+          sed "s/@VERSION@/$v/" res/Info.plist > $c/Info.plist
+          # the icon, from res/icon.png (256 px)
+          mkdir afterlife.iconset
+          for n in 16 32 128 256; do
+              sips -z $n $n res/icon.png --out afterlife.iconset/icon_${n}x${n}.png > /dev/null
+              if [ $n -le 128 ]; then
+                  sips -z $((n * 2)) $((n * 2)) res/icon.png --out afterlife.iconset/icon_${n}x${n}@2x.png > /dev/null
+              fi
+          done
+          iconutil -c icns afterlife.iconset -o $c/Resources/afterlife.icns
+          cp LICENSE $c/Resources/licenses/
+          cp build/_deps/sdl3-src/LICENSE.txt $c/Resources/licenses/SDL3-LICENSE.txt
+          # one file inside: nothing but the system's libraries
+          otool -L $c/MacOS/afterlife
+          if otool -L $c/MacOS/afterlife | grep -E '/opt/homebrew|/usr/local|@rpath'; then exit 1; fi
+          lipo -archs $c/MacOS/afterlife
+          codesign --force --deep -s - $app
+          # (it starts, and without game data says so)
+          { SDL_VIDEO_DRIVER=dummy SDL_AUDIO_DRIVER=dummy $c/MacOS/afterlife --quit 2>&1 || true; } | grep "RcInitialize"
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname Afterlife -srcfolder dmg -ov -format UDZO afterlife-macos.dmg
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: afterlife-macos
+          path: afterlife-macos.dmg
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [native, wasm, windows, appimage, macos-app]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish on the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # (the page goes as afterlife-web.zip, not as the wasm artifact's loose files)
+          rm -f dist/afterlife.html dist/afterlife.js dist/afterlife.wasm
+          ls -l dist
+          gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
+          gh release upload "$TAG" dist/* --clobber

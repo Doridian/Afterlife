@@ -12,6 +12,7 @@
  *
  *   enhance_test [scratch dir]
  */
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -97,7 +98,7 @@ static void test_settings(const char *dir)
     CHECK(port_settings_save(path, &f));
     char arg_ini[1100];
     snprintf(arg_ini, sizeof arg_ini, "--port-ini=%s", path);
-    unsetenv("AFTERLIFE_ENHANCEMENTS");
+    SDL_unsetenv_unsafe("AFTERLIFE_ENHANCEMENTS");
     {
         char *argv[] = {"afterlife", arg_ini, "orig", NULL};
         enhance_init(3, argv);
@@ -111,7 +112,7 @@ static void test_settings(const char *dir)
         CHECK(!g_enhancements && g_port_settings.ui_scale == 3);
         CHECK(enhance_ui_scale_request() == 1); /* no scaling without enhancements */
     }
-    setenv("AFTERLIFE_ENHANCEMENTS", "0", 1);
+    SDL_setenv_unsafe("AFTERLIFE_ENHANCEMENTS", "0", 1);
     {
         char *argv[] = {"afterlife", arg_ini, NULL};
         enhance_init(2, argv);
@@ -122,7 +123,7 @@ static void test_settings(const char *dir)
         enhance_init(3, argv);
         CHECK(g_enhancements); /* the command line beats the environment */
     }
-    unsetenv("AFTERLIFE_ENHANCEMENTS");
+    SDL_unsetenv_unsafe("AFTERLIFE_ENHANCEMENTS");
     /* overrides aren't written back unless asked: the file is unchanged */
     PortSettings back;
     port_settings_defaults(&back);
