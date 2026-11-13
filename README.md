@@ -44,7 +44,9 @@ image of the CD (`.iso`, `.bin` or `.cue`; unzip the
 [archive.org download](https://archive.org/details/AfterlifeUSA) first).
 An image's game files are copied into the port's settings folder, so the
 image isn't needed afterwards. The choice is kept there for the next start
-(`data-path.txt`; delete it to choose again). A `DATA_DIR` argument or an
+(`data-path.txt`; delete it to choose again). Where Linux has no file
+dialog (neither xdg-desktop-portal nor zenity), a window asks for the CD,
+folder or image to be dropped on it instead. A `DATA_DIR` argument or an
 `orig/` folder in the current folder or next to the executable still comes
 first.
 
