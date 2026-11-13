@@ -1,7 +1,7 @@
 # Builds the port and runs the tests that need no game data (the repository
 # has none) on Linux, macOS and Windows, and builds the WebAssembly target
 # without data (the page then asks the player for their files). It also
-# packages the port as one file per system: an AppImage (x86-64, arm64),
+# packages the port as one file per system: an AppImage (x86-64, aarch64),
 # an .exe (x86-64) and the app in a .dmg (macOS, universal), SDL3 linked
 # into each. None carries game data: started without, the port asks for the
 # CD or an image of it (src/platform/datafind.c). A tag v* publishes the
@@ -159,13 +159,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The oldest Ubuntu LTS still in standard support, on purpose: the
+        # AppImage uses the host's glibc, which has to be at least as new as
+        # the one it was built against (the AppImage catalog tests on that
+        # release). Not the newest runner, then; move on only when this one
+        # leaves standard support.
         include:
-          - runner: ubuntu-24.04
+          - runner: ubuntu-22.04
             arch: x86_64
-            appimage_arch: x86_64
-          - runner: ubuntu-24.04-arm
-            arch: arm64
-            appimage_arch: aarch64
+          - runner: ubuntu-22.04-arm
+            arch: aarch64
     runs-on: ${{ matrix.runner }}
     env:
       APPIMAGE_EXTRACT_AND_RUN: 1
@@ -180,6 +183,9 @@ jobs:
           sudo apt-get install -y ninja-build libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
             libxi-dev libxss-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl-dev \
             libasound2-dev libpulse-dev libpipewire-0.3-dev libdecor-0-dev libdbus-1-dev libudev-dev
+          # 22.04's CMake (3.22) is older than CMakeLists.txt's 3.24: pip's
+          python3 -m pip install --user cmake
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAFTERLIFE_STATIC_SDL=ON
@@ -190,8 +196,8 @@ jobs:
       - name: Package (AppImage)
         timeout-minutes: 10
         run: |
-          out=afterlife-linux-${{ matrix.arch }}.AppImage
-          curl -sSLfo linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${{ matrix.appimage_arch }}.AppImage
+          out=afterlife-${{ matrix.arch }}.AppImage
+          curl -sSLfo linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${{ matrix.arch }}.AppImage
           chmod +x linuxdeploy
           doc=AppDir/usr/share/doc/afterlife
           mkdir -p $doc
@@ -205,8 +211,8 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: afterlife-linux-${{ matrix.arch }}
-          path: afterlife-linux-${{ matrix.arch }}.AppImage
+          name: afterlife-${{ matrix.arch }}.AppImage
+          path: afterlife-${{ matrix.arch }}.AppImage
 
   macos-app:
     runs-on: macos-26
