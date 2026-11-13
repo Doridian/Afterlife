@@ -8,7 +8,10 @@
  * folder's data-path.txt (~/.local/share/Afterlife/Afterlife/ on Linux,
  * %APPDATA%\Afterlife\Afterlife\ on Windows, ~/Library/Application
  * Support/Afterlife/Afterlife/ on macOS) and used again while it has the
- * game data.
+ * game data. Where there is no message box or file dialog to ask with (on
+ * Linux SDL's dialogs need xdg-desktop-portal or zenity, which a minimal
+ * system or a sandbox like the AppImage catalog's lacks), a window of the
+ * port's own asks for the CD, folder or image to be dropped on it.
  */
 #include "platform/datafind.h"
 
@@ -238,7 +241,7 @@ static void error_box(const char *msg)
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, TITLE, msg, NULL);
 }
 
-/* 1 a folder, 2 a CD image, 0 quit */
+/* 1 a folder, 2 a CD image, 0 quit, -1 no message box */
 static int ask_what(void)
 {
     static const SDL_MessageBoxButtonData buttons[] = {
@@ -261,11 +264,158 @@ static int ask_what(void)
     };
     int id = 0;
     if (!SDL_ShowMessageBox(&box, &id)) {
-        SDL_Log("no message box (%s): start Afterlife with the folder of the game files as its argument",
-                SDL_GetError());
-        return 0;
+        SDL_Log("no message box (%s)", SDL_GetError());
+        return -1;
     }
     return id;
+}
+
+/* --- no dialog: a window to drop it on --------------------------------------
+ * Its text in SDL's built-in 8x8 font (SDL_RenderDebugText), since SDL's
+ * own message box may not be able to draw any there either. */
+
+#define DROP_W 800
+#define DROP_H 440
+#define MARGIN 24
+
+/* text in lines as wide as the window allows at scale, broken at spaces, from
+ * y; the y after it */
+static float draw_text(SDL_Renderer *r, float y, const char *text, float scale)
+{
+    int cols = (int)((DROP_W - 2 * MARGIN) / (SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE * scale));
+    SDL_SetRenderScale(r, scale, scale);
+    while (*text) {
+        int n = (int)SDL_strlen(text);
+        if (n > cols) {
+            n = cols;
+            while (n > 0 && text[n] != ' ')
+                n--;
+            if (n == 0)
+                n = cols; /* (a long file name) */
+        }
+        char line[256];
+        SDL_snprintf(line, sizeof line, "%.*s", n, text);
+        SDL_RenderDebugText(r, MARGIN / scale, y / scale, line);
+        y += SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE * scale * 1.5f;
+        text += n;
+        while (*text == ' ')
+            text++;
+    }
+    SDL_SetRenderScale(r, 1, 1);
+    return y;
+}
+
+static void drop_draw(SDL_Renderer *r, const char *status, bool error)
+{
+    SDL_SetRenderDrawColor(r, 0x20, 0x18, 0x28, 0xFF);
+    SDL_RenderClear(r);
+    SDL_SetRenderDrawColor(r, 0xF0, 0xC0, 0x40, 0xFF);
+    float y = draw_text(r, MARGIN, "AFTERLIFE", 4) + 8;
+    SDL_SetRenderDrawColor(r, 0xE8, 0xE8, 0xE8, 0xFF);
+    y = draw_text(r, y, "Afterlife needs the files of its CD, which this port doesn't include.", 2) + 12;
+    y = draw_text(r, y,
+                  "Drop the CD (or a folder with its files, such as an installed Afterlife) or an image of "
+                  "the CD (.iso, .bin or .cue) on this window.",
+                  2) +
+        12;
+    SDL_SetRenderDrawColor(r, 0xA0, 0xA0, 0xA0, 0xFF);
+    y = draw_text(r, y, "An image of the US CD is at archive.org/details/AfterlifeUSA (unzip it first).", 2) + 12;
+    if (status) {
+        if (error)
+            SDL_SetRenderDrawColor(r, 0xFF, 0x70, 0x60, 0xFF);
+        else
+            SDL_SetRenderDrawColor(r, 0xE8, 0xE8, 0xE8, 0xFF);
+        draw_text(r, y, status, 2);
+    }
+    SDL_RenderPresent(r);
+}
+
+/* What was dropped: a folder with the game files, a file in one, or a CD
+ * image (its game files into copies); dir is set, or an error message. */
+static const char *take_drop(const char *path, const char *copies, char *dir, size_t len)
+{
+    SDL_PathInfo info;
+    if (!SDL_GetPathInfo(path, &info))
+        return "That can't be read.";
+    if (info.type == SDL_PATHTYPE_DIRECTORY) {
+        if (!datafind_has_game_data(path))
+            return "That folder doesn't have the Afterlife game files (ALIFE.INI, ALIFE.EXE and a .000 bundle).";
+        SDL_strlcpy(dir, path, len);
+        return NULL;
+    }
+    /* a file of the game folder (ALIFE.EXE, say): its folder */
+    const char *slash = SDL_strrchr(path, '/'), *bslash = SDL_strrchr(path, '\\');
+    if (bslash > slash)
+        slash = bslash;
+    if (slash) {
+        SDL_snprintf(dir, len, "%.*s", (int)(slash - path), path);
+        if (datafind_has_game_data(dir))
+            return NULL;
+    }
+    const char *err = extract(path, copies);
+    if (!err && !datafind_has_game_data(copies))
+        err = "That CD image doesn't have the Afterlife game files (ALIFE.INI, ALIFE.EXE and a .000 bundle).";
+    if (!err)
+        SDL_strlcpy(dir, copies, len);
+    return err;
+}
+
+/* The window, until the game data is dropped on it (true, dir set) or it
+ * is closed (false). */
+static bool drop_wait(const char *copies, char *dir, size_t len)
+{
+    SDL_Window *win = NULL;
+    SDL_Renderer *r = NULL;
+    if (!SDL_CreateWindowAndRenderer(TITLE, DROP_W, DROP_H, 0, &win, &r)) {
+        SDL_Log("no file dialog, and no window either (%s): start Afterlife with the folder of the game files "
+                "as its argument",
+                SDL_GetError());
+        return false;
+    }
+    SDL_SetRenderLogicalPresentation(r, DROP_W, DROP_H, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    char status[1024] = "";
+    bool error = false, done = false, got = false;
+    while (!done) {
+        drop_draw(r, *status ? status : NULL, error);
+        SDL_Event e;
+        if (!SDL_WaitEvent(&e))
+            break;
+        switch (e.type) {
+        case SDL_EVENT_QUIT:
+        case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+            done = true;
+            break;
+        case SDL_EVENT_KEY_DOWN:
+            done = e.key.key == SDLK_ESCAPE;
+            break;
+        case SDL_EVENT_DROP_FILE: {
+            const char *name = SDL_strrchr(e.drop.data, '/'), *bname = SDL_strrchr(e.drop.data, '\\');
+            if (bname > name)
+                name = bname;
+            name = name ? name + 1 : e.drop.data;
+            SDL_snprintf(status, sizeof status, "Reading %s...", name);
+            error = false;
+            drop_draw(r, status, false);
+            const char *err = take_drop(e.drop.data, copies, dir, len);
+            if (!err) {
+                done = got = true;
+                break;
+            }
+            SDL_Log("%s: %s", e.drop.data, err);
+            SDL_snprintf(status, sizeof status, "%s: %s Drop another.", name, err);
+            error = true;
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    SDL_DestroyRenderer(r);
+    SDL_DestroyWindow(win);
+    if (!got)
+        SDL_Log("no game data: start Afterlife with the folder of the game files as its argument, or drop them "
+                "on its window");
+    return got;
 }
 
 const char *datafind_data_dir(const char *def, bool ask)
@@ -294,20 +444,18 @@ const char *datafind_data_dir(const char *def, bool ask)
         int what = ask_what();
         if (what == 0)
             return NULL;
-        int got =
-            pick(what == 1 ? SDL_FILEDIALOG_OPENFOLDER : SDL_FILEDIALOG_OPENFILE,
-                 what == 1 ? "Choose the Afterlife CD or the folder of its files" : "Choose an Afterlife CD image");
+        int got = what < 0 ? 3
+                           : pick(what == 1 ? SDL_FILEDIALOG_OPENFOLDER : SDL_FILEDIALOG_OPENFILE,
+                                  what == 1 ? "Choose the Afterlife CD or the folder of its files"
+                                            : "Choose an Afterlife CD image");
         if (got == 3) {
-            char msg[1024];
-            SDL_snprintf(msg, sizeof msg,
-                         "No file dialog (%s). Start Afterlife with the folder of the game files as its argument.",
-                         SDL_GetError());
-            error_box(msg);
-            return NULL;
-        }
-        if (got != 1)
+            if (what > 0)
+                SDL_Log("no file dialog (%s)", SDL_GetError());
+            if (!drop_wait(copies, dir, sizeof dir))
+                return NULL;
+        } else if (got != 1) {
             continue;
-        if (what == 1) {
+        } else if (what == 1) {
             if (!datafind_has_game_data(g_picked)) {
                 error_box("That folder doesn't have the Afterlife game files (ALIFE.INI, ALIFE.EXE and a .000 "
                           "bundle). Choose the CD, or the folder Afterlife is installed in.");
