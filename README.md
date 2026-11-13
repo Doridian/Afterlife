@@ -33,7 +33,7 @@ as one file per system, with no game data:
 
 | System | File |
 |---|---|
-| Linux (x86-64, arm64) | `afterlife-linux-x86_64.AppImage`, `afterlife-linux-arm64.AppImage` |
+| Linux (x86-64, arm64; glibc 2.35 or newer, as in Ubuntu 22.04) | `afterlife-x86_64.AppImage`, `afterlife-aarch64.AppImage` |
 | Windows (x86-64) | `afterlife-windows-x86_64.exe` |
 | macOS 11+ (Apple silicon and Intel) | `afterlife-macos.dmg` (the app; it isn't notarized: right-click → Open the first time) |
 | Browser | `afterlife-web.zip` (the page, as published on GitHub Pages) |
